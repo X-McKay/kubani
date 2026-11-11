@@ -35,6 +35,8 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+import outcome
+
 from . import layout
 
 ISSUER = "https://idp.almckay.io/realms/agents"
@@ -76,8 +78,10 @@ PAGE = (
 )
 
 
-class ConsentError(Exception):
-    """The check was refused or could not reach a verdict."""
+class ConsentError(outcome.Coded):
+    """The check was refused or could not reach a verdict. A refusal is the default; a raise site that knows better says so."""
+
+    default_code = "refused"
 
 
 class ConsentTimeout(Exception):
@@ -149,7 +153,7 @@ def await_callback(listener: socket.socket, timeout: float, clock) -> bytes:
         except TimeoutError:
             continue
         except OSError as exc:
-            raise ConsentError(f"the loopback listener failed ({type(exc).__name__}); nothing was exchanged") from None
+            raise ConsentError(f"the loopback listener failed ({type(exc).__name__}); nothing was exchanged", "unavailable") from None
         with conn:
             conn.settimeout(READ_TIMEOUT)
             line = _read_head(conn)
@@ -169,21 +173,21 @@ def callback_query(request_line: bytes) -> dict[str, list[str]]:
     except ValueError:
         target = None
     if target is None or parts[0] != "GET" or target.path != CALLBACK_PATH:
-        raise ConsentError("the loopback listener received a request that is not the sign-in callback; nothing was exchanged")
+        raise ConsentError("the loopback listener received a request that is not the sign-in callback; nothing was exchanged", "failed")
     return urllib.parse.parse_qs(target.query, keep_blank_values=True)
 
 
 def callback_code(query: dict[str, list[str]], state: str) -> str:
     got = query.get("state", [])
     if len(got) != 1 or not hmac.compare_digest(got[0].encode(), state.encode()):
-        raise ConsentError("the callback's state does not match this sign-in; nothing was exchanged")
+        raise ConsentError("the callback's state does not match this sign-in; nothing was exchanged", "failed")
     if "error" in query:
         error = query["error"][0]
         named = error if ERROR_CODE.match(error) else "(unprintable)"
-        raise ConsentError(f"Keycloak returned the error {named} instead of an authorization code")
+        raise ConsentError(f"Keycloak returned the error {named} instead of an authorization code", "failed")
     codes = query.get("code", [])
     if len(codes) != 1 or not codes[0]:
-        raise ConsentError("the callback carried no authorization code")
+        raise ConsentError("the callback carried no authorization code", "failed")
     return codes[0]
 
 
@@ -208,9 +212,9 @@ def _fetch(url: str, what: str, fields: dict | None = None) -> bytes:
         with urllib.request.build_opener(_NoRedirect()).open(request, timeout=HTTP_TIMEOUT) as response:
             return response.read(MAX_RESPONSE)
     except urllib.error.HTTPError as exc:
-        raise ConsentError(f"the {what} answered HTTP {exc.code}{_oauth_error(exc)}") from None
+        raise ConsentError(f"the {what} answered HTTP {exc.code}{_oauth_error(exc)}", "unavailable") from None
     except (OSError, ValueError) as exc:
-        raise ConsentError(f"the {what} could not be reached ({type(exc).__name__})") from None
+        raise ConsentError(f"the {what} could not be reached ({type(exc).__name__})", "unavailable") from None
 
 
 def _json(raw: bytes, what: str) -> dict:
@@ -219,7 +223,7 @@ def _json(raw: bytes, what: str) -> dict:
     except ValueError:
         doc = None
     if not isinstance(doc, dict):
-        raise ConsentError(f"the {what} did not return a JSON object")
+        raise ConsentError(f"the {what} did not return a JSON object", "unavailable")
     return doc
 
 
@@ -228,7 +232,7 @@ def exchange(issuer: str, code: str, verifier: str, redirect_uri: str) -> dict:
     doc = _json(_fetch(issuer + TOKEN_PATH, "token endpoint", fields), "token endpoint")
     for name in ("access_token", "id_token"):
         if not isinstance(doc.get(name), str) or not doc[name]:
-            raise ConsentError(f"the token endpoint returned no {name}")
+            raise ConsentError(f"the token endpoint returned no {name}", "failed")
     refresh = doc.get("refresh_token")
     return {"access": doc["access_token"], "id": doc["id_token"], "refresh": refresh if isinstance(refresh, str) and refresh else None}
 
@@ -238,7 +242,7 @@ def _pyjwt():
     try:
         import jwt
     except ImportError:
-        raise ConsentError("PyJWT is not installed; run this through `just agent`, which uses the project's locked environment (`uv sync --locked` restores it)") from None
+        raise ConsentError("PyJWT is not installed; run this through `just agent`, which uses the project's locked environment (`uv sync --locked` restores it)", "unavailable") from None
     return jwt
 
 
@@ -253,7 +257,7 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
     try:
         keys = jwt.PyJWKSet.from_dict(_json(_fetch(issuer + CERTS_PATH, "JWKS endpoint"), "JWKS endpoint"))
     except jwt.PyJWTError as exc:
-        raise ConsentError(f"the realm JWKS could not be used ({type(exc).__name__})") from None
+        raise ConsentError(f"the realm JWKS could not be used ({type(exc).__name__})", "failed") from None
 
     def decode(token: str, what: str, audience: str | None) -> dict:
         options = {"verify_signature": True, "verify_aud": audience is not None, "require": ["iss", "sub", "exp"]}
@@ -261,12 +265,12 @@ def verified_claims(issuer: str, tokens: dict, nonce: str) -> dict:
             key = keys[jwt.get_unverified_header(token)["kid"]].key
             return jwt.decode(token, key, algorithms=list(ALGORITHMS), issuer=issuer, audience=audience, leeway=LEEWAY_SECONDS, options=options)
         except (jwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
-            raise ConsentError(f"the {what} failed verification against the realm keys and issuer ({type(exc).__name__})") from None
+            raise ConsentError(f"the {what} failed verification against the realm keys and issuer ({type(exc).__name__})", "failed") from None
 
     access = decode(tokens["access"], "access token", None)
     identity = decode(tokens["id"], "ID token", CLIENT)
     if not hmac.compare_digest(str(identity.get("nonce", "")).encode(), nonce.encode()) or identity["sub"] != access["sub"]:
-        raise ConsentError("the ID token does not belong to this sign-in")
+        raise ConsentError("the ID token does not belong to this sign-in", "failed")
     return access
 
 
@@ -368,7 +372,7 @@ def sign_in(
     try:
         listener = socket.create_server(("127.0.0.1", 0), backlog=8)
     except OSError as exc:
-        raise ConsentError(f"could not listen on 127.0.0.1 ({type(exc).__name__})") from None
+        raise ConsentError(f"could not listen on 127.0.0.1 ({type(exc).__name__})", "unavailable") from None
     with listener:
         redirect_uri = f"http://127.0.0.1:{listener.getsockname()[1]}{CALLBACK_PATH}"
         url = authorization_url(issuer, redirect_uri=redirect_uri, scope=required_scope(tenant, agent), state=state, nonce=nonce, challenge=challenge, prompt=prompt)
@@ -415,7 +419,7 @@ def check(
     if not (is_tty or interactive)():
         raise ConsentError("consent is given by a person at their own terminal: stdin and stderr must both be a TTY")
     if not 0 < timeout <= MAX_TIMEOUT:
-        raise ConsentError(f"--timeout must be above 0 and at most {MAX_TIMEOUT:.0f} seconds")
+        raise ConsentError(f"--timeout must be above 0 and at most {MAX_TIMEOUT:.0f} seconds", "invalid-arguments")
     intro = f"Consent check for agent {agent} in tenant {tenant}: open this URL, sign in as yourself and answer the consent screen. Nothing is deposited."
     signed = sign_in(tenant, agent, intro=intro, prompt=PROMPT, timeout=timeout, browser=browser, issuer=issuer, say=say, open_url=open_url, clock=clock)
     if signed is None:

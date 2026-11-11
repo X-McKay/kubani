@@ -65,7 +65,7 @@ Merge the reviewed GitOps change and allow Flux to reconcile. Verify bootstrap J
 just mcp status example-monitor
 ```
 
-Status uses read-only Kubernetes and Keycloak calls. It checks desired resource configuration, current readiness/route/policy conditions, bootstrap dependencies and exact identity setup. Secret existence checks retrieve only names, never values or annotations. A nonzero result means registration is incomplete, conflicting, or could not be verified.
+Status uses read-only Kubernetes and Keycloak calls. It checks desired resource configuration, current readiness/route/policy conditions, bootstrap dependencies and exact identity setup. Secret existence checks retrieve only names, never values or annotations. A nonzero result means registration is incomplete, conflicting, or could not be verified. Every command prints one JSON document with `ok` and, on failure, `error.code`; credential stages never show exception text (see the [CLI outcome contract](cli-contract.md)).
 
 ## Functional verification
 

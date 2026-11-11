@@ -100,13 +100,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(result["stage"], "add")
         self.assertEqual(result["error_type"], "ValueError")
-        self.assertEqual(result["error"], "invalid backend name")
+        # `error` is the contract's object now; its message is the string this key used to hold.
+        self.assertEqual(result["error"], {"code": "invalid-arguments", "message": "invalid backend name", "retryable": False})
 
     def test_credential_stage_refusal_never_shows_the_message(self):
         self.modules.identity.admin.side_effect = ValueError("PRIVATE_CREDENTIAL_MARKER")
         code, result = self.invoke(["identity", "plan", "existing"])
         self.assertEqual(code, 1)
-        self.assertNotIn("error", result)
+        # The failure object is there, with a fixed sentence and none of the exception's text.
+        self.assertEqual(result["error"]["code"], "unavailable")
+        self.assertNotIn("PRIVATE_CREDENTIAL_MARKER", result["error"]["message"])
         self.assertNotIn("PRIVATE_CREDENTIAL_MARKER", json.dumps(result))
 
     def test_add_refuses_symlink_escape(self):

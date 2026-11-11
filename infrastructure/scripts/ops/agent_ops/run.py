@@ -37,6 +37,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+import outcome
+
 from . import delegation, layout, live
 
 REMOTE = Path(__file__).with_name("remote_session.py")
@@ -68,16 +70,31 @@ GRANT_MAY_BE_HELD = "a grant may be held for this session until the cleanup reco
 NO_GRANT_ANSWERS = ("deposit refused:", "invalid request", "session identity already exists", "session must be a canonical UUIDv4")
 
 
-class RunError(Exception):
-    pass
+class RunError(outcome.Coded):
+    """A run, status, wait or cancel could not be carried out. A refusal is the default; a raise site that knows better says so."""
+
+    default_code = "refused"
+
+
+class Document(dict):
+    """An envelope that also says which outcome code its failure ends as. It compares and prints as the plain dict;
+    `kind` is read by the command-line wrapper, which adds `ok` and `error` (see outcome.py)."""
+
+    kind: str | None = None
+
+
+def tag(envelope: dict, kind: str | None) -> Document:
+    document = Document(envelope)
+    document.kind = kind
+    return document
 
 
 class _Ended(Exception):
     """A run that ends before it asks for a workflow: the exit code, the reason and what else its envelope carries."""
 
-    def __init__(self, code: int, reason: str, **extra):
+    def __init__(self, code: int, reason: str, kind: str | None = None, **extra):
         super().__init__(reason)
-        self.code, self.reason, self.extra = code, reason, extra
+        self.code, self.reason, self.kind, self.extra = code, reason, kind, extra
 
 
 def runs_base() -> Path:
@@ -164,17 +181,18 @@ class Runner:
         try:
             proc = self.kube.exec(self.pod["name"], live.PLATFORM_NAMESPACE, "runner", argv, stdin, EXEC_TIMEOUT)
         except subprocess.TimeoutExpired:
-            raise RunError(f"remote {request['action']} did not answer within {EXEC_TIMEOUT} seconds; whether it took effect is not known") from None
+            raise RunError(f"remote {request['action']} did not answer within {EXEC_TIMEOUT} seconds; whether it took effect is not known", "timeout") from None
         stderr = proc.stderr.decode("utf-8", "replace")[-4000:]
         if stderr:
             _private(self.out / f"{self.stderr_prefix}-{self.calls:02d}.stderr", stderr)
         try:
             payload = json.loads(proc.stdout.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise RunError(f"remote {request['action']} returned no JSON (exit {proc.returncode})") from exc
+            raise RunError(f"remote {request['action']} returned no JSON (exit {proc.returncode})", "unavailable") from exc
         self._recheck()
         if proc.returncode != 0 or "error" in payload:
-            raise RunError(f"remote {request['action']} failed: {payload.get('error', 'unknown')}")
+            answer = str(payload.get("error", "unknown"))
+            raise RunError(f"remote {request['action']} failed: {payload.get('error', 'unknown')}", "refused" if any(x in answer for x in NO_GRANT_ANSWERS) else "failed")
         return payload
 
     def _recheck(self) -> None:
@@ -193,11 +211,11 @@ def plan(root: Path, kube: live.Kube, agent: str, *, release: str | None, grant_
     view = live.resolve_release(views, agent, release)
     mode = view.identity_mode or live.agents(kube, d.tenant).get(agent, {}).get("identity")
     if mode not in ("agent", "on-behalf-of"):
-        raise RunError(f"{agent}: identity mode is not reported by the release or Agent")
+        raise RunError(f"{agent}: identity mode is not reported by the release or Agent", "conflict")
     if grant_handle is not None and not grant_handle.strip():
-        raise RunError("--grant-handle was given an empty value")
+        raise RunError("--grant-handle was given an empty value", "invalid-arguments")
     if mode == "agent" and grant_handle is not None:
-        raise RunError(f"{agent} runs with its own identity and takes no grant handle")
+        raise RunError(f"{agent} runs with its own identity and takes no grant handle", "invalid-arguments")
     consent = False
     if mode == "on-behalf-of" and grant_handle is None:
         # Only a release that reports delegation as not required runs without a grant; the APS
@@ -205,20 +223,20 @@ def plan(root: Path, kube: live.Kube, agent: str, *, release: str | None, grant_
         if view.delegation_required is True:
             consent = True
         elif view.delegation_required is not False:
-            raise RunError(f"{agent}: release {view.name} does not report whether delegation is required")
+            raise RunError(f"{agent}: release {view.name} does not report whether delegation is required", "conflict")
     encoded = json.dumps(task, separators=(",", ":"))
     if len(encoded.encode("utf-8")) > MAX_TASK_BYTES:
-        raise RunError("task exceeds 16 KiB")
+        raise RunError("task exceeds 16 KiB", "validation-failed")
     # `consent`: the release requires a person's delegation and no handle was given, so the run has to obtain consent.
     return {"tenant": d.tenant, "agent": agent, "release": view.name, "releaseChoice": "explicit" if release else "default", "identity": mode, "delegated": grant_handle is not None or consent, "consent": consent, "task": task}
 
 
-def _not_submitted(out: Path, session: str, code: int, reason: str, *, status: str = "NOT_SUBMITTED", **extra) -> tuple[int, dict]:
+def _not_submitted(out: Path, session: str, code: int, reason: str, *, status: str = "NOT_SUBMITTED", kind: str | None = None, **extra) -> tuple[int, dict]:
     """End a run that has a directory and no receipt: the envelope goes to `status.json` and to the caller."""
     envelope = {"status": status, "reason": reason, "sessionId": session, "dir": str(out), **extra}
     if not (out / "status.json").exists():
         _private(out / "status.json", json.dumps(envelope, indent=2, sort_keys=True) + "\n")
-    return code, envelope
+    return code, tag(envelope, kind)
 
 
 def _signed_in_here(p: dict, session: str, out: Path, *, timeout: float, browser: bool, sign_in, say, now) -> tuple[dict, dict]:
@@ -226,13 +244,14 @@ def _signed_in_here(p: dict, session: str, out: Path, *, timeout: float, browser
     intro = _show(say, p["tenant"], p["agent"], p["release"], session, p["task"])
     signed = (sign_in or delegation.sign_in)(p["tenant"], p["agent"], intro=intro, prompt=delegation.PROMPT_REUSE, timeout=timeout, browser=browser, say=say)
     if signed is None:
-        raise _Ended(NO_CONSENT, "the sign-in was not completed in time; no token was sent to the cluster and no workflow was started", timeoutSeconds=timeout)
+        raise _Ended(NO_CONSENT, "the sign-in was not completed in time; no token was sent to the cluster and no workflow was started", "no-consent", timeoutSeconds=timeout)
     report = delegation.assess(signed["claims"], p["tenant"], p["agent"], now=now())
     _say_who(say, report)
     if not report["wouldBeAcceptedForDeposit"]:
         raise _Ended(
             1,
             "the token Keycloak issued would not be accepted for deposit; no token was sent to the cluster and no workflow was started",
+            "refused",
             subject=report["subject"],
             preferredUsername=report.get("preferredUsername"),
             missing=report["missing"],
@@ -280,21 +299,21 @@ def _awaited(p: dict, session: str, out: Path, *, timeout: float, say, sleep, cl
                         if (out / CONSENT_RECORD).exists():
                             break
                         # Written under the lock: it is what tells a `consent` that arrives now that this run is over.
-                        return None, _not_submitted(out, session, NO_CONSENT, _no_workflow(out, "no consent was recorded in time"), timeoutSeconds=timeout)
+                        return None, _not_submitted(out, session, NO_CONSENT, _no_workflow(out, "no consent was recorded in time"), kind="no-consent", timeoutSeconds=timeout)
                 sleep(min(CONSENT_POLL, remaining))
     except KeyboardInterrupt:
         # Under the same lock as giving up, for the same reason. A second interrupt while a deposit holds it ends in `submit`.
         with _locked(out / DEPOSIT_LOCK):
-            return None, _not_submitted(out, session, INTERRUPTED, _no_workflow(out, "interrupted while waiting for consent"))
+            return None, _not_submitted(out, session, INTERRUPTED, _no_workflow(out, "interrupted while waiting for consent"), kind="interrupted")
     record = _consent_record(out, session)
     if record is None:
-        return None, _not_submitted(out, session, 1, f"{out / CONSENT_RECORD} is not a consent record for this session; no workflow was started. If a consent command deposited a token, {GRANT_MAY_BE_HELD}")
+        return None, _not_submitted(out, session, 1, f"{out / CONSENT_RECORD} is not a consent record for this session; no workflow was started. If a consent command deposited a token, {GRANT_MAY_BE_HELD}", kind="validation-failed")
     # The policy service's grant record names no person, so the subject is what the consent command wrote, not something this run verified.
     consent = {"mode": "awaited", "subject": record.get("subject"), "subjectSource": "consent command record", "refreshTokenIssued": record.get("refreshTokenIssued"), "grantRequestedUntil": record.get("grantRequestedUntil")}
     # The person consented to what the consent command showed them. Nothing is started unless that is what this run holds.
     if not hmac.compare_digest(str(record.get("shownSha256")), shown_digest(p["tenant"], p["agent"], p["release"], session, p["task"])):
         reason = "the consent record does not carry the digest of this run's tenant, agent, release, session and task, so the person was not shown what this run would submit"
-        return None, _not_submitted(out, session, 1, f"{reason}; no workflow was started, and {GRANT_MAY_BE_HELD}", consent=consent)
+        return None, _not_submitted(out, session, 1, f"{reason}; no workflow was started, and {GRANT_MAY_BE_HELD}", kind="refused", consent=consent)
     return consent, None
 
 
@@ -329,7 +348,7 @@ def submit(
     inline = False
     if p["consent"]:
         if not 0 < consent_timeout <= delegation.MAX_TIMEOUT:
-            raise RunError(f"--consent-timeout must be above 0 and at most {delegation.MAX_TIMEOUT:.0f} seconds")
+            raise RunError(f"--consent-timeout must be above 0 and at most {delegation.MAX_TIMEOUT:.0f} seconds", "invalid-arguments")
         inline = (is_tty or delegation.interactive)()
         if inline:
             delegation.require_pyjwt()  # before a run directory exists and before anyone is asked to sign in
@@ -356,30 +375,30 @@ def submit(
                 return ended
             request["deposited_grant"] = True
     except _Ended as end:
-        return _not_submitted(out, session, end.code, end.reason, **end.extra)
+        return _not_submitted(out, session, end.code, end.reason, kind=end.kind, **end.extra)
     except KeyboardInterrupt:
         if inline:
-            return _not_submitted(out, session, INTERRUPTED, "interrupted during the sign-in; no token was sent to the cluster and no workflow was started")
-        return _not_submitted(out, session, INTERRUPTED, _no_workflow(out, "interrupted while waiting for consent"))
+            return _not_submitted(out, session, INTERRUPTED, "interrupted during the sign-in; no token was sent to the cluster and no workflow was started", kind="interrupted")
+        return _not_submitted(out, session, INTERRUPTED, _no_workflow(out, "interrupted while waiting for consent"), kind="interrupted")
     except (delegation.ConsentError, RunError) as exc:
         # Only the sign-in at this terminal raises here, and it failed before any token left this process.
-        return _not_submitted(out, session, 2, f"{exc}; no token was sent to the cluster and no workflow was started")
+        return _not_submitted(out, session, 2, f"{exc}; no token was sent to the cluster and no workflow was started", kind=outcome.code_of(exc, "refused"))
     # What is true of the grant when the submit call does not return a started workflow.
     held = f"; {GRANT_MAY_BE_HELD}" if p["consent"] else ""
     try:
         accepted = runner.remote(request)
     except KeyboardInterrupt:
-        return _not_submitted(out, session, INTERRUPTED, f"interrupted while the submit call was in flight; whether a workflow was started is not known{held}", status="SUBMIT_UNCONFIRMED", consent=consent)
+        return _not_submitted(out, session, INTERRUPTED, f"interrupted while the submit call was in flight; whether a workflow was started is not known{held}", status="SUBMIT_UNCONFIRMED", kind="interrupted", consent=consent)
     except RunError as exc:
         if "deposit" in request and any(answer in str(exc) for answer in NO_GRANT_ANSWERS):
             held = "; the policy service holds no grant from this run"
-        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", consent=consent)
+        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", kind=outcome.code_of(exc, "failed"), consent=consent)
     finally:
         request.pop("deposit", None)
     if accepted.get("granted") is False:
         # The consent command recorded a deposit, yet the policy service holds no grant for this session: it expired, or the
         # cleanup reconciler passed between the deposit and this call and closed a session that had no workflow yet.
-        return _not_submitted(out, session, 1, "consent was recorded but the policy service no longer holds a grant for this session; no workflow was started; run again and consent again", consent=consent)
+        return _not_submitted(out, session, 1, "consent was recorded but the policy service no longer holds a grant for this session; no workflow was started; run again and consent again", kind="conflict", consent=consent)
     receipt = {
         "schemaVersion": 1,
         "tenant": p["tenant"],
@@ -406,7 +425,7 @@ def submit(
         return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=cancel_on_timeout, sleep=sleep, clock=clock)
     except KeyboardInterrupt:
         reason = f"interrupted while following the run; the workflow was not cancelled, and `just agent status --receipt {out / 'receipt.json'}` reads it"
-        return INTERRUPTED, {"receipt": receipt, "status": "INTERRUPTED", "reason": reason, "cleanup": "NOT_CONFIRMED"}
+        return INTERRUPTED, tag({"receipt": receipt, "status": "INTERRUPTED", "reason": reason, "cleanup": "NOT_CONFIRMED"}, "interrupted")
 
 
 def _identity(receipt: dict, action: str) -> dict:
@@ -432,7 +451,7 @@ def follow(receipt: dict, runner: Runner, *, wait_timeout: float, poll_interval:
             if cancel_on_timeout:
                 envelope["cancel"] = runner.remote(_identity(receipt, "cancel"))
             _private(runner.out / "status.json", json.dumps(envelope, indent=2, sort_keys=True) + "\n")
-            return 124, envelope
+            return 124, tag(envelope, "timeout")
         sleep(min(poll_interval, remaining))
     return finish(receipt, runner, status)
 
@@ -455,13 +474,13 @@ def finish(receipt: dict, runner: Runner, status: dict) -> tuple[int, dict]:
         envelope["workspace"] = report.get("workspace", [])
         code = 0
     _private(runner.out / "status.json", json.dumps(envelope, indent=2, sort_keys=True) + "\n")
-    return code, envelope
+    return code, tag(envelope, "failed" if code else None)
 
 
 def resume(receipt_path: Path, action: str, *, kube: live.Kube | None = None, wait_timeout: float = 900, poll_interval: float = 10, sleep=time.sleep, clock=time.monotonic) -> tuple[int, dict]:
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     if receipt.get("schemaVersion") != 1:
-        raise RunError("unsupported receipt")
+        raise RunError("unsupported receipt", "validation-failed")
     kube = kube or live.Kube()
     out = receipt_path.parent
     runner = Runner(kube, receipt["tenant"], out)
@@ -472,14 +491,14 @@ def resume(receipt_path: Path, action: str, *, kube: live.Kube | None = None, wa
         status = runner.remote(_identity(receipt, "status"))
         if status["status"] in TERMINAL:
             return finish(receipt, runner, status)
-        return 1, {"receipt": receipt, "status": status["status"], "query": status.get("query"), "cleanup": "NOT_CONFIRMED"}
+        return 1, tag({"receipt": receipt, "status": status["status"], "query": status.get("query"), "cleanup": "NOT_CONFIRMED"}, "timeout")
     if action == "wait":
         return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=False, sleep=sleep, clock=clock)
     if action == "cancel":
         cancel = runner.remote(_identity(receipt, "cancel"))
         # The runner answers `cancel_requested: true` when it accepted the cancel; anything else is not a success.
-        return (0 if cancel.get("cancel_requested") is True else 1), {"receipt": receipt, "cancel": cancel, "cleanup": "NOT_CONFIRMED"}
-    raise RunError("unknown action")
+        return (0 if cancel.get("cancel_requested") is True else 1), tag({"receipt": receipt, "cancel": cancel, "cleanup": "NOT_CONFIRMED"}, "failed")
+    raise RunError("unknown action", "internal")
 
 
 def _stat_directory(path: Path) -> os.stat_result:
@@ -502,7 +521,7 @@ def _own_request(candidate: Path) -> dict:
     if not stat.S_ISDIR(held.st_mode):
         raise NotADirectoryError(str(candidate))
     if held.st_uid != me:
-        raise delegation.ConsentError(f"{candidate} is not owned by you; consent is given only to a run you started")
+        raise delegation.ConsentError(f"{candidate} is not owned by you; consent is given only to a run you started", "refused")
     if stat.S_IMODE(held.st_mode) != 0o700:
         raise delegation.ConsentError(f"{candidate} has mode {stat.S_IMODE(held.st_mode):04o}, not 0700 as `just agent run` creates it; another account could have changed what it says the run will do")
     try:
@@ -530,7 +549,7 @@ def _waiting_run(tenant: str, agent: str, session: str, run_dir: Path | None) ->
     except ValueError:
         canonical = False
     if not canonical:
-        raise delegation.ConsentError("--session takes the session id `just agent run` printed, a lower-case UUID")
+        raise delegation.ConsentError("--session takes the session id `just agent run` printed, a lower-case UUID", "invalid-arguments")
     base = runs_base() / agent
     candidates = [run_dir] if run_dir is not None else sorted(base.glob(f"*-{session[:8]}")) if base.is_dir() else []
     distrusted = None
@@ -546,25 +565,25 @@ def _waiting_run(tenant: str, agent: str, session: str, run_dir: Path | None) ->
             return candidate, request
     if distrusted is not None:
         raise distrusted
-    raise delegation.ConsentError(f"no run of {agent} on this machine is waiting for consent to session {session}; consent is given where `just agent run` is waiting (add --run-dir DIR when the run was started with --out)")
+    raise delegation.ConsentError(f"no run of {agent} on this machine is waiting for consent to session {session}; consent is given where `just agent run` is waiting (add --run-dir DIR when the run was started with --out)", "not-found")
 
 
 def _still_waiting(out: Path) -> None:
     """Refuse unless the run in this directory is alive and still waiting for consent."""
     if (out / CONSENT_RECORD).exists():
-        raise delegation.ConsentError("consent was already given for this session; this command deposited nothing")
+        raise delegation.ConsentError("consent was already given for this session; this command deposited nothing", "conflict")
     if (out / "receipt.json").exists() or (out / "status.json").exists():
-        raise delegation.ConsentError("this run is no longer waiting for consent; this command deposited nothing")
+        raise delegation.ConsentError("this run is no longer waiting for consent; this command deposited nothing", "conflict")
     try:
         fd = os.open(out / WAITING_LOCK, os.O_RDWR)
     except OSError:
-        raise delegation.ConsentError("this run is not waiting for consent; this command deposited nothing") from None
+        raise delegation.ConsentError("this run is not waiting for consent; this command deposited nothing", "conflict") from None
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return  # held by the waiting run
-        raise delegation.ConsentError("the run that asked for this consent has ended; this command deposited nothing")
+        raise delegation.ConsentError("the run that asked for this consent has ended; this command deposited nothing", "conflict")
     finally:
         os.close(fd)
 
@@ -588,7 +607,7 @@ def consent(
     if not (is_tty or delegation.interactive)():
         raise delegation.ConsentError("consent is given by a person at their own terminal: stdin and stderr must both be a TTY")
     if not 0 < timeout <= delegation.MAX_TIMEOUT:
-        raise delegation.ConsentError(f"--timeout must be above 0 and at most {delegation.MAX_TIMEOUT:.0f} seconds")
+        raise delegation.ConsentError(f"--timeout must be above 0 and at most {delegation.MAX_TIMEOUT:.0f} seconds", "invalid-arguments")
     out, request = _waiting_run(tenant, agent, session, run_dir)
     _still_waiting(out)
     delegation.require_pyjwt()
@@ -602,14 +621,14 @@ def consent(
     try:
         signed = (sign_in or delegation.sign_in)(tenant, agent, intro=intro, prompt=delegation.PROMPT_REUSE, timeout=timeout, browser=browser, say=say)
     except KeyboardInterrupt:
-        return INTERRUPTED, dict(base, deposited=False, interrupted=True)
+        return INTERRUPTED, tag(dict(base, deposited=False, interrupted=True), "interrupted")
     if signed is None:
-        return 124, dict(base, deposited=False, timedOut=True, timeoutSeconds=timeout)
+        return 124, tag(dict(base, deposited=False, timedOut=True, timeoutSeconds=timeout), "no-consent")
     report = delegation.assess(signed["claims"], tenant, agent, now=now())
     _say_who(say, report)
     who = {"subject": report["subject"], "preferredUsername": report.get("preferredUsername")}
     if not report["wouldBeAcceptedForDeposit"]:
-        return 1, dict(base, deposited=False, **who, missing=report["missing"])
+        return 1, tag(dict(base, deposited=False, **who, missing=report["missing"]), "refused")
     terms = delegation.deposit_terms(signed, now=now())
     record = {"schemaVersion": 1, "sessionId": session, "agent": agent, "tenant": tenant, "shownSha256": shown, "subject": report["subject"], "refreshTokenIssued": terms["refreshTokenIssued"], "grantRequestedUntil": terms["expiresAt"]}
     with _locked(out / DEPOSIT_LOCK):
@@ -624,17 +643,17 @@ def consent(
         try:
             answer = runner.remote({"action": "deposit", "tenant": tenant, "agent": agent, "session_id": session, "deposit": deposit})
         except KeyboardInterrupt:
-            return INTERRUPTED, dict(base, deposited=None, interrupted=True, **who, reason=f"interrupted while the deposit was in flight; whether it took effect is not known, and {GRANT_MAY_BE_HELD}")
+            return INTERRUPTED, tag(dict(base, deposited=None, interrupted=True, **who, reason=f"interrupted while the deposit was in flight; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "interrupted")
         except RunError as exc:
             if any(refusal in str(exc) for refusal in NO_GRANT_ANSWERS):
                 if first:
                     attempt.unlink(missing_ok=True)  # an earlier attempt whose outcome is unknown keeps its mark
-                return 2, dict(base, deposited=False, **who, reason=f"{exc}; this command deposited nothing")
-            return 2, dict(base, deposited=None, **who, reason=f"{exc}; {GRANT_MAY_BE_HELD}")
+                return 2, tag(dict(base, deposited=False, **who, reason=f"{exc}; this command deposited nothing"), outcome.code_of(exc, "refused"))
+            return 2, tag(dict(base, deposited=None, **who, reason=f"{exc}; {GRANT_MAY_BE_HELD}"), outcome.code_of(exc, "failed"))
         finally:
             deposit.clear()
         if answer.get("deposited") is not True:
-            return 2, dict(base, deposited=None, **who, reason=f"remote deposit did not confirm the deposit; whether it took effect is not known, and {GRANT_MAY_BE_HELD}")
+            return 2, tag(dict(base, deposited=None, **who, reason=f"remote deposit did not confirm the deposit; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "failed")
         record["depositedAt"] = _utc(now())
         # Renamed into place: the waiting run acts on this file the moment it exists, so it must never be seen half written.
         _private(staged, json.dumps(record, indent=2, sort_keys=True) + "\n")

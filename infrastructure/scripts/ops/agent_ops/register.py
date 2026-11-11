@@ -23,6 +23,8 @@ from pathlib import Path
 
 import yaml
 
+import outcome
+
 from . import layout, sync
 
 NAMESPACES = Path("infrastructure/gitops/infrastructure/namespace-policy/agent-platform-namespaces.yaml")
@@ -32,8 +34,8 @@ AGENT_KUSTOMIZATION = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustom
 TAG_SUFFIX = "/v[0-9][A-Za-z0-9.+-]*"
 
 
-class RegisterError(Exception):
-    pass
+class RegisterError(outcome.Coded):
+    default_code = "validation-failed"
 
 
 def _lit(text: str) -> str:
@@ -80,7 +82,7 @@ def _pins_from_texts(signers_text: str, namespaces_text: str, tenant: str) -> di
     doc = _single(signers_text, layout.SIGNERS)
     data = doc.get("data") or {}
     if tenant not in data:
-        raise RegisterError(f"{layout.SIGNERS}: no signer pin for tenant {tenant}")
+        raise RegisterError(f"{layout.SIGNERS}: no signer pin for tenant {tenant}", "not-found")
     try:
         configmap = json.loads(data[tenant]).get("subjectRegExp")
     except (ValueError, AttributeError):
@@ -218,11 +220,11 @@ def _index(lines: list[str], exact: str, path: Path) -> int:
 def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path) -> dict:
     """Add `agents` of `repo` to `tenant`, synced from `source`, and regenerate the pin."""
     if not layout.NAME.match(tenant):
-        raise RegisterError("tenant must be a DNS label")
+        raise RegisterError("tenant must be a DNS label", "invalid-arguments")
     if not REPOSITORY.fullmatch(repo):
-        raise RegisterError("repository must be owner/name")
+        raise RegisterError("repository must be owner/name", "invalid-arguments")
     if not agents:
-        raise RegisterError("name at least one agent")
+        raise RegisterError("name at least one agent", "invalid-arguments")
     committed_pins(root, tenant)  # the tenant must already exist in both pin files
     top = root / layout.AGENTS_DIR / "kustomization.yaml"
     listed = layout.listed_resources(top)  # refuses a kustomization that cannot be appended
@@ -230,14 +232,14 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
     added, kept = [], []
     for agent in agents:
         if not layout.NAME.match(agent):
-            raise RegisterError(f"agent name {agent!r} is not a DNS label")
+            raise RegisterError(f"agent name {agent!r} is not a DNS label", "invalid-arguments")
         d = existing.get(agent)
         entry = f"{tenant}/{agent}/"
         if d is not None:
             if d.tenant != tenant:
-                raise RegisterError(f"{agent} is already committed in {d.tenant}; agent names are unique across tenants")
+                raise RegisterError(f"{agent} is already committed in {d.tenant}; agent names are unique across tenants", "conflict")
             if sync.source_repo(d) != repo:
-                raise RegisterError(f"{agent} is already registered from {sync.source_repo(d)}")
+                raise RegisterError(f"{agent} is already registered from {sync.source_repo(d)}", "conflict")
             if entry not in listed:  # an earlier run stopped between sync and the listing
                 layout.append_listed(top, entry)
                 listed.append(entry)
@@ -247,7 +249,7 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
         if d.path.exists():
             # Left by a run that failed before agent.yaml existed; nothing in it is reviewed.
             if any(p.name != "kustomization.yaml" for p in d.path.iterdir()):
-                raise RegisterError(f"{d.path.relative_to(root)} exists without agent.yaml; inspect and remove it")
+                raise RegisterError(f"{d.path.relative_to(root)} exists without agent.yaml; inspect and remove it", "conflict")
             shutil.rmtree(d.path)
         d.path.mkdir(parents=True, exist_ok=False)
         try:

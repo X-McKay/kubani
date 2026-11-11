@@ -8,13 +8,17 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+import outcome
+
 from . import layout
 
 PLATFORM_NAMESPACE = "agent-platform"
 
 
-class LiveError(Exception):
-    pass
+class LiveError(outcome.Coded):
+    """A live read failed. The default is the cluster (or kubectl) being out of reach; a raise site that knows better says so."""
+
+    default_code = "unavailable"
 
 
 def last_line(stderr, limit: int = 200) -> str:
@@ -147,14 +151,14 @@ def resolve_release(views: list[ReleaseView], agent: str, explicit: str | None) 
     if explicit:
         match = [v for v in candidates if v.name == explicit]
         if not match:
-            raise LiveError(f"{explicit} is not an approved, Ready, signature-verified release of {agent}")
+            raise LiveError(f"{explicit} is not an approved, Ready, signature-verified release of {agent}", "not-found")
         return match[0]
     if not candidates:
-        raise LiveError(f"{agent} has no approved Ready release")
+        raise LiveError(f"{agent} has no approved Ready release", "not-found")
     chosen = newest(candidates)
     if chosen is None:
         names = ", ".join(v.name for v in candidates)
-        raise LiveError(f"{agent} has {len(candidates)} Ready releases and their approval times do not order them; pass --release one of: {names}")
+        raise LiveError(f"{agent} has {len(candidates)} Ready releases and their approval times do not order them; pass --release one of: {names}", "conflict")
     return chosen
 
 

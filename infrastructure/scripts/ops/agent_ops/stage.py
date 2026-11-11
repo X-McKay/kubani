@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+import outcome
+
 from . import layout, live, sync
 
 ASSETS = ("agent.yaml", "agentrelease.yaml", "policy-bundle.json", "predicate.json", "SHA256SUMS", "image")
@@ -19,7 +21,9 @@ PINNED = ("image", "manifestSha256", "policySha256", "lockSha256", "buildRevisio
 PRAGMA = "  # pragma: allowlist secret (verified public release fingerprint)"
 
 
-class StageError(Exception):
+class StageError(outcome.Coded):
+    default_code = "validation-failed"
+
     pass
 
 
@@ -31,13 +35,13 @@ def download(repo: str, tag: str, dest: Path) -> None:
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
     except FileNotFoundError as exc:
-        raise StageError(f"{what}: gh is not installed or not on PATH") from exc
+        raise StageError(f"{what}: gh is not installed or not on PATH", "unavailable") from exc
     except subprocess.TimeoutExpired as exc:
-        raise StageError(f"{what}: timed out after 120 seconds") from exc
+        raise StageError(f"{what}: timed out after 120 seconds", "timeout") from exc
     except subprocess.CalledProcessError as exc:
-        raise StageError(f"{what}: gh exited {exc.returncode}{live.last_line(exc.stderr)}; check `gh auth status`") from exc
+        raise StageError(f"{what}: gh exited {exc.returncode}{live.last_line(exc.stderr)}; check `gh auth status`", "unavailable") from exc
     except OSError as exc:
-        raise StageError(f"{what}: gh could not be run: {exc.strerror or type(exc).__name__}") from exc
+        raise StageError(f"{what}: gh could not be run: {exc.strerror or type(exc).__name__}", "unavailable") from exc
     missing = [n for n in ASSETS if not (dest / n).is_file()]
     if missing:
         raise StageError(f"release {tag} is missing assets: {', '.join(missing)}")
@@ -137,13 +141,13 @@ def render(tag: str, release_text: str) -> str:
 def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: Path | None = None) -> dict:
     m = layout.TAG.match(tag)
     if not m or m.group("agent") != agent:
-        raise StageError("tag must be <agent>/v<version> for this agent")
+        raise StageError("tag must be <agent>/v<version> for this agent", "invalid-arguments")
     d = layout.find_agent(root, agent)
     repo = repo or sync.source_repo(d)
     file_name = f"agentrelease-{m.group('version')}.yaml"
     target = d.path / file_name
     if target.exists():
-        raise StageError(f"{target.relative_to(root)} already exists")
+        raise StageError(f"{target.relative_to(root)} already exists", "conflict")
     with tempfile.TemporaryDirectory(prefix="agent-stage-") as tmp:
         dest = Path(tmp)
         download(repo, tag, dest)
@@ -151,7 +155,7 @@ def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: 
         verified = verify_assets(root, d, repo, tag, dest, source)
         for file in d.release_files():
             if layout.load_one(file, "AgentRelease")["metadata"].get("name") == verified["name"]:
-                raise StageError(f"{file.relative_to(root)} already stages {verified['name']}")
+                raise StageError(f"{file.relative_to(root)} already stages {verified['name']}", "conflict")
         text = (dest / "agentrelease.yaml").read_text(encoding="utf-8")
     rendered = render(tag, text)
     if yaml.safe_load(rendered) != verified["release"]:

@@ -25,6 +25,7 @@ Operational documentation for the Kubani homelab cluster.
 - [Authentik App Access Pattern](configuration/authentik-app-access.md)
 - [Agent Runtime Platform: cluster stages](configuration/agent-runtime-platform.md)
 - [Agent operations: `just agent`](configuration/agent-operations.md) — list, run, sync, stage and approve applied agents
+- [CLI outcome contract](configuration/cli-contract.md) — the one JSON document, `ok`, error codes and exit codes of `just agent`, `just agent-preflight` and `just mcp`
 - [Agent Runtime Platform: Phase A qualification](configuration/agent-runtime-platform-phase-a-qualification.md)
 - [Agent Runtime Platform: handoff, 2026-11-02](configuration/agent-runtime-platform-handoff.md) — current state, open work and next steps for the spec rollout
 

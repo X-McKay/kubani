@@ -9,6 +9,7 @@ import sys
 import traceback
 from pathlib import Path
 
+import outcome
 from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync
 
 ERRORS = (
@@ -28,6 +29,54 @@ ONE_DOCUMENT = ("run", "consent")
 
 def emit(payload) -> None:
     print(json.dumps(payload, sort_keys=True, indent=2, allow_nan=False))
+
+
+class Parser(argparse.ArgumentParser):
+    """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
+
+    def error(self, message):
+        emit(outcome.document({}, outcome.error("invalid-arguments", message)))
+        super().error(message)
+
+
+def failure_for(command: str, args, code: int, doc: dict) -> dict:
+    """The `error` object of a command that ended with a non-zero exit code and printed `doc`. The message is the
+    document's own `reason` where it has one, else a fixed sentence: nothing here shows what `reason` does not."""
+    kind = getattr(doc, "kind", None)
+    reason = doc.get("reason") if isinstance(doc.get("reason"), str) else None
+    if command == "check-sync":
+        rows = [{"check": "agent-sync", **row} for row in doc.get("agents", [])] + [{"check": "tenant-pin", **row} for row in doc.get("pins", [])]
+        failed = sum(1 for row in rows if row.get("state") != "ok")
+        return outcome.error("check-failed", f"{failed} of {len(rows)} checks did not hold; see proofs", proofs=rows)
+    if command == "consent" and args.check and code == 1:
+        proofs = [
+            {"check": f"the audience includes {delegation.POLICY_AUDIENCE}", "ok": doc.get("hasPolicyServiceAudience") is True},
+            {"check": "the token is a person's, not an agent's", "ok": doc.get("clientType") != "agent"},
+            {"check": f"the scope includes {doc.get('requiredScope')}", "ok": doc.get("hasDelegationScope") is True},
+            {"check": "the token carries may_act.sub", "ok": doc.get("mayActSubPresent") is True},
+            {"check": "every claim has the JSON type the policy service decodes", "ok": not doc.get("undecodableClaims")},
+        ]
+        return outcome.error("check-failed", "the token Keycloak issued would not be accepted for deposit; see proofs and missing", proofs=proofs)
+    if kind is None:
+        kind = {124: "timeout", run.INTERRUPTED: "interrupted", run.NO_CONSENT: "no-consent"}.get(code, "failed")
+        if command == "consent" and code == 124:
+            kind = "no-consent"
+    if reason is None:
+        status = doc.get("status")
+        if kind == "timeout":
+            shown = status if status in run.TERMINAL or status == "RUNNING" else None
+            reason = f"the wait ended before the session did (status {shown})" if shown else "the wait ended before the work did"
+        elif kind == "no-consent":
+            reason = "nobody signed in before the timeout; nothing was deposited"
+        elif kind == "refused" and "missing" in doc:
+            reason = "the token Keycloak issued would not be accepted for deposit; see missing"
+        elif command == "cancel":
+            reason = "the runner did not accept the cancel request; see cancel"
+        elif status in run.TERMINAL:
+            reason = f"the session ended {status}" + ("" if doc.get("confirmed") else " and its cleanup was not confirmed")
+        else:
+            reason = "the command ended unsuccessfully"
+    return outcome.error(kind, reason)
 
 
 def positive_float(text: str) -> float:
@@ -53,15 +102,21 @@ def positive_int(text: str) -> int:
 def parse_task(args) -> object:
     given = [x for x in (args.task, args.task_json, args.task_file) if x is not None]
     if len(given) != 1:
-        raise run.RunError("pass exactly one of --task, --task-json or --task-file")
+        raise run.RunError("pass exactly one of --task, --task-json or --task-file", "invalid-arguments")
     if args.task is not None:
         return {"request": args.task}
     raw = args.task_json if args.task_json is not None else Path(args.task_file).read_text(encoding="utf-8")
     return json.loads(raw)
 
 
+def conclude(args, code: int, doc: dict) -> int:
+    """Print `doc` with `ok` (and, when `code` is not 0, `error`) added, and give back the exit code unchanged."""
+    emit(outcome.document(doc, None if code == 0 else failure_for(args.command, args, code, doc)))
+    return code
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = Parser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
     parser.add_argument("--repo", help="source repository owner/name (default: the committed Agent's sync header)")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -143,7 +198,7 @@ def main(argv=None) -> int:
         if args.command == "state":
             snap = state.snapshot(root, live.Kube(), prs=not args.no_prs)
             if args.json:
-                emit(snap)
+                emit(outcome.document(snap))
             else:
                 print(state.format_snapshot(snap))
             return 0
@@ -165,69 +220,66 @@ def main(argv=None) -> int:
                 browser=args.browser,
                 started=started,
             )
-            emit(envelope)
-            return code
+            return conclude(args, code, envelope)
         if args.command in ("status", "wait", "cancel"):
-            code, envelope = run.resume(args.receipt, args.command, wait_timeout=args.wait_timeout, poll_interval=args.poll_interval)
-            emit(envelope)
-            return code
+            code, envelope = run.resume(args.receipt, args.command, wait_timeout=getattr(args, "wait_timeout", 900), poll_interval=getattr(args, "poll_interval", 10))
+            return conclude(args, code, envelope)
         if args.command == "consent":
             if args.check == (args.session is not None):
-                raise delegation.ConsentError("pass exactly one of --session ID, to consent to the session a waiting `run` printed, or --check, to test the sign-in without depositing anything")
+                raise delegation.ConsentError("pass exactly one of --session ID, to consent to the session a waiting `run` printed, or --check, to test the sign-in without depositing anything", "invalid-arguments")
             if args.check:
                 if args.run_dir is not None:
-                    raise delegation.ConsentError("--run-dir applies only with --session")
+                    raise delegation.ConsentError("--run-dir applies only with --session", "invalid-arguments")
                 code, report = delegation.check(root, args.agent, timeout=args.timeout, browser=args.browser)
             else:
                 code, report = run.consent(root, args.agent, args.session, run_dir=args.run_dir, timeout=args.timeout, browser=args.browser)
-            emit(report)
-            return code
+            return conclude(args, code, report)
         if args.command == "register":
-            emit(register.register(root, args.tenant, args.repository, args.agents, args.source))
-            return 0
+            return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, args.source))
         if args.command == "sync":
-            emit(sync.sync(root, args.agent, args.source, repo=args.repo, allow_repo_change=args.allow_repo_change))
-            return 0
+            return conclude(args, 0, sync.sync(root, args.agent, args.source, repo=args.repo, allow_repo_change=args.allow_repo_change))
         if args.command == "check-sync":
             result = sync.check(root, source=args.source, agents=args.agents or None)
             pins = register.check(root)
             result["pins"] = pins["tenants"]
             result["ok"] = result["ok"] and pins["ok"]
-            emit(result)
-            return 0 if result["ok"] else 1
+            return conclude(args, 0 if result["ok"] else 1, result)
         if args.command == "stage":
-            emit(stage.stage(root, args.agent, args.tag, repo=args.repo, source=args.source))
-            return 0
+            return conclude(args, 0, stage.stage(root, args.agent, args.tag, repo=args.repo, source=args.source))
         if args.command == "approve":
-            emit(approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
-            return 0
+            return conclude(args, 0, approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
     except KeyboardInterrupt:
+        message = "interrupted before the command finished; a run directory, when one was created, holds what was written by then"
         if args.command not in ONE_DOCUMENT:
+            emit(outcome.document({}, outcome.error("interrupted", message)))
             raise
         # `run` and `consent` end their own interrupts with what they know; this is one that arrived outside those places.
         print("interrupted", file=sys.stderr)
-        emit({"status": "INTERRUPTED", "reason": "interrupted before the command finished; a run directory, when one was created, holds what was written by then", **started})
+        emit(outcome.document({"status": "INTERRUPTED", "reason": message, **started}, outcome.error("interrupted", message)))
         return run.INTERRUPTED
     except ERRORS as exc:
         print(f"refused: {exc}", file=sys.stderr)
-        if args.command in ONE_DOCUMENT:
-            emit({"status": "REFUSED", "reason": str(exc)})
+        failure = outcome.error(outcome.code_of(exc, "refused"), str(exc) or type(exc).__name__)
+        emit(outcome.document({"status": "REFUSED", "reason": str(exc)} if args.command in ONE_DOCUMENT else {}, failure))
         return 2
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
-        if args.command in ONE_DOCUMENT:
-            emit({"status": "ERROR", "reason": str(exc)})
+        code = "not-found" if isinstance(exc, FileNotFoundError) else "validation-failed" if isinstance(exc, ValueError) else "failed"
+        failure = outcome.error(code, str(exc) or type(exc).__name__)
+        emit(outcome.document({"status": "ERROR", "reason": str(exc)} if args.command in ONE_DOCUMENT else {}, failure))
         return 1
     except Exception as exc:
-        if args.command not in ONE_DOCUMENT:
-            raise
         # Anything unforeseen still ends as one document. Only the exception's type and place are named: its message is not
         # known to be free of what a remote answer or a token carried. A run that had a directory by then is named, because
         # a workflow may have been started and `receipt.json`, when it was written, is the only way back to it.
-        frame = traceback.extract_tb(exc.__traceback__)[-1]
-        reason = f"unexpected {type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno}"
+        reason = outcome.unexpected(exc)
+        failure = outcome.error("internal", reason)
+        if args.command not in ONE_DOCUMENT:
+            traceback.print_exc()  # what the uncaught exception printed before this document existed
+            emit(outcome.document({}, failure))
+            return 1
         print(f"error: {reason}", file=sys.stderr)
-        emit({"status": "ERROR", "reason": reason, **started})
+        emit(outcome.document({"status": "ERROR", "reason": reason, **started}, failure))
         return 1
     return 2
 

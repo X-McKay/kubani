@@ -8,13 +8,17 @@ from pathlib import Path
 
 import yaml
 
+import outcome
+
 from . import layout, live, sync
 
 APPROVAL_RE = re.compile(r"^  approval:\n    approved: false\n", re.MULTILINE)
 
 
-class ApproveError(Exception):
-    pass
+class ApproveError(outcome.Coded):
+    """A gate refused the approval."""
+
+    default_code = "refused"
 
 
 def gates(committed: dict, observed: dict, pin: dict, repo: str) -> dict:
@@ -72,19 +76,19 @@ def approve(
     kube = kube or live.Kube()
     d, file, committed = layout.find_release(root, name)
     if committed["spec"].get("approval") != {"approved": False}:
-        raise ApproveError(f"{file.relative_to(root)} is not an unapproved staged release")
+        raise ApproveError(f"{file.relative_to(root)} is not an unapproved staged release", "conflict")
     observed = kube.get("agentrelease", name, d.tenant)
     evidence = gates(committed, observed, layout.signer_pin(root, d.tenant), repo or sync.source_repo(d))
     approver = by or layout.committed_agent(d)["spec"].get("owner")
     if not isinstance(approver, str) or not approver:
-        raise ApproveError("no approver: pass --by or set the Agent owner")
+        raise ApproveError("no approver: pass --by or set the Agent owner", "invalid-arguments")
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
     block = f"  approval:\n    approved: true\n    approvedBy: {approver}\n    approvedAt: \"{stamp}\"\n"
     if ticket:
         block += f"    ticket: {ticket}\n"
     text = file.read_text(encoding="utf-8")
     if len(APPROVAL_RE.findall(text)) != 1:
-        raise ApproveError(f"{file.relative_to(root)}: expected exactly one `approval: approved: false` block")
+        raise ApproveError(f"{file.relative_to(root)}: expected exactly one `approval: approved: false` block", "validation-failed")
     updated = APPROVAL_RE.sub(block, text)
     parsed = yaml.safe_load(updated)
     want = dict(committed)
@@ -93,7 +97,7 @@ def approve(
     if ticket:
         want["spec"]["approval"]["ticket"] = ticket
     if parsed != want:
-        raise ApproveError("approval edit changed more than the approval block")
+        raise ApproveError("approval edit changed more than the approval block", "validation-failed")
     file.write_text(updated, encoding="utf-8")
     return {
         "release": name,

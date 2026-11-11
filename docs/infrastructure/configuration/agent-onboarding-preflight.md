@@ -73,7 +73,9 @@ never applies objects, bootstraps identities, runs tools, creates grants or sess
 or reconciles configuration. Missing authorization returns unavailable evidence and
 never initiates a privilege change.
 
-The command emits one versioned JSON result. Each check has a stable code, state,
+The command emits one versioned JSON result; a failed result also carries
+`error.code` and the checks as `error.proofs` (see the
+[CLI outcome contract](cli-contract.md)). Each check has a stable code, state,
 required flag, agent/backend, bounded explanation and remediation. Exit 0 means
 all required checks passed or were not applicable. Required fail, unavailable and
 not_checked states exit 1; incomplete or conflicting requested live evidence fails.

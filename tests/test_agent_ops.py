@@ -554,7 +554,7 @@ class RunTests(unittest.TestCase):
             root = make_root(Path(tmp))
             clock = iter([0, 1000, 1000, 1000]).__next__
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "a", kube=kube_for_run([accepted, running]), wait_timeout=5, sleep=lambda s: None, clock=clock)
-            self.assertEqual(code, 124)
+            self.assertEqual((code, envelope.kind), (124, "timeout"))
             self.assertEqual(envelope["cleanup"], "NOT_CONFIRMED")
             failed = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "FAILED"}, "result": {"outcome": "FAILED"}, "confirmed": False}
             kube = kube_for_run([accepted, failed])
@@ -570,6 +570,7 @@ class RunTests(unittest.TestCase):
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=out, kube=kube_for_run([{"error": "session identity already exists"}]))
             # An own-identity run has no grant to speak of; the remote answer is passed on as it came.
             self.assertEqual((code, envelope["status"], envelope["reason"]), (2, "SUBMIT_UNCONFIRMED", "remote submit failed: session identity already exists"))
+            self.assertEqual(envelope.kind, "refused")
             self.assertEqual(sorted(p.name for p in out.iterdir()), ["request.json", "status.json"])
             self.assertEqual(json.loads((out / "status.json").read_text()), envelope)
 
@@ -973,7 +974,7 @@ class ReleaseChoiceTests(unittest.TestCase):
             del receipt["releaseChoice"]
             path.write_text(json.dumps(receipt))
             code, envelope = run.resume(path, "status", kube=self.kube([{"workflow_id": "w", "run_id": "r", "status": "RUNNING", "query": {}}]))
-            self.assertEqual((code, envelope["status"]), (1, "RUNNING"))
+            self.assertEqual((code, envelope["status"], envelope.kind), (1, "RUNNING", "timeout"))
 
     def test_cancel_exits_zero_only_when_the_runner_accepted_it(self):
         with tempfile.TemporaryDirectory() as tmp:

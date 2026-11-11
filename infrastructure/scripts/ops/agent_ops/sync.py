@@ -12,6 +12,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import outcome
+
 from . import layout, live
 
 HEADER_RE = re.compile(
@@ -23,11 +25,12 @@ HEADER_RE = re.compile(
 DEFAULT_REPO = "X-McKay/zetra-agents"
 
 
-class SyncError(Exception):
-    pass
+class SyncError(outcome.Coded):
+    default_code = "validation-failed"
 
 
 class SourceMissing(SyncError):
+    default_code = "not-found"
     """The commit or path does not exist in the source checkout (as opposed to git failing)."""
 
 
@@ -44,13 +47,13 @@ def _git(source: Path, *args: str) -> str:
         text = (exc.stderr or "").lower()
         if exc.returncode == 128 and ("does not exist" in text or "not a valid object" in text or "exists on disk, but not in" in text):
             raise SourceMissing(f"{args[-1]} is not in {source}") from exc
-        raise SyncError(f"git {' '.join(args)} failed in {source}: git exited {exc.returncode}{live.last_line(exc.stderr)}") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git exited {exc.returncode}{live.last_line(exc.stderr)}", "failed") from exc
     except FileNotFoundError as exc:
-        raise SyncError(f"git {' '.join(args)} failed in {source}: git is not installed or not on PATH") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git is not installed or not on PATH", "unavailable") from exc
     except subprocess.TimeoutExpired as exc:
-        raise SyncError(f"git {' '.join(args)} failed in {source}: timed out after 30 seconds") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}: timed out after 30 seconds", "timeout") from exc
     except OSError as exc:
-        raise SyncError(f"git {' '.join(args)} failed in {source}: git could not be run: {exc.strerror or type(exc).__name__}") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git could not be run: {exc.strerror or type(exc).__name__}", "unavailable") from exc
 
 
 def source_file(source: Path, agent: str, commit: str) -> str:
@@ -114,10 +117,10 @@ def sync(
     if repo is None:
         raise SyncError(f"{agent}: no sync header to take the repository from; pass --repo")
     if recorded is not None and repo != recorded and not allow_repo_change:
-        raise SyncError(f"{agent} is recorded from {recorded}; pass --allow-repo-change to move it to {repo}")
+        raise SyncError(f"{agent} is recorded from {recorded}; pass --allow-repo-change to move it to {repo}", "conflict")
     head, dirty = source_head(source, agent)
     if dirty:
-        raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first")
+        raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first", "conflict")
     body = source_file(source, agent, head)
     doc = _parse_agent(body, d)
     current = layout.committed_agent(d) if d.agent_file.is_file() else None
@@ -156,7 +159,7 @@ def check(root: Path, *, source: Path | None = None, agents: list[str] | None = 
         known = sorted({d.agent for d in layout.agent_dirs(root)})
         unknown = sorted(set(agents) - set(known))
         if unknown:
-            raise SyncError(f"not a committed agent: {', '.join(unknown)}; the committed agents are: {', '.join(known)}")
+            raise SyncError(f"not a committed agent: {', '.join(unknown)}; the committed agents are: {', '.join(known)}", "not-found")
     for d in layout.agent_dirs(root):
         if agents and d.agent not in agents:
             continue

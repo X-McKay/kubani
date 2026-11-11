@@ -5,7 +5,9 @@ what the November 2026 releases did by hand: copying the Agent from the source
 repository, staging a published release, approving it after the controller has
 verified it, and submitting an ordinary session. Every subcommand prints one
 JSON document and exits non-zero on refusal, so an operator or an automated
-session can act on it without parsing prose.
+session can act on it without parsing prose. Every document carries `ok`, and a
+failure carries `error.code` from a closed set; see the
+[CLI outcome contract](cli-contract.md).
 
 ```sh
 just agent state                                # Flux, platform pods, agents, releases, sandboxes, open PRs

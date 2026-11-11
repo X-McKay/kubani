@@ -977,6 +977,35 @@ class CommandLineTests(Case):
         self.assertIn(self.idp.issuer + delegation.AUTH_PATH, err)
         self.assert_secrets_only_on_stdin(kube, 0, out, err)
 
+    def test_every_ending_carries_ok_and_a_code_from_the_closed_set(self):
+        def codes(argv, kube, browser=None, interactive=None):
+            code, out, _ = self.run_cli(argv, kube, browser, interactive=interactive)
+            document = json.loads(out)
+            self.assertIs(document["ok"], code == 0)
+            return code, document["error"]["code"], document["error"]["retryable"]
+
+        kube = self.kube([ACCEPTED])
+        base = ["run", "sample", "--task", "go", "--no-wait"]
+        # Not at a terminal, nobody consents in time.
+        self.assertEqual(codes([*base, "--consent-timeout", "0.05", "--out", str(self.tmp / "a")], kube), (3, "no-consent", True))
+        # A token the policy service would refuse.
+        self.idp.mutate = lambda t: t["access"].update(scope="openid")
+        self.assertEqual(codes([*base, "--browser", "--out", str(self.tmp / "b")], kube, self.browser(), interactive=True), (1, "refused", False))
+        self.idp.mutate = lambda t: None
+        # Keycloak itself answers with an error.
+        self.assertEqual(codes([*base, "--browser", "--out", str(self.tmp / "c")], kube, self.browser(error="access_denied"), interactive=True), (2, "failed", False))
+        # Interrupted at the sign-in, and interrupted where the run does not handle it itself.
+        with patch.object(delegation, "sign_in", interrupted):
+            self.assertEqual(codes([*base, "--out", str(self.tmp / "d")], kube, interactive=True), (130, "interrupted", True))
+        with patch.object(run, "plan", interrupted):
+            self.assertEqual(codes([*base, "--out", str(self.tmp / "e")], kube, interactive=True), (130, "interrupted", True))
+        # Refusals before a run directory exists.
+        self.assertEqual(codes([*base, "--task-json", "{}"], kube), (2, "invalid-arguments", False))
+        self.assertEqual(codes([*base, "--grant-handle", ""], kube), (2, "invalid-arguments", False))
+        self.assertEqual(codes(["consent", "sample", "--session", OTHER_SESSION, "--run-dir", str(self.tmp / "absent")], kube, interactive=True), (2, "not-found", False))
+        self.assertEqual(codes(["consent", "sample", "--session", OTHER_SESSION], kube), (2, "refused", False))
+        self.assertEqual(codes(["run", "absent-agent", "--task", "go"], kube), (2, "not-found", False))
+
     def test_every_ending_prints_exactly_one_json_document(self):
         self.idp.mutate = lambda t: t["access"].update(scope="openid")
         kube = self.kube([ACCEPTED])
@@ -1015,7 +1044,7 @@ class CommandLineTests(Case):
             with self.subTest(argv):
                 code, out, err = self.run_cli(argv, kube, self.browser(), interactive=interactive)
                 document = json.loads(out)
-                self.assertEqual((code, document["status"], set(document)), (2, "REFUSED", {"status", "reason"}))
+                self.assertEqual((code, document["status"], set(document)), (2, "REFUSED", {"status", "reason", "ok", "error"}))
                 self.assertIn(expected, document["reason"])
                 self.assertEqual(err, f"refused: {document['reason']}\n")
         # An error that is not a refusal.
@@ -1028,7 +1057,7 @@ class CommandLineTests(Case):
         with patch.object(run, "plan", unforeseen):
             code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--out", str(self.tmp / "e")], kube, interactive=True)
         document = json.loads(out)
-        self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason"}))
+        self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason", "ok", "error"}))
         self.assertRegex(document["reason"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
         self.assertEqual(err, f"error: {document['reason']}\n")
         # The same after the run directory exists, here a started workflow whose answer lacks a field: the document names
@@ -1036,15 +1065,20 @@ class CommandLineTests(Case):
         answer = {k: v for k, v in ACCEPTED.items() if k != "workflow_id"}
         code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(self.tmp / "f")], self.kube([answer]), self.browser(), interactive=True)
         document = json.loads(out)
-        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "ERROR", {"status", "reason", "sessionId", "dir"}, str(self.tmp / "f")))
+        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "ERROR", {"status", "reason", "sessionId", "dir", "ok", "error"}, str(self.tmp / "f")))
         self.assertRegex(document["reason"], r"^unexpected KeyError at run\.py:\d+$")
         self.assertEqual(json.loads((self.tmp / "f" / "request.json").read_text())["session_id"], document["sessionId"])
         for secret in self.secrets():
             self.assertNotIn(secret, out + err)
-        # Only `run` and `consent` promise one document: any other command lets an unforeseen error through as it is.
-        with patch.object(live, "listing", unforeseen), self.assertRaises(KeyError):
-            self.run_cli(["ls"], kube)
         self.assertNotIn("must not be printed", out + err)
+        # Every command ends as one document: an unforeseen error in any other command names its type and place on stdout
+        # (the traceback it always printed stays on stderr) and exits 1.
+        with patch.object(live, "listing", unforeseen):
+            code, out, err = self.run_cli(["ls"], kube)
+        document = json.loads(out)
+        self.assertEqual((code, document["ok"], document["error"]["code"], document["error"]["retryable"]), (1, False, "internal", False))
+        self.assertRegex(document["error"]["message"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
+        self.assertNotIn("must not be printed", out)
         self.assertEqual(kube.exec_calls, [])
 
     def test_await_consent_is_no_longer_an_option(self):
