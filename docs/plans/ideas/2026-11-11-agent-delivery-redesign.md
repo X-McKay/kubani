@@ -240,34 +240,84 @@ The four contracts:
 4. **Activation state** on the release object. The provisioners watch it and
    react. No service calls another to cause an activation.
 
-The registry keeps using Kubernetes objects as its store, so the existing
-`AgentRelease` history carries over unchanged.
+The registry keeps using Kubernetes objects as its store, so existing
+`AgentRelease` objects stay valid. The schema needs additions, because it is
+strict and drops unknown fields: optional fields on `AgentRelease` for the
+version, the declaration, the runtime protocol version, the verdict, an
+evaluation summary and the difference in authority; and one new kind that
+records which version of an agent is current on each channel, because a flag on
+each release cannot guarantee that at most one is current.
+
+Two things in today's controller must change before a newer version can become
+current automatically (checked 2026-11-11):
+
+- A session is bound to its release by name when it is submitted, and nothing
+  looks the release up again. But a release's readiness is recomputed from the
+  single live `Agent` object, so changing an agent's declaration marks every
+  older release as drifted and not ready, and a session still running on one of
+  them is refused at its next sandbox. Compiling each release's policy from the
+  declaration it carries removes this; until then, "sessions in flight finish
+  on the version they started with" holds only while the declaration is
+  unchanged.
+- The per-agent rate limit is taken from whichever ready release is read last.
+  With two ready releases of one agent the result is arbitrary. It must be
+  taken from the current version.
 
 ## 9. Build and release on self-hosted runners
 
-Recommended: **one release pipeline, owned by the platform, on one runner scale
-set.**
+Facts that constrain the choice (checked 2026-11-11):
 
-- A workflow in zetra takes a source repository, a commit and an agent. It runs
-  on a single scale set bound to zetra.
-- The platform starts it when a trusted repository's main branch gains a
-  version bump. Nothing in an agent repository starts it, and no agent
-  repository holds a registry or signing credential.
-- It is two jobs. The build job checks out the exact commit, runs the gate and
-  builds the image with the platform's Dockerfile; it holds no credential. The
-  publish job pushes, signs and attests; it runs no code from the repository.
-- Pull request checks in the agent repository run on GitHub's runners. They
-  need no cluster access.
+- The repositories belong to a personal account. A repository-level runner
+  scale set serves one repository, and runner groups, which would let several
+  repositories share one, exist only for organisations.
+- A workflow cannot start a workflow in another repository without a stored
+  token for that repository. The default token is scoped to its own repository.
+- In a reusable workflow, the signing certificate's subject is the reusable
+  workflow's own path, and the calling repository is carried in a certificate
+  extension. The steps are defined entirely by the called workflow; the caller
+  supplies inputs only.
 
-What this removes: a scale set, a guard entry and a GitHub App installation per
-repository, and the shared registry password in each repository's secrets. It
-also serves the platform image builds planned in pull request 420 from the same
+Two ways to satisfy D1, D3 and D9 follow from that.
+
+**Option A: the release runs in the agent repository's own pipeline.** A
+workflow in the agent repository, on a merge to main, calls the platform's
+reusable release workflow from zetra and runs it on a self-hosted scale set for
+that repository.
+
+- The scale set and its guard entry are generated from the trust registration,
+  not written by hand. The registry credential is held on the runner, so no
+  repository stores a password.
+- The author sees the whole release, including the registry's result, in their
+  own repository's run, because the last job runs inside the cluster and can
+  read the registry. No extra token is needed to report results.
+- The signature identifies the platform's workflow, and the verifier reads the
+  calling repository from the certificate extension.
+- Cost per trusted repository: one scale set (one listener pod) and one GitHub
+  App installation by the repository's owner.
+- The runner guard admits only a push to main from a trusted repository. A job
+  the repository defines for itself on that runner could push to the registry
+  but could not sign as the platform's workflow, so it could not produce
+  anything the verifier accepts.
+
+**Option B: one central pipeline in zetra.** A scheduled workflow in zetra
+polls the trusted repositories for version bumps on main and builds on a single
 scale set.
 
-Fallback if a central pipeline proves unworkable: keep a scale set per
-repository, generate it and its guard entry from the trust registration, and
-hold the registry credential on the runner. Cost: one listener pod and one
-GitHub App installation per repository.
+- Nothing is installed or stored per repository.
+- A release starts on the next poll, not on the merge: five minutes at best and
+  often later, and the run appears in zetra, not in the author's repository.
+- Reporting a result on the author's commit needs a platform-held token with
+  permission to write commit statuses on each repository.
+
+Recommended: **Option A.** It is the literal meaning of D9, it gives the author
+the result where they are already looking, and its per-repository cost is
+generated. Option B stays available for a repository whose owner cannot install
+the application.
+
+In both, the build job runs the gate and builds with the platform's Dockerfile
+and holds no signing identity of its own; pull request checks run on GitHub's
+runners and need no cluster access. Both also serve the platform image builds
+planned in pull request 420.
 
 ## 10. Verification and admission
 
@@ -280,10 +330,22 @@ Kyverno admits an agent pod only if a verdict from the verifier exists for the
 image digest. The per-tenant signer regular expression, which today lists every
 agent name in two files, is deleted.
 
+What exists today (checked 2026-11-11): Kyverno v1.19.2 already admits agent
+images through a `ClusterPolicy` that requires five attestations, each with
+conditions on its content, including an evaluation attestation that must report
+every case passed. Requiring one more attestation of a verdict type, signed by
+the verifier's key, is an addition of the same shape. The verdict must repeat
+the image digest, and the policy must check it. The Registry Controller also
+verifies signatures itself and assumes a tag-shaped certificate subject; that
+code becomes the verifier and loses the tag assumption, so there is one
+verifier and not two.
+
 ## 11. Evaluation and activation
 
 - **In continuous integration:** tests and scripted scenarios, with scripted
-  model and tool replies. Deterministic, fast, required to merge.
+  model and tool replies. Deterministic, fast, required to merge. The release
+  already attaches an evaluation attestation, and admission already refuses an
+  image whose attestation reports a failed case; that stays.
 - **On the cluster, before activation:** the registry runs the agent's
   evaluation suite and a smoke session as ordinary sessions against the built
   artifact. Results are compared with the current version's results. A
@@ -323,8 +385,9 @@ table. A route without one is denied, and a test fails the build.
 
 Deleted from Kubani once migration completes: `apps/agents/` (about 60 files),
 the tenant signer pin, and the `sync`, `check-sync`, `stage` and `approve`
-subcommands. Deleted from zetra: the composite release action and the rendered
-release workflow in agent repositories.
+subcommands. Deleted from zetra: the composite release action. The workflow
+rendered into agent repositories shrinks to a call to the platform's release
+workflow.
 
 Stays in Kubani: every platform service's manifests, tenant policy, the list of
 trusted repositories, and `just agent state` and `run` as thin clients of the
@@ -339,8 +402,8 @@ Each phase ends with something that can be checked, and can stop there.
 | 0. Repair and foundations | Fix the preflight, model-free and `--release` items in section 3 (the runner item is resolved by phase 3). Clean-up items from the audit (section 17). Then, once the decisions in pull request 420 are made: build and sign platform images in continuous integration, and move the conformance harness out of the runner image. | A model-free agent runs. Preflight works against zetra-agents. Every test module runs. Platform images are built by a pipeline. |
 | 1. Registry, read-only | The registry serves the existing release objects and a status view. No behaviour changes. | The status view agrees with `just agent ls` for every agent. |
 | 2. Session interface | Start, status, cancel and report over HTTP. `just agent run` becomes its client. | A session completes with no `kubectl exec`. |
-| 3. Platform release pipeline and verdict | The central pipeline, the verifier, and Kyverno admitting on the verdict, for one agent. The old path stays for the others. | One agent is released by a merge and admitted on a verdict. |
-| 4. Declaration with the release | The registry decides authority per version. Approval moves into the registry. That agent's files leave Kubani. | A change of authority is approved without a Kubani pull request. |
+| 3. Platform release pipeline and verdict | The platform's release workflow (section 9), the verifier, and Kyverno admitting on the verdict, for one agent. The rate limit is taken from the current version. The old path stays for the others. | One agent is released by a merge and admitted on a verdict. |
+| 4. Declaration with the release | Each release's policy is compiled from the declaration it carries, which removes the drift check. The registry decides authority per version. Approval moves into the registry. That agent's files leave Kubani. | A change of authority is approved without a Kubani pull request, and a session running on the previous version finishes. |
 | 5. Evaluation and preview | Cluster-side evaluation before activation, the preview tenant, promotion by digest. | A regressed build is stopped automatically. |
 | 6. Migrate the rest | One agent at a time, then delete what section 14 lists. | `apps/agents/` is gone. |
 
@@ -357,23 +420,27 @@ Assumed, for Al to confirm or reverse before phase 3:
 
 1. Approval of a change of authority is a signed, recorded action in the
    registry in place of a reviewed pull request.
-2. The central release pipeline of section 9 is the improvement wanted for
-   self-hosted builds, with the merge to main as the event that starts it. The
-   other reading of D9 is that the release job runs in the agent repository's
-   own workflow on a self-hosted runner, which is the fallback in section 9.
+2. Option A of section 9, the release running in the agent repository's own
+   pipeline on a generated scale set, is the improvement wanted for self-hosted
+   builds.
+
+Settled by reading the code and documentation on 2026-11-11, and folded into
+sections 8 to 10:
+
+- Kyverno can admit on the verifier's verdict with the policy kind already in
+  use.
+- A session is bound to its release at submission; the obstacle to automatic
+  activation is the drift check, not the binding.
+- The policy service's ledger is already behind an interface, so it can be
+  split out later at modest cost. It is not split in this plan.
+  `platform/budget-backend` is a test double, not the ledger.
 
 Not yet verified:
 
-- How the platform starts the release workflow: a dispatch from the cluster
-  with a credential scoped to zetra's workflows, or a scheduled poll in zetra.
-- How results are reported on the author's commit without installing an
-  application on every repository.
-- Whether the deployed Kyverno version can admit on an attestation signed by
-  the verifier, and with which policy type.
-- Whether the policy service's ledger should be a separate part. It has not
-  been read closely.
-- How a session binds to a release, to confirm that sessions in flight are
-  unaffected by activation.
+- Whether the private certificate authority issues the certificate extension
+  that names the calling repository, which Option A in section 9 relies on.
+- Whether the runner guard can tell a job of the platform's reusable workflow
+  from a job the calling repository defines itself.
 - Whether one file can replace the two declaration files an author writes.
   The author-side review that informs this had not reported when this draft was
   written; nor had the tooling timings.
