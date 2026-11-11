@@ -81,9 +81,46 @@ Success means Temporal `COMPLETED`, result outcome `COMPLETED`, query state
 `CLEANED` and cleanup exactly `{stop: OK, delete: DELETED, grant: OK}`. Only
 then is the content-addressed snapshot read (at most 64 MiB, hash verified,
 uncompressed tar, at most 256 members) and `workspace/report.md` (at most 16,000
-bytes, strict UTF-8) copied out. Exit codes: 0 confirmed success with report,
-1 failure or unconfirmed cleanup, 2 refused input, 3 nobody consented in time
-(nothing was deposited or submitted), 124 local timeout.
+bytes, strict UTF-8) copied out.
+
+Once its arguments have parsed, `run` prints exactly one JSON document on
+stdout however it ends, and each ending has one exit code. A `REFUSED` or
+`ERROR` ending also prints one line on stderr (`refused: ...` or
+`error: ...`), as the other subcommands do.
+
+| Ending | Exit | `status` in the document | Files the ending leaves |
+| --- | --- | --- | --- |
+| the workflow closed with confirmed success and cleanup, and the report was copied out | 0 | the workflow's status | `request.json`, `receipt.json`, `status.json`, `report.md` |
+| `--no-wait`, the workflow was started | 0 | `SUBMITTED` | `request.json`, `receipt.json` |
+| the workflow closed without confirmed success or without confirmed cleanup | 1 | the workflow's status | `request.json`, `receipt.json`, `status.json` |
+| `--wait-timeout` passed | 124 | the workflow's status, with `timedOut: true` | `request.json`, `receipt.json`, `status.json` |
+| Ctrl-C while following the workflow; the workflow is not cancelled | 130 | `INTERRUPTED` | `request.json`, `receipt.json` |
+| refused before a run directory exists: the input, the release, the identity row, no Ready runner pod, PyJWT missing for a sign-in | 2 | `REFUSED` | none |
+| an error that is not a refusal, such as a task file that cannot be read or is not JSON | 1 | `ERROR` | none |
+| the submit call failed, was refused by the remote script or did not answer in 60 seconds | 2 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
+| Ctrl-C while the submit call was in flight | 130 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
+| nobody consented within `--consent-timeout`, or the sign-in at this terminal was not completed in time | 3 | `NOT_SUBMITTED` | `request.json`, `status.json` |
+| the token Keycloak issued at this terminal would not be accepted for deposit | 1 | `NOT_SUBMITTED`, with `missing` | `request.json`, `status.json` |
+| `consent.json` is not a record for this session, or does not carry the digest of what this run holds | 1 | `NOT_SUBMITTED` | `request.json`, `status.json` (beside the `consent.json` that was found) |
+| consent was recorded and the APS holds no grant for the session | 1 | `NOT_SUBMITTED` | `request.json`, `status.json` (beside `consent.json`) |
+| the sign-in at this terminal was refused or failed (an `error=` callback, a `state` mismatch, a failed signature or issuer check, a listener failure) | 2 | `NOT_SUBMITTED` | `request.json`, `status.json` |
+| Ctrl-C during the sign-in or while waiting for consent | 130 | `NOT_SUBMITTED` | `request.json`, `status.json` |
+
+The last six rows are reached only by a release that requires delegation.
+`SUBMIT_UNCONFIRMED` means the host does not know whether a workflow exists:
+no receipt was written, so `status`, `wait` and `cancel` cannot be pointed at
+it. Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
+carries a `reason`; for a release that requires delegation the reason says
+what is known about a grant (see
+[What can go wrong](#what-can-go-wrong)). A remote call that wrote to stderr
+also leaves an `exec-NN.stderr` file. Two endings fall outside the table: a
+remote `status` call that fails while the workflow is being followed ends as
+`REFUSED` with exit 2, and an operating-system error such as a file that
+cannot be written ends as `ERROR` with exit 1; both leave what was written by
+then and write no `status.json`. Ctrl-C at a moment `run`
+does not handle itself (before the run directory exists, for example) ends as
+`INTERRUPTED` with exit 130 and a document that holds only `status` and
+`reason`. No ending prints a Python traceback.
 
 Each run gets a new private directory, by default
 `~/.local/state/kubani/agent-runs/<agent>/<UTC time>-<session prefix>/`:
@@ -92,11 +129,12 @@ Each run gets a new private directory, by default
 | --- | --- |
 | `request.json` | tenant, agent, release, session id, task and bound (never the grant handle) |
 | `receipt.json` | namespace, workflow id, run id, task queue, runner pod uid, remote script sha256, the release's identity mode, whether a grant handle was submitted or a grant deposited, and how consent was obtained (never a token or a handle) |
-| `status.json` | the final envelope: status, query, result, cleanup confirmation; `NOT_SUBMITTED` with a reason when the run ended before a workflow started |
+| `status.json` | the document `run` printed, for the endings the table above lists it under: status, query, result and cleanup confirmation once a workflow closed or `--wait-timeout` passed; `NOT_SUBMITTED` or `SUBMIT_UNCONFIRMED` with a `reason` otherwise. Not written by `--no-wait`, by Ctrl-C while following, or by a `REFUSED`, `ERROR` or bare `INTERRUPTED` ending |
 | `report.md` | the agent's report, present only after confirmed success |
 | `exec-NN.stderr` | bounded stderr of a remote call, when any |
-| `consent.json` | written by `consent --session` after the APS accepted the deposit: session id, agent, tenant, the person's subject id, whether a refresh token was issued, the grant's expiry, when the deposit was made (never a token or a handle) |
+| `consent.json` | written by `consent --session` after the APS accepted the deposit: session id, agent, tenant, `shownSha256` (the digest of what the person was shown), the person's subject id, whether a refresh token was issued, `grantRequestedUntil`, when the deposit was made (never a token or a handle) |
 | `waiting.lock`, `deposit.lock` | empty lock files of a run that waited for consent |
+| `deposit.attempted` | one timestamp per deposit a consent command sent. Removed when the deposit is confirmed, and when the APS refuses it and no earlier attempt is unresolved. While it exists, a run that ends without a workflow says a grant may be held |
 | `consent-exec-NN.stderr` | bounded stderr of the consent command's remote call, when any |
 
 `status`, `wait` and `cancel` take `--receipt` and operate on that exact run
@@ -118,42 +156,71 @@ session id, writes `request.json`, and then takes one of two paths. A run of
 an own-identity agent, of an agent whose delegation is optional, or with
 `--grant-handle` reaches neither and behaves as it did before.
 
-**Started from a terminal** (stdin, stdout and stderr are all a TTY, and
-`--await-consent` is not given). `run` prints, on stderr, the agent, tenant,
-release and session id and an authorization URL. The person who started it
-opens the URL and answers the consent screen. The sign-in is the one
-`consent --check` performs ([steps 1 to 3](#checking-consent-just-agent-consent---check-agent))
-with one difference: the URL carries `prompt=consent`, so an open Keycloak
-session is reused and the consent screen is still shown every time.
-`--browser` also hands the URL to the default browser. `run` checks the token
-against the four conditions `consent --check` reports and, if one fails,
-refuses with exit 2 without sending the token anywhere. Otherwise it makes
-one remote call, which deposits the token for the session id and starts the
-workflow.
+`--consent-timeout` and `--browser` apply only on these two paths. A run that
+asks nobody accepts them and ignores them.
 
-**Started without a terminal, or with `--await-consent`.** `run` signs nobody
-in. It prints one line on stderr and waits up to `--consent-timeout` seconds
-(300 by default, 900 at most):
+**Started from a terminal** (stdin and stderr are both a TTY; stdout may be a
+pipe or a file, so `just agent run ... | jq` still signs the person in here).
+`run` prints on stderr, before any URL: the task as it will be submitted (cut
+at 2,000 characters, with the path of `request.json` for the rest), then one
+line naming the agent, tenant, release and session id, then the authorization
+URL. The person who started it opens the URL and answers the consent screen.
+The sign-in is the one `consent --check` performs
+([steps 1 to 3](#checking-consent-just-agent-consent---check-agent)) with one
+difference: the URL carries `prompt=consent` in place of
+`prompt=login consent`. That asks Keycloak to reuse an open session and still
+show the consent screen (`agent-cli` has `consentRequired`; not observed).
+Because a reused session may belong to another account than the person
+expects, `run` prints `Signed in as <preferred_username>.` on stderr after
+the sign-in (the `sub` when the token has no username). `--browser` also
+hands the URL to the default browser. `run` checks the token against the four
+conditions `consent --check` reports and, if one fails, ends with exit 1 and
+`NOT_SUBMITTED` without sending the token anywhere; the reasons are under
+`missing`. Otherwise it makes one remote call, which deposits the token for
+the session id and starts the workflow.
+
+**Started without a terminal** (stdin or stderr is not a TTY). `run` signs
+nobody in. It prints one line on stderr and waits up to `--consent-timeout`
+seconds (300 by default, 900 at most):
 
 ```text
-investigator acts on behalf of a person and this run cannot sign anyone in (not started from a terminal, or --await-consent). Within 300 seconds that person runs, in a terminal on this machine: just agent consent investigator --session <id>
+investigator acts on behalf of a person and this run cannot sign anyone in (stdin and stderr are not both a terminal). Within 300 seconds that person runs, in a terminal on this machine: just agent consent investigator --session <id>
 ```
 
-`--run-dir DIR` is added to the printed command when `--out` put the run
-directory outside the default location. The person runs the printed command
-in their own terminal. `consent --session`:
+The consent command finds the run under the default run directory by the
+session id's first eight characters. When `--out` put the run directory
+anywhere that lookup would not find it, including a differently named
+directory inside the default location, the printed command also carries
+`--run-dir` with the absolute path, quoted for the shell. The person runs the
+printed command in their own terminal. `consent --session`:
 
 1. Refuses, before anyone is asked to sign in, unless the committed Agent is
-   on-behalf-of, stdin, stdout and stderr are all a TTY, the session id is a
-   lower-case UUID, and a `run` of that agent on this machine is alive and
-   still waiting for that session.
+   on-behalf-of, stdin and stderr are both a TTY, the session id is a
+   lower-case UUID, and a `run` of that agent and tenant on this machine is
+   alive and still waiting for that session. It also refuses a run directory
+   that the caller does not own or whose mode is not exactly 0700, and a
+   `request.json` that is a symbolic link, is not a regular file or is not
+   owned by the caller: that file decides what the person is shown.
 2. Prints the task from the run's `request.json` (cut at 2,000 characters),
-   then the agent, tenant, release and session id and the authorization URL.
-   The sign-in is the same as for a run started from a terminal.
+   then the agent, tenant, release and session id and the authorization URL,
+   in the same form as a run started from a terminal, and after the sign-in
+   the same `Signed in as` line.
 3. If the token meets the four conditions, deposits it through its own remote
    call and writes `consent.json` into the run directory. If it does not, the
    command exits 1, lists the reasons under `missing` and deposits nothing;
    the run keeps waiting.
+
+`consent.json` carries `shownSha256`: a SHA-256 over one canonical JSON
+encoding of the tenant, agent, release, session id and whole task document
+that step 2 displayed from. `run` computes the same digest from what it holds
+in memory, which is what it will submit, and starts nothing unless the two
+are equal. A `request.json` changed between `run` writing it and the consent
+command reading it therefore ends the run with exit 1 and `NOT_SUBMITTED`,
+after the deposit: the grant may be held until the cleanup reconciler's next
+pass, and the reason says so. The handle never reaches the host, so the host
+cannot release that grant itself. The digest covers the whole task; the
+display is cut at 2,000 characters, so a person who wants to read a longer
+task opens `request.json`.
 
 `run` learns that the grant exists from `consent.json` and from nothing else:
 it looks for the file twice a second. The file is written only after the APS
@@ -164,9 +231,16 @@ crossing: `run` cannot give up while a deposit is in progress, and a second
 `consent` for the same session is refused.
 
 If nobody consents in time, `run` exits 3 with status `NOT_SUBMITTED`. No
-workflow was started and no grant was deposited, and a `consent` that arrives
-afterwards is refused before the sign-in. A run started from a terminal
-exits 3 in the same way when the sign-in is not completed in time.
+workflow was started, and a `consent` that arrives afterwards is refused
+before the sign-in. The reason says what this machine knows about a deposit:
+that no consent command reached the deposit step, or that one sent a token
+and recorded no deposit, in which case a grant may be held until the cleanup
+reconciler's next pass. A run started from a terminal exits 3 in the same way
+when the sign-in is not completed in time; no token left the machine.
+
+Ctrl-C ends either path with exit 130, `NOT_SUBMITTED` in `status.json` and
+on stdout, and no traceback. A consent command that arrives afterwards is
+refused.
 
 The awaited path asks more of the person than a sign-in. The run directory is
 private to the operating-system user who started `run`, and the deposit is
@@ -175,6 +249,11 @@ at a terminal on the machine where `run` waits, as that user, with a
 kubeconfig that may exec into that pod. Today that is the operator consenting
 to a session that an automated session started. There is no path yet for a
 person who has no such access.
+
+What the digest does not do: it is checked by `run` on the host. Nothing at
+the APS or the Session Runner binds a grant to a task, so a process that can
+already exec into the runner pod could start that session id with another
+task once a grant exists.
 
 #### Where the token and the handle go
 
@@ -185,7 +264,11 @@ of `POST /v1/grants` on port 9002, with the refresh token (or null) and the
 expiry in the body. The token is never placed on a command line, in a file,
 in the command's output, in the receipt or in an error message. The remote
 script reaches the APS without a proxy and without following a redirect, and
-reports a failure as one of a fixed list of messages.
+reports a failure as one of a fixed list of messages. That request is plain
+HTTP inside the cluster network
+(`http://agent-policy-service.agent-platform.svc.cluster.local:9002`), as
+every Session Runner call to the APS already was before this path existed;
+whether traffic between nodes is encrypted was not checked.
 
 The grant handle never reaches the host. The APS returns it to the remote
 script inside the pod:
@@ -207,7 +290,11 @@ with `--grant-handle`.
 
 The access token lives 300 seconds. Whether Keycloak issues `agent-cli` a
 refresh token for this sign-in has not been observed (the request does not
-ask for `offline_access`, which the client is refused). Both answers are
+ask for `offline_access`; `agent-cli` is refused it with HTTP 400
+`not_allowed`, which
+`infrastructure/gitops/apps/agent-platform/conformance/human/DELEGATION.md`
+records as observed, although the realm file lists it as an optional scope of
+the client). Both answers are
 handled, and the command says which one it got:
 
 - **A refresh token was issued.** It is deposited with the access token, and
@@ -223,21 +310,32 @@ handled, and the command says which one it got:
   prints a line saying so on stderr, and `consent --session` puts it in the
   `note` field of its output.
 
-Either way the receipt records `refreshTokenIssued` and `grantExpiresAt`.
+Either way the receipt records `refreshTokenIssued` and
+`grantRequestedUntil`. That time is the upper bound the deposit asked for,
+not how long delegation will work. The APS refreshes the access token only
+during an exchange, and only when less than 120 seconds of it remain; it does
+nothing between exchanges. With the realm's client session idle time of 600
+seconds, a session that makes no delegated call for about ten minutes is
+expected to find the refresh token dead and delegation over, well before
+`grantRequestedUntil` (read from the realm file and zetra `18aee61`, not
+observed).
 Nothing is revoked at Keycloak, for the reason given under
 [`consent --check`](#checking-consent-just-agent-consent---check-agent).
 
 #### What the receipt records about consent
 
-`consent` in the receipt is null when the run asked nobody. Otherwise it
+`consent` in the receipt is null when the run asked nobody, so receipts of
+own-identity agents, of optional delegation and of `--grant-handle` runs gain
+a `consent: null` field they did not have before. Otherwise it
 holds `mode` (`inline` for a run that signed the person in itself, `awaited`
 for one that waited for the consent command), `subject`, `subjectSource`,
-`refreshTokenIssued` and `grantExpiresAt`.
+`refreshTokenIssued` and `grantRequestedUntil`.
 
 `subject` is the `sub` claim of the person's token, Keycloak's opaque id for
 the user. It is recorded because it says who consented, the APS already logs
-it at deposit, and `consent --check` already prints it. The username is not
-recorded. For an inline run the subject comes from the token `run` verified.
+it at deposit, and `consent --check` already prints it. The username is
+printed on stderr after the sign-in and is not recorded in the receipt. For
+an inline run the subject comes from the token `run` verified.
 For an awaited run `run` never sees the token and copies the subject from
 `consent.json`, a file any process of the same operating-system user could
 have written; `subjectSource` says which of the two it was. The receipt holds
@@ -245,19 +343,31 @@ no token and no handle.
 
 #### What can go wrong
 
+Every result below is one JSON document on stdout with the exit code given.
+"A grant may be held" is the reason's own wording: `a grant may be held for
+this session until the cleanup reconciler's next pass (every five minutes)`.
+The interval is read from zetra `18aee61`; no removal has been observed.
+
 | Case | Result |
 | --- | --- |
-| nobody runs the consent command within `--consent-timeout` | `run` exits 3, `NOT_SUBMITTED`; nothing was deposited or submitted |
-| the sign-in of a run started from a terminal is not completed in time | the same |
-| Keycloak issues a token that fails one of the four conditions, run started from a terminal | `refused: the token Keycloak issued would not be accepted for deposit, so nothing was deposited or submitted: <reasons>`, exit 2; the run directory holds only `request.json` |
+| nobody runs the consent command within `--consent-timeout` | `run` exits 3, `NOT_SUBMITTED`: `no consent was recorded in time; no consent command reached the deposit step and no workflow was started` |
+| a consent command sent a token and its deposit was never confirmed, and the run then gives up or is interrupted | `run` exits 3 (130 when interrupted), `NOT_SUBMITTED`; the reason says a consent command sent a token and recorded no deposit, so a grant may be held |
+| the sign-in of a run started from a terminal is not completed in time | `run` exits 3, `NOT_SUBMITTED`; no token was sent to the cluster and no workflow was started |
+| Keycloak issues a token that fails one of the four conditions, run started from a terminal | `run` exits 1, `NOT_SUBMITTED`, with `subject`, `preferredUsername` and the reasons under `missing`; no token was sent to the cluster |
 | the same, in `consent --session` | exit 1 with `deposited: false` and the reasons under `missing`; the run keeps waiting until its timeout |
-| the sign-in of `consent --session` is not completed in time | exit 124 with `deposited: false`; the run keeps waiting until its timeout |
-| the APS refuses the deposit | `refused: remote submit failed: deposit refused: <reason>` (`remote deposit failed` from the consent command), exit 2; no workflow, no receipt, no `consent.json` |
-| `consent.json` exists but the APS holds no grant for the session when `run` looks | `run` exits 1, `NOT_SUBMITTED`, `consent was recorded but the policy service no longer holds a grant for this session; run again and consent again`; no receipt |
-| the workflow cannot be started after the grant was deposited or found | the remote script removes the grant, naming this session, if no workflow exists for it; `run` exits 2; the next run needs a new consent |
-| a remote call does not answer within 60 seconds | `refused: remote <action> did not answer within 60 seconds; whether it took effect is not known`, exit 2; a grant left without a workflow is removed by the cleanup reconciler |
-| `--await-consent` on a run that would ask nobody | refused, exit 2, before a run directory exists |
-| `consent --session` without a terminal, for an own-identity agent, for a session no live run on this machine waits for, or after consent was already given | refused, exit 2, before the sign-in |
+| Keycloak refuses the authorization request, or the sign-in fails a check, run started from a terminal | `run` exits 2, `NOT_SUBMITTED`, the reason naming the refusal; no token was sent to the cluster |
+| the same, in `consent --session` or `consent --check` | exit 2, `REFUSED`; the run keeps waiting until its timeout |
+| the sign-in of `consent --session` is not completed in time | exit 124 with `deposited: false` and `timedOut: true`; the run keeps waiting until its timeout |
+| the APS refuses the deposit, run started from a terminal | `run` exits 2, `SUBMIT_UNCONFIRMED`: `remote submit failed: deposit refused: <reason>; the policy service holds no grant from this run`; no receipt |
+| the APS refuses the deposit, `consent --session` | exit 2 with `deposited: false` and `remote deposit failed: deposit refused: <reason>; this command deposited nothing`; no `consent.json`; the run keeps waiting |
+| the consent command's deposit fails another way, is not confirmed, or does not answer within 60 seconds | exit 2 with `deposited: null` and a reason that says a grant may be held; no `consent.json`; `deposit.attempted` stays; the run keeps waiting |
+| `consent.json` is for another session or cannot be read | `run` exits 1, `NOT_SUBMITTED`; no workflow was started; if a consent command deposited a token, a grant may be held |
+| `consent.json` does not carry the digest of this run's tenant, agent, release, session and task | `run` exits 1, `NOT_SUBMITTED`; no workflow was started and a grant may be held |
+| `consent.json` exists but the APS holds no grant for the session when `run` looks | `run` exits 1, `NOT_SUBMITTED`, `consent was recorded but the policy service no longer holds a grant for this session; no workflow was started; run again and consent again`; no receipt |
+| the workflow cannot be started after the grant was deposited or found | the remote script tries once to remove the grant, naming this session, if no workflow exists for it, and does not report whether that worked; `run` exits 2, `SUBMIT_UNCONFIRMED`, and the reason says a grant may be held; the next run needs a new consent |
+| a remote call does not answer within 60 seconds | from `run`'s submit call: exit 2, `SUBMIT_UNCONFIRMED`, `remote submit did not answer within 60 seconds; whether it took effect is not known`, and for a release that requires delegation that a grant may be held |
+| Ctrl-C during the sign-in or the wait | `run` exits 130, `NOT_SUBMITTED`; `consent --session` exits 130 with `deposited: false` and `interrupted: true`, or `deposited: null` with a reason when the deposit was in flight |
+| `consent --session` without a terminal, for an own-identity agent, for a session no live run of that agent and tenant on this machine waits for, for a run directory or `request.json` another account owns or could have changed, or after consent was already given | exit 2, `REFUSED`, before the sign-in; `this command deposited nothing` where a run directory was found |
 
 The APS's refusals of a deposit are reported as: the token belongs to an
 agent, not a person; the token lacks this agent's delegation scope; the token
@@ -272,8 +382,9 @@ Tested offline by `just test-agent-ops`:
 - The host side, against the in-process fake identity provider and fake
   cluster in the test files: one test for each identity row (own identity,
   optional delegation, required with inline consent, required with awaited
-  consent, required with `--grant-handle`), the refusals and timeouts above,
-  and that no token, token segment, authorization code or PKCE verifier is in
+  consent, required with `--grant-handle`), the refusals, timeouts and
+  interrupts above, the digest and ownership checks, the terminal test on
+  stand-in streams, and that no token, token segment, authorization code or PKCE verifier is in
   any file, command line, printed line or output, while the access token is
   in the standard input of exactly one remote call.
 - The remote script, started as a subprocess the way `run` starts it, against
@@ -294,6 +405,26 @@ whether a real person's token carries the scope and `may_act`, whether the
 APS accepts the deposit, whether the session passes preflight, and whether
 investigator can then read what the person may read. No session whose release
 requires delegation has been run through `run`.
+
+Limits that apply to every agent, not only to one that requires delegation:
+
+- Every remote call, including `status`, `wait` and `cancel` for an
+  own-identity agent, now sends the script and the request on the standard
+  input of `kubectl exec` (the bootstrap described under "Running a
+  session"). That transport has run only against stand-ins. Until one live
+  session has been run on it, no `run` of any agent is known to work on this
+  version.
+- Receipts gain `consent: null` for the identity rows that ask nobody.
+- A failed or unanswered submit call now ends with a `SUBMIT_UNCONFIRMED`
+  document and `status.json` for every agent, where it used to print only a
+  `refused:` line and write no `status.json`. The exit code is 2 as before.
+- The remote script's output is confined to a fixed list of messages, and
+  the tests read it for tokens and handles. The pod's stderr is different: up
+  to 4,000 characters of it are copied into `exec-NN.stderr` (or
+  `consent-exec-NN.stderr`) as they came. The script names stderr nowhere,
+  but what the Python interpreter or the runner's libraries write there on a
+  crash or a warning was not established by reading them. It is the one path out of the
+  pod that is not closed by reading the code.
 
 ### Grant handles
 
@@ -348,7 +479,7 @@ What a missing or wrong handle produces:
 
 | Case | Refused by | Result |
 | --- | --- | --- |
-| delegation required, no `--grant-handle` | nobody: `run` asks the person for consent | see [What can go wrong](#what-can-go-wrong); when nobody consents in time, exit 3 with nothing deposited or submitted |
+| delegation required, no `--grant-handle` | nobody: `run` asks the person for consent | see [What can go wrong](#what-can-go-wrong); when nobody consents in time, exit 3 with no workflow started and a reason that says what is known about a deposit |
 | on-behalf-of release that reports neither true nor false for `delegationRequired`, no `--grant-handle` | `run`, before a run directory exists or anything is submitted | `refused: <agent>: release <name> does not report whether delegation is required`, exit 2 |
 | `identity.mode: agent`, `--grant-handle` given | `run`, at the same point | `refused: <agent> runs with its own identity and takes no grant handle`, exit 2 |
 | delegation required, handle the APS does not hold (unknown, expired or already deleted) | Session Runner preflight | the preflight activity fails as `Forbidden` (`APS GET refused with 404`); the result outcome is `FAILED` and `run` exits 1 without a report |
@@ -398,8 +529,9 @@ described here, and `--session`, the person's half of a waiting `run`
 with both it refuses with exit 2.
 
 The command refuses unless the committed Agent declares
-`identity.mode: on-behalf-of`, and unless stdin, stdout and stderr are all a
-terminal. The terminal check runs before anything is listened on or fetched.
+`identity.mode: on-behalf-of`, and unless stdin and stderr are both a
+terminal (stdout may be a pipe or a file; it receives only the JSON
+document). The terminal check runs before anything is listened on or fetched.
 It stops a run from a pipeline or a plain subprocess; a wrapper that supplies
 a pseudo-terminal passes it. What a script cannot supply is the sign-in, which
 the person does in their own browser. The command then:
@@ -442,7 +574,12 @@ error message.
 Exit codes: 0 when `wouldBeAcceptedForDeposit` is true, 1 when it is false,
 2 on a refusal (including a failed signature or issuer check, a `state`
 mismatch, an `error=` callback, a request on the listener that is not the
-callback and a listener failure), 124 when no callback arrived in time.
+callback and a listener failure), 124 when no callback arrived in time,
+130 on Ctrl-C. A refusal prints `refused: <reason>` on stderr and
+`{"status": "REFUSED", "reason": ...}` on stdout; Ctrl-C prints
+`{"status": "INTERRUPTED", ...}` and no traceback. The same holds for
+`consent --session`, whose other documents are listed under
+[What can go wrong](#what-can-go-wrong).
 
 What it proves: for the person who signed in, at that moment, Keycloak issued
 a token for which these four conditions hold, or it names the ones that do
@@ -507,11 +644,13 @@ browser session when no other client session is left. A grant deposited from
 the same browser session shares that client session, so revoking here would
 invalidate the refresh token the APS holds for it.
 
-The token checks use PyJWT. The `agent` recipe adds it with `uv run --with`
-only when the first argument is `run` or `consent`, so the other subcommands
-start from the locked environment alone. `run` imports it only when it signs
-someone in, so a run that asks nobody, or that waits for the consent command,
-does not need it. As of 2026-11-10 `consent --check` has run only against the
+The token checks use PyJWT, which is one of the project's locked
+dependencies (`PyJWT[crypto]==2.13.0` in `pyproject.toml` and `uv.lock`).
+`just setup` installs it with everything else, and `just agent` starts every
+subcommand from the locked environment with no `--with`, so a machine whose
+environment is synced needs no package index to run any agent. `run` imports
+PyJWT only when it signs someone in, so a run that asks nobody, or that waits
+for the consent command, does not use it. As of 2026-11-10 `consent --check` has run only against the
 in-process fake identity provider in `tests/test_agent_ops_consent.py`. It
 has not been run against the live realm.
 
@@ -535,8 +674,10 @@ fails closed when a pass lands in it:
   `Forbidden`, the outcome is `FAILED` and `run` exits 1. Nothing acted for
   the person.
 - **Awaited consent.** The gap runs from the consent command's deposit to the
-  start made by `run`: up to half a second until `run` sees `consent.json`,
-  then one `kubectl exec` and two reads at the APS, a few seconds in all. If
+  start made by `run`: the rest of the consent command's own remote call, up
+  to half a second until `run` sees `consent.json`, then one `kubectl exec`,
+  a connection to Temporal and two reads at the APS. That is expected to take
+  seconds; it has not been measured. If
   a pass removes the grant before `run` looks for it, `run` exits 1 with
   `NOT_SUBMITTED` and no workflow starts. If it removes the grant between the
   lookup and the start, the session fails at preflight as above.
@@ -546,25 +687,51 @@ deposited for a run that then died before starting a workflow is removed the
 same way, by the reconciler's next pass. None of this has been observed on
 the cluster.
 
-#### Per-person prerequisites
+#### Prerequisites for a first run
 
-Two things remain the operator's to authorise for each person. No command
-here does either, and without them that person's consent does not lead to a
-working investigator session:
+On the machine and for the command:
+
+- **The browser runs on the same host as the command.** The redirect goes to
+  the command's listener on `127.0.0.1` (the realm allows `agent-cli` only
+  `http://127.0.0.1/*`). Over SSH the person either forwards the port the
+  printed URL names in its `redirect_uri` to the same port on the remote host
+  before opening the URL, or runs the command where the browser is. The port
+  is chosen per sign-in, so the forward is set up after the URL is printed.
+- **PyJWT is in the synced environment** (`just setup`, or `uv sync
+  --locked`). A run that would sign someone in refuses before creating a run
+  directory when it is missing.
+- **`--release` is needed for investigator** while it has two Ready releases;
+  `just agent ls` shows which. The release is resolved before anything about
+  consent is looked at.
+- **Automation gives the run time.** A run that waits for consent lasts up to
+  `--consent-timeout` seconds before it submits anything. An automated
+  session starts it in the background, or with a tool timeout longer than
+  `--consent-timeout`: killing the run ends the wait, and a consent given
+  after that is refused.
+
+Two more things remain the operator's to authorise for each person. No
+command here does either. Without the first the person is not expected to get
+a token `run` will deposit; without the second the session is expected to
+start and investigator to be refused what it tries to read. Neither
+expectation has been observed:
 
 1. The Keycloak delegate permission for the agent's service account over that
    person. Without it the person is not expected to get a depositable
    token; what Keycloak does instead has not been observed (see the outcomes
-   listed above). `consent --check` shows whether it is in place, and neither
-   `run` nor `consent --session` deposits a token that lacks the scope or
-   `may_act`.
+   listed above). `consent --check` shows whether the token Keycloak issues
+   that person meets the four conditions, which is the visible effect of the
+   permission and not the permission itself, and neither `run` nor
+   `consent --session` deposits a token that lacks the scope or `may_act`.
+   The one tool that grants the permission,
+   `infrastructure/scripts/ops/conformance-delegation.py`, refuses any actor
+   but the synthetic `conformance-alice`.
 2. Kubernetes read access for that person in `zetra-poc-fixtures`, the
-   namespace investigator reads, granted to the person's Keycloak `sub` (the
-   `subject` that `consent --check`, `consent --session` and the receipt
-   report). This is expected, not yet verified: how the person's identity
-   reaches the API server has not been exercised. No RoleBinding is committed
-   for it, because the `sub` is not known until the person has signed in
-   once.
+   namespace investigator reads. Which name the API server sees for the
+   person is unknown: probably the Keycloak `sub` (the `subject` that
+   `consent --check`, `consent --session` and the receipt report); not
+   confirmed. This repository holds no API-server OIDC username
+   configuration, and how the person's identity reaches the API server has
+   not been exercised. No RoleBinding is committed for it.
 
 ## Registering a repository
 
@@ -672,4 +839,6 @@ the release as runnable once Ready.
   queue through the tenant's existing runner.
 - Nothing here changes identities, budgets or network policy. The only grant
   these commands create is the one a person's own sign-in and consent
-  produce, for one session; no command mints one or revokes anything.
+  produce, for one session. Nothing is revoked at Keycloak. The only removal
+  these commands make is the remote script's: after a failed start it asks
+  the APS once to delete the grant it deposited or found for that session.

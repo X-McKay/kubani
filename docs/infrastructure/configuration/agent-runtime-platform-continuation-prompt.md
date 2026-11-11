@@ -45,8 +45,9 @@ pull requests themselves override anything in this list:
   require delegation. Since kubani #422 `run` asks the person for consent at
   run time and deposits the grant for its own session (tested offline only;
   no sign-in, deposit or session has been made against the live realm, APS or
-  cluster, and the two per-person prerequisites in agent-operations.md are
-  the user's steps). The golden path's closing session check stays open until
+  cluster, and the delegate permission and Kubernetes access listed under
+  "Prerequisites for a first run" in agent-operations.md are the user's
+  steps). The golden path's closing session check stays open until
   such a session has run. Since kubani #418 `run` submits an on-behalf-of agent whose release
   does not require delegation (conformance, conformance-b) without a handle;
   no such session has been run yet.
