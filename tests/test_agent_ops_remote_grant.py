@@ -308,10 +308,13 @@ class DepositTests(Case):
         self.assertEqual((self.requests(), self.started()), ([], []))
 
     def test_a_redirect_is_not_followed(self):
-        self.aps.routes[("POST", "/v1/grants")] = (307, {}, {"Location": self.aps.url + "/elsewhere"})
-        self.aps.routes[("POST", "/elsewhere")] = (201, {"grant_handle": HANDLE})
+        # The two answers urllib would follow by itself, each time repeating the bearer: 302 to a POST and 307 to a GET.
+        self.aps.routes[("GET", "/elsewhere")] = (200, {"grant_handle": HANDLE, "sessions": []})
+        self.aps.routes[("POST", "/v1/grants")] = (302, {}, {"Location": self.aps.url + "/elsewhere"})
         self.assertEqual(self.refused(self.request(deposit=self.deposit())), "grant deposit failed")
-        self.assertEqual([seen["path"] for seen in self.requests()], ["/v1/grants"])
+        self.aps.routes[("GET", "/v1/sessions")] = (307, {}, {"Location": self.aps.url + "/elsewhere"})
+        self.assertEqual(self.refused(self.request(deposited_grant=True)), "policy service session listing failed")
+        self.assertEqual([seen["path"] for seen in self.requests()], ["/v1/grants", "/v1/sessions"])
         self.assertEqual(self.started(), [])
 
     def test_malformed_requests_are_refused_before_a_token_leaves_the_pod(self):

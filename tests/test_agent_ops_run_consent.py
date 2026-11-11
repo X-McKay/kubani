@@ -481,6 +481,25 @@ class ConsentCommandTests(Case):
         self.assertEqual([c["action"] for c in kube.exec_calls], ["deposit", "submit"])
         self.assertFalse((self.out / "consent.json.tmp").exists())
 
+    def test_a_run_that_gives_up_during_the_sign_in_gets_no_deposit(self):
+        kube = self.kube([DEPOSITED])
+        finish = self.start_waiting(kube)
+        browser = self.browser()
+        person = self.sign_in(browser)
+
+        def slow_person(*args, **kwargs):
+            signed = person(*args, **kwargs)
+            self.give_up()  # the run's deadline passes while the person is still at the consent screen
+            self.assertEqual(finish()[0], run.NO_CONSENT)
+            return signed
+
+        with self.assertRaises(delegation.ConsentError) as caught:
+            self.consent(self.session, browser, kube, sign_in=slow_person)
+        self.assertEqual(str(caught.exception), "this run is no longer waiting for consent; nothing was deposited")
+        self.assertTrue(self.idp.calls)  # the person did sign in; what was refused is the deposit
+        self.assertEqual(kube.exec_calls, [])
+        self.assertFalse((self.out / "consent.json").exists())
+
     def waiting_run_is_untouched(self, kube, finish, calls=()):
         """The consent attempt left the run waiting; it then gives up with nothing submitted."""
         self.assertEqual([c["action"] for c in kube.exec_calls], list(calls))
