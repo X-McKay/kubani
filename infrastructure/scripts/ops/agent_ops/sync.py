@@ -12,7 +12,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import layout
+from . import layout, live
 
 HEADER_RE = re.compile(
     r"^# Synced from (?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+) (?P<path>agents/[a-z0-9-]+/deploy/agent\.yaml)"
@@ -44,9 +44,13 @@ def _git(source: Path, *args: str) -> str:
         text = (exc.stderr or "").lower()
         if exc.returncode == 128 and ("does not exist" in text or "not a valid object" in text or "exists on disk, but not in" in text):
             raise SourceMissing(f"{args[-1]} is not in {source}") from exc
-        raise SyncError(f"git {' '.join(args)} failed in {source}") from exc
-    except (subprocess.TimeoutExpired, OSError) as exc:
-        raise SyncError(f"git {' '.join(args)} failed in {source}") from exc
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git exited {exc.returncode}{live.last_line(exc.stderr)}") from exc
+    except FileNotFoundError as exc:
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git is not installed or not on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise SyncError(f"git {' '.join(args)} failed in {source}: timed out after 30 seconds") from exc
+    except OSError as exc:
+        raise SyncError(f"git {' '.join(args)} failed in {source}: git could not be run: {exc.strerror or type(exc).__name__}") from exc
 
 
 def source_file(source: Path, agent: str, commit: str) -> str:
@@ -148,6 +152,11 @@ def _parse_agent(body: str, d: layout.AgentDir) -> dict:
 
 def check(root: Path, *, source: Path | None = None, agents: list[str] | None = None) -> dict:
     rows = []
+    if agents:
+        known = sorted({d.agent for d in layout.agent_dirs(root)})
+        unknown = sorted(set(agents) - set(known))
+        if unknown:
+            raise SyncError(f"not a committed agent: {', '.join(unknown)}; the committed agents are: {', '.join(known)}")
     for d in layout.agent_dirs(root):
         if agents and d.agent not in agents:
             continue

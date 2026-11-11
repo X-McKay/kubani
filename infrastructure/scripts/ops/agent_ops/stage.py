@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from . import layout, sync
+from . import layout, live, sync
 
 ASSETS = ("agent.yaml", "agentrelease.yaml", "policy-bundle.json", "predicate.json", "SHA256SUMS", "image")
 SUMMED = frozenset(ASSETS[:4])
@@ -27,10 +27,17 @@ def download(repo: str, tag: str, dest: Path) -> None:
     cmd = ["gh", "release", "download", tag, "-R", repo, "-D", str(dest)]
     for name in ASSETS:
         cmd += ["-p", name]
+    what = f"gh release download {tag} from {repo} failed"
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=120)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-        raise StageError(f"gh release download {tag} from {repo} failed") from exc
+    except FileNotFoundError as exc:
+        raise StageError(f"{what}: gh is not installed or not on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise StageError(f"{what}: timed out after 120 seconds") from exc
+    except subprocess.CalledProcessError as exc:
+        raise StageError(f"{what}: gh exited {exc.returncode}{live.last_line(exc.stderr)}; check `gh auth status`") from exc
+    except OSError as exc:
+        raise StageError(f"{what}: gh could not be run: {exc.strerror or type(exc).__name__}") from exc
     missing = [n for n in ASSETS if not (dest / n).is_file()]
     if missing:
         raise StageError(f"release {tag} is missing assets: {', '.join(missing)}")

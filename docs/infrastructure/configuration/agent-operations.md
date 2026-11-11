@@ -43,9 +43,14 @@ reads Secrets, prints tokens or bypasses a release gate.
 ## Running a session
 
 `run` resolves the tenant from the committed directory, the release from the
-live objects (exactly one approved, Ready, signature-verified, drift-free
-release unless `--release` names one) and the identity mode from the release
-status. The command is the same for every agent; what it needs depends on the
+live objects (the approved, Ready, signature-verified, drift-free release; when
+several qualify, the one with the latest `spec.approval.approvedAt`, unless
+`--release` pins one) and the identity mode from the release status. If the
+approval times of the qualifying releases are missing or equal, they cannot be
+ordered and `run` refuses and lists their names; pass `--release`. The `run`
+output and `receipt.json` record the release used as `release` and how it was
+chosen as `releaseChoice` (`default` or `explicit`; receipts written before
+this key existed lack it and still load). The command is the same for every agent; what it needs depends on the
 identity the release reports:
 
 | Release reports | Without `--grant-handle` | With `--grant-handle` |
@@ -60,7 +65,8 @@ every agent. The receipt records `identity`, `delegated` and `consent`;
 `delegated: true` means a handle was submitted or a grant was deposited for
 the session, not that any call was made on a person's behalf.
 On 2026-11-10 `conformance` has two runnable releases and `conformance-b`
-three, so `run` needs `--release` for them. A release that requires delegation
+three; `run` takes the most recently approved of them unless `--release` names
+another. A release that requires delegation
 is run by asking the person for consent at run time; see
 [below](#consent-for-a-release-that-requires-delegation). As of 2026-11-10 that
 path has run only against test stand-ins.
@@ -157,7 +163,13 @@ Each run gets a new private directory, by default
 `status`, `wait` and `cancel` take `--receipt` and operate on that exact run
 only; they never submit. The runner pod's uid, container id, image id and
 restart count are re-read after every call and `runnerIdentityChanged` is
-reported if any differs.
+reported if any differs. Only `wait` takes `--wait-timeout` and
+`--poll-interval`; `status` and `cancel` reject them. `cancel` exits 0 when the
+runner accepted the cancellation (`cancel.cancel_requested: true`) and 1
+otherwise; `status` exits 0 only for a closed, confirmed run, as `run` does.
+`check-sync NAME` refuses a name that is not a committed agent (exit 2) and
+lists the valid ones. `--poll-interval`, `--wait-timeout` and
+`--max-boundaries` must be above 0.
 
 The wait is the host's polling loop and the report reader is in the remote
 script. The deployed session-runner image (built from zetra `18aee61`, kubani
@@ -519,9 +531,10 @@ What a missing or wrong handle produces:
 | delegation required, handle deposited in another tenant | Session Runner preflight | the same, with `APS GET refused with 403` |
 | delegation required, handle deposited for another session id | Session Runner preflight | `Forbidden` (`delegated session without a grant`); the same outcome and exit code |
 
-The release is resolved before the handle is looked at, so while investigator
-has two Ready releases, `run investigator` without `--release` is refused for
-that first.
+The release is resolved before the handle is looked at; while investigator has
+two Ready releases, `run investigator` without `--release` uses the most
+recently approved one, and refuses only if their approval times cannot order
+them.
 
 Cleanup runs for the handle a session was given whether or not preflight
 accepted it, and preflight reads the handle only for an on-behalf-of release
@@ -733,8 +746,9 @@ On the machine and for the command:
 - **PyJWT is in the synced environment** (`just setup`, or `uv sync
   --locked`). A run that would sign someone in refuses before creating a run
   directory when it is missing.
-- **`--release` is needed for investigator** while it has two Ready releases;
-  `just agent ls` shows which. The release is resolved before anything about
+- **investigator has two Ready releases**; `run` takes the most recently
+  approved unless `--release` pins the other, and `just agent ls` shows which
+  it would use. The release is resolved before anything about
   consent is looked at.
 - **Automation gives the run time.** A run that waits for consent lasts up to
   `--consent-timeout` seconds before it submits anything. An automated

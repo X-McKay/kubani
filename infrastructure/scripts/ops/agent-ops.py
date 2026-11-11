@@ -30,6 +30,26 @@ def emit(payload) -> None:
     print(json.dumps(payload, sort_keys=True, indent=2, allow_nan=False))
 
 
+def positive_float(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a number") from None
+    if not 0 < value < float("inf"):
+        raise argparse.ArgumentTypeError(f"must be above 0, not {text}")
+    return value
+
+
+def positive_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"must be at least 1, not {text}")
+    return value
+
+
 def parse_task(args) -> object:
     given = [x for x in (args.task, args.task_json, args.task_file) if x is not None]
     if len(given) != 1:
@@ -47,36 +67,37 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("ls", help="agents, their live readiness and the release `run` would use")
-    p.add_argument("--json", action="store_true")
+    p.add_argument("--json", action="store_true", help="print the rows as JSON instead of a table")
 
     p = sub.add_parser("state", help="read-only platform snapshot: Flux, platform pods, agents, releases, sandboxes, open PRs")
-    p.add_argument("--json", action="store_true")
+    p.add_argument("--json", action="store_true", help="print the snapshot as JSON instead of text")
     p.add_argument("--no-prs", action="store_true", help="skip the gh pull request listing")
 
     p = sub.add_parser("run", help="submit one ordinary session and, by default, wait for its report")
-    p.add_argument("agent")
+    p.add_argument("agent", help="agent name; `just agent ls` lists them")
     p.add_argument("--task", help="plain request text, sent as {\"request\": TEXT}")
     p.add_argument("--task-json", help="task as a JSON document")
-    p.add_argument("--task-file", type=Path)
-    p.add_argument("--release", help="AgentRelease name when more than one is Ready")
+    p.add_argument("--task-file", type=Path, help="read the task document (JSON) from this file")
+    p.add_argument("--release", help="AgentRelease name to pin; `just agent ls` lists the names (default: the most recently approved runnable release, which the output records)")
     p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents; without one, a release that requires delegation asks for consent")
     p.add_argument("--consent-timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the sign-in or for the consent command; ignored when the run needs no consent")
     p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="when signing in here, also hand the URL to the default browser (default: print it only); ignored when the run needs no consent")
-    p.add_argument("--max-boundaries", type=int, default=64)
-    p.add_argument("--no-wait", action="store_true")
-    p.add_argument("--wait-timeout", type=float, default=900)
-    p.add_argument("--poll-interval", type=float, default=10)
-    p.add_argument("--cancel-on-timeout", action="store_true")
+    p.add_argument("--max-boundaries", type=positive_int, default=64, help="most boundaries (checkpoints) the session may cross; at least 1")
+    p.add_argument("--no-wait", action="store_true", help="print the receipt as soon as the session is submitted, without following it")
+    p.add_argument("--wait-timeout", type=positive_float, default=900, help="seconds to follow the session before giving up (exit 124); above 0")
+    p.add_argument("--poll-interval", type=positive_float, default=10, help="seconds between status polls; above 0")
+    p.add_argument("--cancel-on-timeout", action="store_true", help="when --wait-timeout passes, also ask the runner to cancel the session (default: leave it running)")
     p.add_argument("--out", type=Path, help="new private directory for receipt, status and report")
 
     for name, text in (("status", "read the exact run named by a receipt"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
         p = sub.add_parser(name, help=text)
-        p.add_argument("--receipt", type=Path, required=True)
-        p.add_argument("--wait-timeout", type=float, default=900)
-        p.add_argument("--poll-interval", type=float, default=10)
+        p.add_argument("--receipt", type=Path, required=True, help="the receipt.json a `run` wrote")
+        if name == "wait":
+            p.add_argument("--wait-timeout", type=positive_float, default=900, help="seconds to follow the session before giving up (exit 124); above 0")
+            p.add_argument("--poll-interval", type=positive_float, default=10, help="seconds between status polls; above 0")
 
     p = sub.add_parser("consent", help="a person consents to a waiting run's session (--session), or checks whether Keycloak would issue them a depositable token (--check)")
-    p.add_argument("agent")
+    p.add_argument("agent", help="agent name; `just agent ls` lists them")
     p.add_argument("--check", action="store_true", help="sign in afresh, report the token's metadata, discard it; nothing is deposited")
     p.add_argument("--session", help="the session id a waiting `run` printed: sign in, consent, and deposit the token for that session only")
     p.add_argument("--run-dir", type=Path, help="with --session: the waiting run's directory, when it was started with --out")
@@ -84,29 +105,29 @@ def main(argv=None) -> int:
     p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="also hand the URL to the default browser (default: print it only)")
 
     p = sub.add_parser("register", help="add a repository's agents to a tenant and regenerate the tenant signer pin")
-    p.add_argument("tenant")
+    p.add_argument("tenant", help="tenant name, e.g. tenant-test")
     p.add_argument("repository", help="owner/name of the repository whose release workflow signs these agents")
-    p.add_argument("agents", nargs="+")
+    p.add_argument("agents", nargs="+", help="names of the agents to add to the tenant")
     p.add_argument("--source", type=Path, required=True, help="clean checkout of the repository")
 
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
-    p.add_argument("agent")
-    p.add_argument("--source", type=Path, required=True)
+    p.add_argument("agent", help="committed agent to refresh from the source checkout")
+    p.add_argument("--source", type=Path, required=True, help="checkout of the source repository to copy deploy/agent.yaml from")
     p.add_argument("--allow-repo-change", action="store_true", help="let --repo differ from the repository the header records")
 
     p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header and every tenant pin against the headers")
-    p.add_argument("agents", nargs="*")
+    p.add_argument("agents", nargs="*", help="limit the check to these committed agents (default: all)")
     p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout")
 
     p = sub.add_parser("stage", help="download, verify and stage an unapproved AgentRelease")
-    p.add_argument("agent")
-    p.add_argument("tag")
+    p.add_argument("agent", help="committed agent the release belongs to")
+    p.add_argument("tag", help="release tag to download from the source repository")
     p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout")
 
     p = sub.add_parser("approve", help="record approval after the controller verified the staged release")
-    p.add_argument("release")
-    p.add_argument("--by")
-    p.add_argument("--ticket")
+    p.add_argument("release", help="name of the staged AgentRelease to approve")
+    p.add_argument("--by", help="who approves (default: the Agent's owner)")
+    p.add_argument("--ticket", help="URL or id recorded with the approval")
 
     args = parser.parse_args(argv)
     root = args.root

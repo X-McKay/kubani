@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from . import layout
 
@@ -14,6 +15,17 @@ PLATFORM_NAMESPACE = "agent-platform"
 
 class LiveError(Exception):
     pass
+
+
+def last_line(stderr, limit: int = 200) -> str:
+    """The last non-empty line of a failed command's stderr as `: <line>`, trimmed; empty when there is none."""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    lines = [x.strip() for x in (stderr or "").splitlines() if x.strip()]
+    if not lines:
+        return ""
+    line = lines[-1]
+    return ": " + (line if len(line) <= limit else line[: limit - 3] + "...")
 
 
 class Kube:
@@ -31,10 +43,17 @@ class Kube:
             cmd.append(name)
         if selector:
             cmd += ["-l", selector]
+        what = f"kubectl get {kind} {name or ''} -n {namespace}"
         try:
             out = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=30).stdout
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-            raise LiveError(f"kubectl get {kind} {name or ''} -n {namespace} failed") from exc
+        except FileNotFoundError as exc:
+            raise LiveError(f"{what} failed: kubectl is not installed or not on PATH") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise LiveError(f"{what} failed: timed out after 30 seconds (API server unreachable or slow)") from exc
+        except subprocess.CalledProcessError as exc:
+            raise LiveError(f"{what} failed: kubectl exited {exc.returncode}{last_line(exc.stderr)}") from exc
+        except OSError as exc:
+            raise LiveError(f"{what} failed: kubectl could not be run: {exc.strerror or type(exc).__name__}") from exc
         return json.loads(out)
 
     def exec(self, pod: str, namespace: str, container: str, argv: list[str], stdin: bytes, timeout: int) -> subprocess.CompletedProcess:
@@ -53,6 +72,7 @@ class ReleaseView:
     identity_mode: str | None
     delegation_required: bool | None
     ready_reason: str | None
+    approved_at: str | None = None
 
 
 def _conditions(status: dict) -> dict:
@@ -75,6 +95,7 @@ def releases(kube: Kube, tenant: str) -> list[ReleaseView]:
                 identity_mode=status.get("identityMode"),
                 delegation_required=status.get("delegationRequired"),
                 ready_reason=_conditions(status).get("Ready", {}).get("reason"),
+                approved_at=spec["approval"].get("approvedAt") if isinstance(spec.get("approval"), dict) else None,
             )
         )
     return sorted(views, key=lambda v: (v.agent, v.name))
@@ -99,19 +120,42 @@ def runnable(views: list[ReleaseView], agent: str) -> list[ReleaseView]:
     return [v for v in views if v.agent == agent and v.approved and v.ready and v.signature and not v.drift]
 
 
+def _approved_instant(view: ReleaseView) -> datetime | None:
+    if not isinstance(view.approved_at, str):
+        return None
+    try:
+        moment = datetime.fromisoformat(view.approved_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def newest(candidates: list[ReleaseView]) -> ReleaseView | None:
+    """The most recently approved of several releases, by `spec.approval.approvedAt`; None when that cannot be told
+    (a release without a readable time, or two with the same time)."""
+    if len(candidates) == 1:
+        return candidates[0]
+    moments = [_approved_instant(v) for v in candidates]
+    if not candidates or any(m is None for m in moments) or len(set(moments)) != len(moments):
+        return None
+    return max(zip(moments, candidates), key=lambda pair: pair[0])[1]
+
+
 def resolve_release(views: list[ReleaseView], agent: str, explicit: str | None) -> ReleaseView:
+    """The pinned release, else the only runnable one, else the most recently approved runnable one."""
     candidates = runnable(views, agent)
     if explicit:
         match = [v for v in candidates if v.name == explicit]
         if not match:
             raise LiveError(f"{explicit} is not an approved, Ready, signature-verified release of {agent}")
         return match[0]
-    if len(candidates) == 1:
-        return candidates[0]
     if not candidates:
         raise LiveError(f"{agent} has no approved Ready release")
-    names = ", ".join(v.name for v in candidates)
-    raise LiveError(f"{agent} has {len(candidates)} Ready releases; pass --release one of: {names}")
+    chosen = newest(candidates)
+    if chosen is None:
+        names = ", ".join(v.name for v in candidates)
+        raise LiveError(f"{agent} has {len(candidates)} Ready releases and their approval times do not order them; pass --release one of: {names}")
+    return chosen
 
 
 def listing(root, kube: Kube) -> list[dict]:
@@ -137,7 +181,7 @@ def listing(root, kube: Kube) -> list[dict]:
                     "mcp": info["mcp"] if info else [],
                     "releases": len(mine),
                     "readyReleases": [v.name for v in ok],
-                    "runnable": ok[0].name if len(ok) == 1 else None,
+                    "runnable": chosen.name if (chosen := newest(ok)) else None,
                     "description": info["description"] if info else "",
                 }
             )

@@ -210,7 +210,7 @@ def plan(root: Path, kube: live.Kube, agent: str, *, release: str | None, grant_
     if len(encoded.encode("utf-8")) > MAX_TASK_BYTES:
         raise RunError("task exceeds 16 KiB")
     # `consent`: the release requires a person's delegation and no handle was given, so the run has to obtain consent.
-    return {"tenant": d.tenant, "agent": agent, "release": view.name, "identity": mode, "delegated": grant_handle is not None or consent, "consent": consent, "task": task}
+    return {"tenant": d.tenant, "agent": agent, "release": view.name, "releaseChoice": "explicit" if release else "default", "identity": mode, "delegated": grant_handle is not None or consent, "consent": consent, "task": task}
 
 
 def _not_submitted(out: Path, session: str, code: int, reason: str, *, status: str = "NOT_SUBMITTED", **extra) -> tuple[int, dict]:
@@ -385,6 +385,7 @@ def submit(
         "tenant": p["tenant"],
         "agent": agent,
         "release": p["release"],
+        "releaseChoice": p["releaseChoice"],
         "sessionId": session,
         "identity": p["identity"],
         "delegated": p["delegated"],
@@ -475,7 +476,9 @@ def resume(receipt_path: Path, action: str, *, kube: live.Kube | None = None, wa
     if action == "wait":
         return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=False, sleep=sleep, clock=clock)
     if action == "cancel":
-        return 1, {"receipt": receipt, "cancel": runner.remote(_identity(receipt, "cancel")), "cleanup": "NOT_CONFIRMED"}
+        cancel = runner.remote(_identity(receipt, "cancel"))
+        # The runner answers `cancel_requested: true` when it accepted the cancel; anything else is not a success.
+        return (0 if cancel.get("cancel_requested") is True else 1), {"receipt": receipt, "cancel": cancel, "cleanup": "NOT_CONFIRMED"}
     raise RunError("unknown action")
 
 
