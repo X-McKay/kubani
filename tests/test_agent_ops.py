@@ -539,8 +539,12 @@ class RunTests(unittest.TestCase):
     def test_remote_error_is_surfaced_without_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = make_root(Path(tmp))
-            with self.assertRaises(run.RunError):
-                run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "a", kube=kube_for_run([{"error": "session identity already exists"}]))
+            out = Path(tmp) / "a"
+            code, envelope = run.submit(root, "sample", {"request": "go"}, out=out, kube=kube_for_run([{"error": "session identity already exists"}]))
+            # An own-identity run has no grant to speak of; the remote answer is passed on as it came.
+            self.assertEqual((code, envelope["status"], envelope["reason"]), (2, "SUBMIT_UNCONFIRMED", "remote submit failed: session identity already exists"))
+            self.assertEqual(sorted(p.name for p in out.iterdir()), ["request.json", "status.json"])
+            self.assertEqual(json.loads((out / "status.json").read_text()), envelope)
 
 
 class StateTests(unittest.TestCase):

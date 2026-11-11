@@ -21,6 +21,9 @@ ERRORS = (
     approve.ApproveError,
 )
 
+# Subcommands that print exactly one JSON document on stdout however they end, once their arguments have parsed.
+ONE_DOCUMENT = ("run", "consent")
+
 
 def emit(payload) -> None:
     print(json.dumps(payload, sort_keys=True, indent=2, allow_nan=False))
@@ -56,9 +59,8 @@ def main(argv=None) -> int:
     p.add_argument("--task-file", type=Path)
     p.add_argument("--release", help="AgentRelease name when more than one is Ready")
     p.add_argument("--grant-handle", help="consented delegation handle for on-behalf-of agents; without one, a release that requires delegation asks for consent")
-    p.add_argument("--await-consent", action="store_true", help="do not sign anyone in here; wait for `consent AGENT --session ID` from another terminal (always the case when not started from a terminal)")
-    p.add_argument("--consent-timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the sign-in or for the consent command")
-    p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="when signing in here, also hand the URL to the default browser (default: print it only)")
+    p.add_argument("--consent-timeout", type=float, default=delegation.DEFAULT_TIMEOUT, help="seconds to wait for the sign-in or for the consent command; ignored when the run needs no consent")
+    p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="when signing in here, also hand the URL to the default browser (default: print it only); ignored when the run needs no consent")
     p.add_argument("--max-boundaries", type=int, default=64)
     p.add_argument("--no-wait", action="store_true")
     p.add_argument("--wait-timeout", type=float, default=900)
@@ -136,7 +138,6 @@ def main(argv=None) -> int:
                 poll_interval=args.poll_interval,
                 cancel_on_timeout=args.cancel_on_timeout,
                 out=args.out,
-                await_consent=args.await_consent,
                 consent_timeout=args.consent_timeout,
                 browser=args.browser,
             )
@@ -176,11 +177,22 @@ def main(argv=None) -> int:
         if args.command == "approve":
             emit(approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
             return 0
+    except KeyboardInterrupt:
+        if args.command not in ONE_DOCUMENT:
+            raise
+        # `run` and `consent` end their own interrupts with what they know; this is one that arrived outside those places.
+        print("interrupted", file=sys.stderr)
+        emit({"status": "INTERRUPTED", "reason": "interrupted before the command finished; a run directory, when one was created, holds what was written by then"})
+        return run.INTERRUPTED
     except ERRORS as exc:
         print(f"refused: {exc}", file=sys.stderr)
+        if args.command in ONE_DOCUMENT:
+            emit({"status": "REFUSED", "reason": str(exc)})
         return 2
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        if args.command in ONE_DOCUMENT:
+            emit({"status": "ERROR", "reason": str(exc)})
         return 1
     return 2
 

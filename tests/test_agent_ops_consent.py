@@ -189,6 +189,17 @@ class Browser:
             conn.close()
 
 
+class Stream(io.StringIO):
+    """A standard stream that is, or is not, a terminal."""
+
+    def __init__(self, tty: bool):
+        super().__init__()
+        self.tty = tty
+
+    def isatty(self) -> bool:
+        return self.tty
+
+
 class ConsentCase(unittest.TestCase):
     def setUp(self):
         self.idp = FakeIdp()
@@ -568,11 +579,57 @@ class RefusalTests(ConsentCase):
     def test_without_a_tty_nothing_is_started(self):
         browser = self.browser()
         with patch.object(delegation.socket, "create_server", lambda *a, **k: self.fail("a listener was bound before the TTY check")):
-            self.assertIn("must all be a TTY", self.refused(browser, is_tty=lambda: False))
+            self.assertIn("stdin and stderr must both be a TTY", self.refused(browser, is_tty=lambda: False))
         self.assertEqual((browser.opened, self.said, self.idp.calls), (0, [], []))
-        for stream in ("stdin", "stdout", "stderr"):
-            with self.subTest(stream=stream), patch.object(sys, stream, io.StringIO()):
-                self.assertFalse(delegation.interactive())
+
+    def test_a_person_is_at_the_terminal_when_stdin_and_stderr_are_terminals_whatever_stdout_is(self):
+        for stdin in (True, False, None):
+            for stdout in (True, False, None):
+                for stderr in (True, False, None):
+                    streams = {name: None if tty is None else Stream(tty) for name, tty in (("stdin", stdin), ("stdout", stdout), ("stderr", stderr))}
+                    with self.subTest(stdin=stdin, stdout=stdout, stderr=stderr), patch.multiple(sys, **streams):
+                        answer = delegation.interactive()
+                    self.assertIs(answer, stdin is True and stderr is True, (stdin, stdout, stderr))
+
+    def test_a_redirect_from_an_endpoint_is_refused_and_never_followed(self):
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def answer(self):
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                seen.append((self.command, self.path))
+                if self.path == "/moved":
+                    body = b'{"followed": true}'
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                else:
+                    body = b""
+                    self.send_response(int(self.path.strip("/")))
+                    self.send_header("Location", f"http://127.0.0.1:{self.server.server_address[1]}/moved")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            do_GET = do_POST = answer
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        self.assertEqual(delegation._fetch(base + "/moved", "token endpoint"), b'{"followed": true}', "the stand-in answers when asked directly")
+        seen.clear()
+        for status in (301, 302, 303, 307, 308):
+            for fields in (None, {"code": "c", "code_verifier": "v"}):
+                with self.subTest(status=status, post=fields is not None):
+                    with self.assertRaises(delegation.ConsentError) as caught:
+                        delegation._fetch(f"{base}/{status}", "token endpoint", fields)
+                    self.assertEqual(str(caught.exception), f"the token endpoint answered HTTP {status}")
+        self.assertEqual(len(seen), 10)
+        self.assertEqual([entry for entry in seen if entry[1] == "/moved"], [], "a code and its verifier are sent to the endpoint asked, never to where it points")
 
     def test_agent_identity_mode_is_refused_before_the_tty_check(self):
         root = make_root(self.tmp / "other", mode="agent")
@@ -621,7 +678,7 @@ class CommandTests(ConsentCase):
         self.assertEqual(code, 1)
         self.assertFalse(json.loads(out)["wouldBeAcceptedForDeposit"])
         code, out, err = self.run_cli(["consent", "--check", "sample", "--browser"], self.browser(error="access_denied"))
-        self.assertEqual((code, out), (2, ""))
+        self.assertEqual((code, json.loads(out)), (2, {"status": "REFUSED", "reason": "Keycloak returned the error access_denied instead of an authorization code"}))
         self.assertEqual(err.splitlines()[-1], "refused: Keycloak returned the error access_denied instead of an authorization code")
 
     def test_without_exactly_one_mode_the_command_refuses_and_starts_nothing(self):
@@ -629,17 +686,30 @@ class CommandTests(ConsentCase):
         for argv in (["consent", "sample", "--browser"], ["consent", "sample", "--check", "--session", session], ["consent", "sample", "--check", "--run-dir", str(self.tmp)]):
             browser = self.browser()
             code, out, err = self.run_cli(argv, browser)
-            self.assertEqual((code, out), (2, ""), argv)
-            self.assertIn("refused: --run-dir applies only with --session" if "--run-dir" in argv else "refused: pass exactly one of --session ID", err)
+            expected = "--run-dir applies only with --session" if "--run-dir" in argv else "pass exactly one of --session ID"
+            document = json.loads(out)
+            self.assertEqual((code, document["status"]), (2, "REFUSED"), argv)
+            self.assertIn(expected, document["reason"])
+            self.assertIn("refused: " + expected, err)
             self.assertEqual((browser.opened, self.idp.calls), (0, []))
 
     def test_real_tty_check_refuses_under_a_test_runner(self):
         out, err = io.StringIO(), io.StringIO()
         with patch.object(delegation, "ISSUER", self.idp.issuer), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = cli.main(["--root", str(self.root), "consent", "--check", "sample", "--timeout", "1"])
-        self.assertEqual((code, out.getvalue()), (2, ""))
-        self.assertIn("must all be a TTY", err.getvalue())
+        document = json.loads(out.getvalue())
+        self.assertEqual((code, document["status"]), (2, "REFUSED"))
+        self.assertIn("stdin and stderr must both be a TTY", document["reason"])
+        self.assertIn("stdin and stderr must both be a TTY", err.getvalue())
         self.assertEqual(self.idp.calls, [])
+
+    def test_an_interrupted_check_exits_130_with_one_document_and_no_traceback(self):
+        def interrupted(*args, **kwargs):
+            raise KeyboardInterrupt
+
+        with patch.object(delegation, "sign_in", interrupted):
+            code, out, err = self.run_cli(["consent", "--check", "sample"], self.browser())
+        self.assertEqual((code, json.loads(out)["status"], err), (130, "INTERRUPTED", "interrupted\n"))
 
     def test_nothing_secret_reaches_stdout_stderr_or_a_file(self):
         home = self.tmp / "home"
@@ -680,8 +750,11 @@ class CommandTests(ConsentCase):
             for secret in secrets_seen:
                 self.assertNotIn(secret, text, where)
         for name, code, out, _ in captured:
-            if code in (0, 1):
-                self.assertEqual(set(json.loads(out)) & {"scope", "token", "access_token", "id_token", "refresh_token", "code", "code_verifier", "state", "nonce"}, set(), name)
+            # One JSON document however the command ended; a refusal's carries its status and reason only.
+            document = json.loads(out)
+            self.assertEqual(set(document) & {"scope", "token", "access_token", "id_token", "refresh_token", "code", "code_verifier", "state", "nonce"}, set(), name)
+            if code == 2:
+                self.assertEqual(set(document), {"status", "reason"}, name)
 
 
 class ModuleShapeTests(unittest.TestCase):

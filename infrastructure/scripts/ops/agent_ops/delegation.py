@@ -40,11 +40,13 @@ from . import layout
 ISSUER = "https://idp.almckay.io/realms/agents"
 CLIENT = "agent-cli"
 POLICY_AUDIENCE = "agent-policy-service"
-# `consent --check`: always a fresh sign-in and a fresh consent screen, so the answer comes from the person, not from a browser session.
+# `consent --check`: asks Keycloak for a fresh sign-in and a fresh consent screen, so that the answer comes from the person and not from a browser session (not observed).
 PROMPT = "login consent"
-# A deposit for one session: a Keycloak session already open in the browser is reused, the consent screen is still shown every time.
+# A deposit for one session: the URL asks Keycloak to show the consent screen every time and does not ask for a fresh login,
+# so a Keycloak session already open in the browser may be reused. Read from the OpenID Connect `prompt` parameter, not observed.
 PROMPT_REUSE = "consent"
-# How long a deposited grant lasts when Keycloak issued a refresh token: the APS cap, which is also the realm's client session maximum.
+# The expiry a deposit asks the APS for when Keycloak issued a refresh token: the APS cap, which is also the realm's client
+# session maximum. It is an upper bound, not a promise: the grant ends earlier when the APS can no longer refresh the token.
 GRANT_LIFETIME = 8 * 3600
 AUTH_PATH = "/protocol/openid-connect/auth"
 TOKEN_PATH = "/protocol/openid-connect/token"
@@ -83,7 +85,8 @@ class ConsentTimeout(Exception):
 
 
 def interactive() -> bool:
-    return all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stdout, sys.stderr))
+    """A person is at this terminal: they can be shown the URL (stderr) and can interrupt (stdin). stdout carries the JSON document and may be a pipe."""
+    return all(stream is not None and stream.isatty() for stream in (sys.stdin, sys.stderr))
 
 
 def required_scope(tenant: str, agent: str) -> str:
@@ -231,11 +234,11 @@ def exchange(issuer: str, code: str, verifier: str, redirect_uri: str) -> dict:
 
 
 def _pyjwt():
-    """PyJWT comes from the `agent` recipe; it is imported on use so the other subcommands run without it."""
+    """PyJWT is a locked project dependency; it is imported on use so a missing or broken install is refused in one line, before anyone signs in."""
     try:
         import jwt
     except ImportError:
-        raise ConsentError("PyJWT is not installed; run this through `just agent`, which supplies it for `run` and `consent`") from None
+        raise ConsentError("PyJWT is not installed; run this through `just agent`, which uses the project's locked environment (`uv sync --locked` restores it)") from None
     return jwt
 
 
@@ -383,10 +386,12 @@ def sign_in(
 
 
 def deposit_terms(signed: dict, *, now: float) -> dict:
-    """What a deposit of this sign-in carries besides the access token, and when the grant ends.
+    """What a deposit of this sign-in carries besides the access token, and the expiry it asks for.
 
-    With a refresh token the grant lasts GRANT_LIFETIME and the APS renews the access token as it nears
-    expiry. Without one nothing can renew it, so the grant ends when the access token does.
+    With a refresh token the deposit asks for GRANT_LIFETIME. That is the latest the grant can last: the APS
+    refreshes the access token only while it exchanges it for the agent, so a long gap between delegated calls
+    can end the delegation sooner. Without a refresh token nothing can renew the access token, and the expiry
+    asked for is the access token's own.
     """
     refresh = signed["tokens"]["refresh"]
     end = now + GRANT_LIFETIME if refresh is not None else signed["claims"]["exp"]
@@ -408,7 +413,7 @@ def check(
 ) -> tuple[int, dict]:
     tenant = tenant_of(root, agent)
     if not (is_tty or interactive)():
-        raise ConsentError("consent is given by a person at their own terminal: stdin, stdout and stderr must all be a TTY")
+        raise ConsentError("consent is given by a person at their own terminal: stdin and stderr must both be a TTY")
     if not 0 < timeout <= MAX_TIMEOUT:
         raise ConsentError(f"--timeout must be above 0 and at most {MAX_TIMEOUT:.0f} seconds")
     intro = f"Consent check for agent {agent} in tenant {tenant}: open this URL, sign in as yourself and answer the consent screen. Nothing is deposited."
