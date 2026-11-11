@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync
@@ -193,6 +194,16 @@ def main(argv=None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         if args.command in ONE_DOCUMENT:
             emit({"status": "ERROR", "reason": str(exc)})
+        return 1
+    except Exception as exc:
+        if args.command not in ONE_DOCUMENT:
+            raise
+        # Anything unforeseen still ends as one document. Only the exception's type and place are named: its message is not
+        # known to be free of what a remote answer or a token carried.
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        reason = f"unexpected {type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno}"
+        print(f"error: {reason}", file=sys.stderr)
+        emit({"status": "ERROR", "reason": reason})
         return 1
     return 2
 

@@ -60,7 +60,6 @@ DEPOSIT_LOCK = "deposit.lock"
 # Appended to by `consent` just before it sends a token to the pod, and removed once the outcome is recorded or known to be
 # a refusal. Left behind, it says a deposit was attempted and this machine does not know how it ended.
 DEPOSIT_ATTEMPT = "deposit.attempted"
-SHOWN_TASK_CHARS = 2000
 MAX_REQUEST_BYTES = 256 * 1024
 # The runner's cleanup reconciler closes a session that holds a grant and has no workflow; it runs every five minutes
 # (RECONCILE_EVERY in zetra platform/runner/runner/worker.py, read at 18aee61, not observed).
@@ -120,19 +119,23 @@ def shown_digest(tenant: str, agent: str, release, session: str, task) -> str:
     return hashlib.sha256(json.dumps(shown, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
-def _show(say, tenant: str, agent: str, release, session: str, task, request_path: Path) -> str:
+def _plain(value) -> str:
+    """A value read from a file or a token, as it may be put on a terminal: printable characters only, and bounded."""
+    return "".join(ch if ch.isprintable() else "?" for ch in str(value))[:256]
+
+
+def _show(say, tenant: str, agent: str, release, session: str, task) -> str:
     """Tell the person which task they are about to consent to; returns the line that introduces the sign-in URL."""
-    shown = json.dumps(task, sort_keys=True)
-    if len(shown) > SHOWN_TASK_CHARS:
-        shown = shown[:SHOWN_TASK_CHARS] + f"... ({len(shown)} characters; the whole task is in {request_path})"
-    say(f"Task: {shown}")
-    return f"{agent} (tenant {tenant}, release {release}) will act as you for session {session}, on the task above: open this URL, sign in if asked and answer the consent screen."
+    # The whole task and never a part of it: the digest covers all of it, so all of it has to be put in front of the person.
+    # JSON with ASCII escapes leaves no control character and no direction override for a terminal to act on.
+    say("Task: " + json.dumps(task, sort_keys=True, ensure_ascii=True))
+    return f"{_plain(agent)} (tenant {_plain(tenant)}, release {_plain(release)}) will act as you for session {_plain(session)}, on the task above: open this URL, sign in if asked and answer the consent screen."
 
 
 def _say_who(say, report: dict) -> None:
     """Name the account that signed in, so a sign-in as someone else is seen before anything runs. Never a token."""
     name = str(report.get("preferredUsername") or report["subject"])
-    say("Signed in as " + "".join(ch if ch.isprintable() else "?" for ch in name)[:256] + ".")
+    say("Signed in as " + _plain(name) + ".")
 
 
 class Runner:
@@ -212,7 +215,7 @@ def _not_submitted(out: Path, session: str, code: int, reason: str, *, status: s
 
 def _signed_in_here(p: dict, session: str, out: Path, *, timeout: float, browser: bool, sign_in, say, now) -> tuple[dict, dict]:
     """Show the person at this terminal the task, sign them in and return (what to deposit, what the receipt records)."""
-    intro = _show(say, p["tenant"], p["agent"], p["release"], session, p["task"], out / "request.json")
+    intro = _show(say, p["tenant"], p["agent"], p["release"], session, p["task"])
     signed = (sign_in or delegation.sign_in)(p["tenant"], p["agent"], intro=intro, prompt=delegation.PROMPT_REUSE, timeout=timeout, browser=browser, say=say)
     if signed is None:
         raise _Ended(NO_CONSENT, "the sign-in was not completed in time; no token was sent to the cluster and no workflow was started", timeoutSeconds=timeout)
@@ -487,16 +490,21 @@ def _own_request(candidate: Path) -> dict:
     if stat.S_IMODE(held.st_mode) != 0o700:
         raise delegation.ConsentError(f"{candidate} has mode {stat.S_IMODE(held.st_mode):04o}, not 0700 as `just agent run` creates it; another account could have changed what it says the run will do")
     try:
-        fd = os.open(candidate / "request.json", os.O_RDONLY | os.O_NOFOLLOW)
+        # Non-blocking, so a named pipe put in the file's place is refused below and not waited on.
+        fd = os.open(candidate / "request.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError as exc:
         if exc.errno == errno.ELOOP:
             raise delegation.ConsentError(f"{candidate / 'request.json'} is a symbolic link, not the file `just agent run` wrote") from None
         raise
-    with os.fdopen(fd, "rb") as source:
-        entry = _stat_open_file(source.fileno())
+    try:
+        # Asked of the open descriptor before anything is read from it: a directory or a pipe cannot be read as the request.
+        entry = _stat_open_file(fd)
         if not stat.S_ISREG(entry.st_mode) or entry.st_uid != me:
             raise delegation.ConsentError(f"{candidate / 'request.json'} is not a regular file owned by you; consent is given only to a run you started")
-        return json.loads(source.read(MAX_REQUEST_BYTES).decode("utf-8"))
+        with os.fdopen(os.dup(fd), "rb") as source:
+            return json.loads(source.read(MAX_REQUEST_BYTES).decode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def _waiting_run(tenant: str, agent: str, session: str, run_dir: Path | None) -> tuple[Path, dict]:
@@ -571,7 +579,7 @@ def consent(
     runner = Runner(kube or live.Kube(), tenant, out, stderr_prefix="consent-exec")  # the pod is located before the person is asked
     say = say or _stderr
     release, task = request.get("release"), request.get("task")
-    intro = _show(say, tenant, agent, release, session, task, out / "request.json")
+    intro = _show(say, tenant, agent, release, session, task)
     # What the lines above were built from, read once: the waiting run starts nothing unless it holds the same.
     shown = shown_digest(tenant, agent, release, session, task)
     base = {"agent": agent, "tenant": tenant, "sessionId": session, "runDir": str(out)}

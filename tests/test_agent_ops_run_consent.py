@@ -675,6 +675,32 @@ class ConsentCommandTests(Case):
         self.assertEqual(self.consent(self.session, self.browser(), kube)[0], 0)
         self.assertEqual(finish()[0], 0)
 
+    def test_what_is_shown_cannot_drive_the_terminal(self):
+        """Escape sequences and direction overrides in the task or the release reach the terminal as visible text, never as themselves."""
+        said = []
+        intro = run._show(said.append, "tenant-test", "sample", "r1\x1b[2K\x1b[1Aharmless", OTHER_SESSION, {"request": "a\x1b[2K\u202eb\nc"})
+        self.assertEqual(said, ['Task: {"request": "a\\u001b[2K\\u202eb\\nc"}'])
+        self.assertIn("release r1?[2K?[1Aharmless)", intro)
+        for text in said + [intro]:
+            self.assertTrue(text.isprintable(), text)
+        who = []
+        run._say_who(who.append, {"preferredUsername": "al\x1b[2Kice\u202e", "subject": "s"})
+        self.assertEqual(who, ["Signed in as al?[2Kice?."])
+
+    def test_a_request_that_is_not_a_regular_file_is_refused(self):
+        kube = self.kube([DEPOSITED, ACCEPTED])
+        finish = self.start_waiting(kube)
+        aside = self.tmp / "aside.json"
+        os.rename(self.out / "request.json", aside)
+        for plant, remove in ((os.mkdir, os.rmdir), (os.mkfifo, os.unlink)):
+            with self.subTest(plant.__name__):
+                plant(self.out / "request.json")
+                self.assertEqual(self.refused(self.session), f"{self.out / 'request.json'} is not a regular file owned by you; consent is given only to a run you started")
+                remove(self.out / "request.json")
+        os.rename(aside, self.out / "request.json")
+        self.assertEqual(self.consent(self.session, self.browser(), kube)[0], 0)
+        self.assertEqual(finish()[0], 0)
+
     def test_a_run_directory_whose_mode_is_not_0700_is_refused(self):
         kube = self.kube([DEPOSITED, ACCEPTED])
         finish = self.start_waiting(kube)
@@ -834,10 +860,12 @@ class ConsentCommandTests(Case):
         for secret in self.secrets():
             self.assertNotIn(secret, json.dumps(report))
 
-    def test_the_task_is_shown_before_the_sign_in_and_a_long_one_is_cut(self):
+    def test_the_whole_task_is_shown_before_the_sign_in_however_long(self):
+        """The digest covers the whole task, so the display may not stop short of it: the end of a long task is shown too."""
         kube = self.kube([DEPOSITED, ACCEPTED])
         box = {}
-        thread = threading.Thread(target=lambda: box.update(result=run.submit(self.root, "sample", {"request": "x" * 5000}, kube=kube, say=self.said.append, out=self.out, wait=False, is_tty=lambda: False, sleep=lambda s: time.sleep(0.005))), daemon=True)
+        task = {"request": "x" * 15000 + " and then the last instruction"}
+        thread = threading.Thread(target=lambda: box.update(result=run.submit(self.root, "sample", task, kube=kube, say=self.said.append, out=self.out, wait=False, is_tty=lambda: False, sleep=lambda s: time.sleep(0.005))), daemon=True)
         thread.start()
         deadline = time.monotonic() + 10
         while not self.said and time.monotonic() < deadline:
@@ -846,9 +874,8 @@ class ConsentCommandTests(Case):
         self.assertEqual(self.consent(session, self.browser(), kube)[0], 0)
         thread.join(10)
         self.assertEqual(box["result"][0], 0)
-        self.assertTrue(self.consent_said[0].startswith('Task: {"request": "xxxx'))
-        self.assertIn(f"characters; the whole task is in {self.out / 'request.json'})", self.consent_said[0])
-        self.assertLess(len(self.consent_said[0]), 2300)
+        self.assertEqual(self.consent_said[0], "Task: " + json.dumps(task, sort_keys=True))
+        self.assertTrue(self.consent_said[0].endswith('and then the last instruction"}'))
         self.assertIn(f"will act as you for session {session}, on the task above", self.consent_said[1])
         self.assertTrue(self.consent_said[2].startswith(self.idp.issuer + delegation.AUTH_PATH))
 
@@ -972,6 +999,16 @@ class CommandLineTests(Case):
         code, out, err = self.run_cli(["run", "sample", "--task-file", str(self.tmp / "absent.json")], kube)
         self.assertEqual((code, json.loads(out)["status"]), (1, "ERROR"))
         self.assertTrue(err.startswith("error: "))
+        # An error nobody foresaw: still one document, naming the exception's type and place and never its message.
+        def unforeseen(*args, **kwargs):
+            raise KeyError("a value that must not be printed")
+        with patch.object(run, "plan", unforeseen):
+            code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--out", str(self.tmp / "e")], kube, interactive=True)
+        document = json.loads(out)
+        self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason"}))
+        self.assertRegex(document["reason"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
+        self.assertEqual(err, f"error: {document['reason']}\n")
+        self.assertNotIn("must not be printed", out + err)
         self.assertEqual(kube.exec_calls, [])
 
     def test_await_consent_is_no_longer_an_option(self):
