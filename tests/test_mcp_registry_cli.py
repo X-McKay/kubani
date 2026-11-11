@@ -95,6 +95,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(self.invoke(["add", "extra"])[0], 1)
         self.assertEqual(p.read_text(), "retain me")
 
+    def test_offline_add_refusal_shows_the_repository_message(self):
+        code, result = self.invoke(["add", "Bad_Name"])
+        self.assertEqual(code, 1)
+        self.assertEqual(result["stage"], "add")
+        self.assertEqual(result["error_type"], "ValueError")
+        self.assertEqual(result["error"], "invalid backend name")
+
+    def test_credential_stage_refusal_never_shows_the_message(self):
+        self.modules.identity.admin.side_effect = ValueError("PRIVATE_CREDENTIAL_MARKER")
+        code, result = self.invoke(["identity", "plan", "existing"])
+        self.assertEqual(code, 1)
+        self.assertNotIn("error", result)
+        self.assertNotIn("PRIVATE_CREDENTIAL_MARKER", json.dumps(result))
+
     def test_add_refuses_symlink_escape(self):
         (self.root / "infrastructure").symlink_to("/tmp", target_is_directory=True)
         self.assertEqual(self.invoke(["add", "extra"])[0], 1)

@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+OFFLINE_STAGES = frozenset({"add", "render", "check"})
 NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 def modules():
     # Import lazily: help and offline commands do not initialize credentials.
@@ -167,17 +168,17 @@ def main(argv=None):
         return 0
     except Exception as error:  # noqa: BLE001 - never expose credential-bearing exceptions
         # Exceptions can contain credential-bearing HTTP/process responses.
-        print(
-            json.dumps(
-                {
-                    "status": "refused",
-                    "stage": stage,
-                    "error_type": type(error).__name__,
-                    "note": "No conflicting identity is overwritten. Inspect configuration and any partial operation before retry.",
-                },
-                sort_keys=True,
-            )
-        )
+        refusal = {
+            "status": "refused",
+            "stage": stage,
+            "error_type": type(error).__name__,
+            "note": "No conflicting identity is overwritten. Inspect configuration and any partial operation before retry.",
+        }
+        # Only stages that read committed files may show the message: nothing
+        # there touches a credential. Every other stage reports the type only.
+        if stage in OFFLINE_STAGES and isinstance(error, (ValueError, OSError)):
+            refusal["error"] = str(error)
+        print(json.dumps(refusal, sort_keys=True))
         return 1
 
 
