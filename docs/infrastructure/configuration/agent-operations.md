@@ -97,7 +97,7 @@ stdout however it ends, and each ending has one exit code. A `REFUSED` or
 | Ctrl-C while following the workflow; the workflow is not cancelled | 130 | `INTERRUPTED` | `request.json`, `receipt.json` |
 | refused before a run directory exists: the input, the release, the identity row, no Ready runner pod, PyJWT missing for a sign-in | 2 | `REFUSED` | none |
 | an error that is not a refusal, such as a task file that cannot be read or is not JSON | 1 | `ERROR` | none |
-| an error the code does not foresee (any other Python exception) | 1 | `ERROR`, the reason naming only the exception's type and the file and line that raised it | whatever was written by then; no `status.json` |
+| an error the code does not foresee (any other Python exception) | 1 | `ERROR`, the reason naming only the exception's type and the file and line that raised it; with `sessionId` and `dir` once the run directory exists | whatever was written by then, which can include the `receipt.json` of a started workflow; no `status.json` |
 | the submit call failed, was refused by the remote script or did not answer in 60 seconds | 2 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
 | Ctrl-C while the submit call was in flight | 130 | `SUBMIT_UNCONFIRMED` | `request.json`, `status.json` |
 | nobody consented within `--consent-timeout`, or the sign-in at this terminal was not completed in time | 3 | `NOT_SUBMITTED` | `request.json`, `status.json` |
@@ -110,10 +110,21 @@ stdout however it ends, and each ending has one exit code. A `REFUSED` or
 The last six rows are reached only by a release that requires delegation.
 `SUBMIT_UNCONFIRMED` means the submit call returned no started workflow and
 no receipt was written, so `status`, `wait` and `cancel` cannot be pointed at
-the session. The reason tells the two cases apart: the remote script answered
-with a refusal (`remote submit failed: ...`, for example `invalid request` or
-`session identity already exists`), or the call did not answer and whether a
-workflow exists is not known. Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
+the session. Whether a workflow exists depends on the reason (read from
+`remote_session.py`, not observed on the cluster):
+
+- This call started none. The remote script gives these answers before it
+  asks Temporal to start anything: `invalid request`, `session must be a
+  canonical UUIDv4`, `session identity already exists` (a workflow with that
+  identity was already there), every `deposit refused: ...`, `grant deposit
+  failed`, `policy service unreachable`, `policy service session listing
+  failed` and `the session's grant names another tenant or agent`.
+- A workflow was started: `accepted start run identity missing`.
+- Not known: `operation failed; ...` (any other failure inside the pod, its
+  40-second limit included), a call that did not answer in 60 seconds, a
+  `kubectl exec` that failed, and Ctrl-C while the call was in flight.
+
+Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
 carries a `reason`; for a release that requires delegation the reason says
 what is known about a grant (see
 [What can go wrong](#what-can-go-wrong)). A remote call that wrote to stderr
@@ -228,10 +239,12 @@ cannot release that grant itself. The digest covers the whole task and the
 whole task is displayed: up to 16 KiB, which as escaped JSON can be several
 times that many characters on the terminal. Nothing is cut, because a part
 left unshown would be consented to unseen. The release and the other names on
-the following line are printed with every non-printable character replaced by
-`?`, so a value in `request.json` cannot move the cursor or erase the task
-line. A release changed that way still fails the digest comparison, after the
-deposit.
+the following line, and the account name after the sign-in, are printed with
+every character outside visible ASCII replaced by `?` (an account name with
+other letters shows `?` for them), and a name over 256 characters is cut with
+the cut and the full length stated, so a value in `request.json` cannot move
+the cursor, erase the task line or hide part of itself. A release changed
+that way still fails the digest comparison, after the deposit.
 
 `run` learns that the grant exists from `consent.json` and from nothing else:
 it looks for the file twice a second. The file is written only after the APS
