@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "missing or unknown declaration fields"
+  "message_contains": "upstreams[0]: missing field(s) port"
 }

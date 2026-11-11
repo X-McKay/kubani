@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "invalid or incomplete string field"
+  "message_contains": "authorization.scopeDescription: must be a non-empty description"
 }

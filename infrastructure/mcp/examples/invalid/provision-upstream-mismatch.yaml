@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: no upstream matches the provision host and port.
-# Expected: ValueError containing 'provision upstream mismatch' (see provision-upstream-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in provision-upstream-mismatch.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

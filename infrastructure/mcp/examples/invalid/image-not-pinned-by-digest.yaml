@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: image is a tag, not @sha256:<digest>.
-# Expected: ValueError containing 'invalid or incomplete string field' (see image-not-pinned-by-digest.expect.json).
+# Expected: ValueError; the message is pinned in image-not-pinned-by-digest.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

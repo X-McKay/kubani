@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: only one of the two pair files exists.
-# Expected: ValueError containing 'partial credential pair refused' (see provision-partial-pair.expect.json).
+# Expected: ValueError; the message is pinned in provision-partial-pair.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

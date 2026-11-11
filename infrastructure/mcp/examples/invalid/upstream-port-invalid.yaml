@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: upstream port is 0.
-# Expected: ValueError containing 'invalid port' (see upstream-port-invalid.expect.json).
+# Expected: ValueError; the message is pinned in upstream-port-invalid.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: workload.port is absent.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see workload-missing-field.expect.json).
+# Expected: ValueError; the message is pinned in workload-missing-field.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

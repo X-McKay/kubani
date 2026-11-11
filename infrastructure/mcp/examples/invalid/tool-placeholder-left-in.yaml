@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the scaffold tool placeholder was never replaced.
-# Expected: ValueError containing 'invalid or incomplete string field' (see tool-placeholder-left-in.expect.json).
+# Expected: ValueError; the message is pinned in tool-placeholder-left-in.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

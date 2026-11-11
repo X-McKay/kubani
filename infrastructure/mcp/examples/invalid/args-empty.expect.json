@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "explicit SSE arguments required"
+  "message_contains": "workload.args: must be a non-empty list of SSE server arguments"
 }

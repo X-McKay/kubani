@@ -1,7 +1,7 @@
 # INVALID (set rule, so this example is a directory): breaks exactly one rule.
 # Rule broken: two backends provision the same credential Secret pair. Each one is valid
 # alone; together they would fight over the same two manifests.
-# Expected: ValueError containing 'credential pair collision' (see ../credential-pair-collision.expect.json).
+# Expected: ValueError; the message is pinned in ../credential-pair-collision.expect.json.
 version: 1
 name: example-full-two
 profile: container-sse-v1

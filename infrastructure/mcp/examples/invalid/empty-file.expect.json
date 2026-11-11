@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "one backend declaration per file required"
+  "message_contains": "empty-file.yaml: expected exactly 1 YAML document, found 0"
 }

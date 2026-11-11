@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "invalid or incomplete string field"
+  "message_contains": "authorization.tools[0]: must be a tool name (letters, digits, underscores, dots, dashes; not starting with a digit)"
 }

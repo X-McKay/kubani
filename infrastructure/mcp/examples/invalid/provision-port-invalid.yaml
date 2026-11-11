@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: provision.port out of range.
-# Expected: ValueError containing 'invalid port' (see provision-port-invalid.expect.json).
+# Expected: ValueError; the message is pinned in provision-port-invalid.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

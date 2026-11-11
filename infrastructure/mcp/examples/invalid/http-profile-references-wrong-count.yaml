@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: references is empty instead of the ten reviewed objects.
-# Expected: ValueError containing 'exact bounded public references required' (see http-profile-references-wrong-count.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-references-wrong-count.expect.json.
 version: 1
 name: kubernetes
 profile: existing-streamable-http-v1

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: roleManifest does not end in .enc.yaml.
-# Expected: ValueError containing 'provision path must be a declared encrypted Secret' (see provision-path-not-sops-name.expect.json).
+# Expected: ValueError; the message is pinned in provision-path-not-sops-name.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

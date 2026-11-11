@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: profile is not a supported one.
-# Expected: ValueError containing 'unsupported transport/auth profile' (see profile-unsupported.expect.json).
+# Expected: ValueError; the message is pinned in profile-unsupported.expect.json.
 version: 1
 name: example-minimal
 profile: container-grpc-v1

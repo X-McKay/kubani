@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: version is 2.
-# Expected: ValueError containing 'unsupported registry version' (see version-unsupported.expect.json).
+# Expected: ValueError; the message is pinned in version-unsupported.expect.json.
 version: 2
 name: example-minimal
 profile: container-sse-v1

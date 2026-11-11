@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: name has capitals and an underscore.
-# Expected: ValueError containing 'invalid or incomplete string field' (see name-not-lowercase-dashed.expect.json).
+# Expected: ValueError; the message is pinned in name-not-lowercase-dashed.expect.json.
 version: 1
 name: Example_Minimal
 profile: container-sse-v1

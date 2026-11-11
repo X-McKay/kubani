@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: a quantity is not a Kubernetes quantity.
-# Expected: ValueError containing 'invalid or incomplete string field' (see resources-quantity-invalid.expect.json).
+# Expected: ValueError; the message is pinned in resources-quantity-invalid.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

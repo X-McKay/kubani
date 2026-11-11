@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: required top-level field 'upstreams' is absent.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see missing-required-field.expect.json).
+# Expected: ValueError; the message is pinned in missing-required-field.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

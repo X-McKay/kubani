@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: tools is an empty list.
-# Expected: ValueError containing 'exact unique tools required' (see tools-empty.expect.json).
+# Expected: ValueError; the message is pinned in tools-empty.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

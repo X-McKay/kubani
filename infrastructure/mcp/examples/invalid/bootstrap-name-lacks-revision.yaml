@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: Job name does not end in -<revision>.
-# Expected: ValueError containing 'bootstrap revision/Job name mismatch' (see bootstrap-name-lacks-revision.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-name-lacks-revision.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

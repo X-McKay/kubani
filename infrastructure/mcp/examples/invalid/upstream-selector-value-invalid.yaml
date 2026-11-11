@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: a selector value contains a space.
-# Expected: ValueError containing 'invalid or incomplete string field' (see upstream-selector-value-invalid.expect.json).
+# Expected: ValueError; the message is pinned in upstream-selector-value-invalid.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

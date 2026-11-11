@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: scopeDescription is empty.
-# Expected: ValueError containing 'invalid or incomplete string field' (see http-profile-scope-description-empty.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-scope-description-empty.expect.json.
 version: 1
 name: kubernetes
 profile: existing-streamable-http-v1

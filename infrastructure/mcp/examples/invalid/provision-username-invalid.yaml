@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: username is not a lowercase identifier.
-# Expected: ValueError containing 'invalid or incomplete string field' (see provision-username-invalid.expect.json).
+# Expected: ValueError; the message is pinned in provision-username-invalid.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

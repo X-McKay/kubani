@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: policyDescription is empty.
-# Expected: ValueError containing 'invalid or incomplete string field' (see provision-policy-description-empty.expect.json).
+# Expected: ValueError; the message is pinned in provision-policy-description-empty.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

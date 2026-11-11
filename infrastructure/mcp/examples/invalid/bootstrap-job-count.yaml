@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the manifest has two Jobs.
-# Expected: ValueError containing 'bootstrap Job identity mismatch' (see bootstrap-job-count.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-job-count.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

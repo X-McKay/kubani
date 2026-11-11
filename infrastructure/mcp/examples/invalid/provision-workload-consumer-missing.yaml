@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: no DATABASE_URI secretEnv names the workload credential.
-# Expected: ValueError containing 'unique bounded credential consumer references required' (see provision-workload-consumer-missing.expect.json).
+# Expected: ValueError; the message is pinned in provision-workload-consumer-missing.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

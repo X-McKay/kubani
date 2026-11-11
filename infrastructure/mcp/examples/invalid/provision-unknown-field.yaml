@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: provision has an unknown field.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see provision-unknown-field.expect.json).
+# Expected: ValueError; the message is pinned in provision-unknown-field.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

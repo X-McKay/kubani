@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "exact unique tools required"
+  "message_contains": "authorization.tools: entries must be unique"
 }

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: upstream namespace is not a valid name.
-# Expected: ValueError containing 'invalid or incomplete string field' (see upstream-namespace-invalid.expect.json).
+# Expected: ValueError; the message is pinned in upstream-namespace-invalid.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

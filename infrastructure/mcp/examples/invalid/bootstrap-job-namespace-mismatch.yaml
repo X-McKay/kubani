@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the Job is in another namespace.
-# Expected: ValueError containing 'bootstrap Job identity mismatch' (see bootstrap-job-namespace-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-job-namespace-mismatch.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

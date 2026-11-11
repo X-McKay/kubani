@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: an unknown top-level field.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see unknown-top-level-field.expect.json).
+# Expected: ValueError; the message is pinned in unknown-top-level-field.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: a mapping repeats a key (YAML would silently keep the last one).
-# Expected: ValueError containing 'duplicate or non-string YAML key' (see duplicate-yaml-key.expect.json).
+# Expected: ValueError; the message is pinned in duplicate-yaml-key.expect.json.
 version: 1
 version: 1
 name: example-dup

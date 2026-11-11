@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "bootstrap ConfigMap reference mismatch"
+  "message_contains": "bootstrap.configMap: expected the Job to mount a ConfigMap volume of this name, found none"
 }

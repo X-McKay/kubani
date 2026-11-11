@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: a definition is valid, but the file name is not <name>.yaml.
-# Expected: ValueError containing 'filename mismatch' (see filename-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in filename-mismatch.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

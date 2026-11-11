@@ -1,7 +1,7 @@
 # INVALID (set rule, so this example is a directory): breaks exactly one rule.
 # Rule broken: two backends declare the same Keycloak role. The role prefix check is
 # per backend, so 'example-a' and 'example-a-b' can both write agent-role-example-a-b-read.
-# Expected: ValueError containing 'backend role collision' (see ../role-collision.expect.json).
+# Expected: ValueError; the message is pinned in ../role-collision.expect.json.
 version: 1
 name: example-a
 profile: container-sse-v1

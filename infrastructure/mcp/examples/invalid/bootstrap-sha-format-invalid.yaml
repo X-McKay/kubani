@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: sqlSha256 is not sha256: plus 64 hex characters.
-# Expected: ValueError containing 'invalid or incomplete string field' (see bootstrap-sha-format-invalid.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-sha-format-invalid.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

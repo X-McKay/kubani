@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "missing or unknown declaration fields"
+  "message_contains": "definition: missing field(s) references"
 }

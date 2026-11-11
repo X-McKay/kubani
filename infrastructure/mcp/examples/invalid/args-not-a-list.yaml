@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: args is a string.
-# Expected: ValueError containing 'explicit SSE arguments required' (see args-not-a-list.expect.json).
+# Expected: ValueError; the message is pinned in args-not-a-list.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

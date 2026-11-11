@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the hash is not that of the SQL file.
-# Expected: ValueError containing 'bootstrap SQL hash mismatch' (see bootstrap-sql-hash-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-sql-hash-mismatch.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: roleManifest equals workloadManifest.
-# Expected: ValueError containing 'distinct credential paths required' (see provision-paths-not-distinct.expect.json).
+# Expected: ValueError; the message is pinned in provision-paths-not-distinct.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

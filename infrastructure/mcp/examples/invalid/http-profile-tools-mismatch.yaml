@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: an extra tool is listed.
-# Expected: ValueError containing 'existing HTTP role or tools mismatch' (see http-profile-tools-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-tools-mismatch.expect.json.
 version: 1
 name: kubernetes
 profile: existing-streamable-http-v1

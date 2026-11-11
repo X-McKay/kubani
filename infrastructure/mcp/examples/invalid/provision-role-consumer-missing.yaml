@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the Job has no MCP_PASSWORD.
-# Expected: ValueError containing 'unique bounded credential consumer references required' (see provision-role-consumer-missing.expect.json).
+# Expected: ValueError; the message is pinned in provision-role-consumer-missing.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

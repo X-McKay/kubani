@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: name is 41 characters.
-# Expected: ValueError containing 'name exceeds 40 characters' (see name-too-long.expect.json).
+# Expected: ValueError; the message is pinned in name-too-long.expect.json.
 version: 1
 name: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
 profile: container-sse-v1

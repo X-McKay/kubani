@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: two upstreams share a name.
-# Expected: ValueError containing 'duplicate upstream name' (see upstream-duplicate-name.expect.json).
+# Expected: ValueError; the message is pinned in upstream-duplicate-name.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

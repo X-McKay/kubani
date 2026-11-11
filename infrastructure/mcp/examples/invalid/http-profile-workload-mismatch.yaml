@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the workload differs from the reviewed contract.
-# Expected: ValueError containing 'existing HTTP transport contract mismatch' (see http-profile-workload-mismatch.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-workload-mismatch.expect.json.
 version: 1
 name: kubernetes
 profile: existing-streamable-http-v1

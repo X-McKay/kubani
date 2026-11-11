@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: provision.profile is not postgres-secret-pair-v1.
-# Expected: ValueError containing 'unsupported provisioning profile or missing bootstrap' (see provision-profile-unsupported.expect.json).
+# Expected: ValueError; the message is pinned in provision-profile-unsupported.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

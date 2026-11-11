@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: workload.port is a string.
-# Expected: ValueError containing 'invalid port' (see port-not-an-integer.expect.json).
+# Expected: ValueError; the message is pinned in port-not-an-integer.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

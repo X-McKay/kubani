@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
-# Rule broken: upstreams is a mapping (the code raises TypeError 'upstreams must be explicit list', surfaced wrapped).
-# Expected: ValueError containing 'invalid declaration type or structure' (see upstreams-not-a-list.expect.json).
+# Rule broken: upstreams is a mapping, not a list.
+# Expected: ValueError; the message is pinned in upstreams-not-a-list.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

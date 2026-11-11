@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: revision is not v<positive integer>.
-# Expected: ValueError containing 'invalid or incomplete string field' (see bootstrap-revision-invalid.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-revision-invalid.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

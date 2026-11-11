@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: database contains a space.
-# Expected: ValueError containing 'invalid or incomplete string field' (see provision-database-invalid.expect.json).
+# Expected: ValueError; the message is pinned in provision-database-invalid.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

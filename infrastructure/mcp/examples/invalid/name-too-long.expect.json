@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "name exceeds 40 characters"
+  "message_contains": "name: must be at most 40 characters"
 }

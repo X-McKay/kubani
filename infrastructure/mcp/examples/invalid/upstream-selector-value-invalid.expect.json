@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "invalid or incomplete string field"
+  "message_contains": "upstreams[0].selector values: must be a label value (letters, digits, dots, underscores, dashes)"
 }

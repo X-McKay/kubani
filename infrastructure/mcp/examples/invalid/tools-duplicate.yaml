@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: a tool is listed twice.
-# Expected: ValueError containing 'exact unique tools required' (see tools-duplicate.expect.json).
+# Expected: ValueError; the message is pinned in tools-duplicate.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

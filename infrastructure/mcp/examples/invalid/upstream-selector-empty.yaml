@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: selector is empty.
-# Expected: ValueError containing 'upstream Pod selector required' (see upstream-selector-empty.expect.json).
+# Expected: ValueError; the message is pinned in upstream-selector-empty.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

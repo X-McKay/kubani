@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "unsupported provisioning profile or missing bootstrap"
+  "message_contains": "provision.profile: must be postgres-secret-pair-v1"
 }

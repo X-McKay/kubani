@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the existing-http profile requires references.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see http-profile-missing-field.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-missing-field.expect.json.
 version: 1
 name: kubernetes
 profile: existing-streamable-http-v1

@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: only the 'kubernetes' name is supported.
-# Expected: ValueError containing 'unsupported existing HTTP backend' (see http-profile-name-not-kubernetes.expect.json).
+# Expected: ValueError; the message is pinned in http-profile-name-not-kubernetes.expect.json.
 version: 1
 name: other
 profile: existing-streamable-http-v1

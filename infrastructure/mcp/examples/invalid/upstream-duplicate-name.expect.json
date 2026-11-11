@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "duplicate upstream name"
+  "message_contains": "upstreams[1].name: duplicate of an earlier upstream"
 }

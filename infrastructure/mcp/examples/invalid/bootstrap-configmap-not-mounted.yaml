@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: the Job does not mount bootstrap.configMap.
-# Expected: ValueError containing 'bootstrap ConfigMap reference mismatch' (see bootstrap-configmap-not-mounted.expect.json).
+# Expected: ValueError; the message is pinned in bootstrap-configmap-not-mounted.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

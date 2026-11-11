@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "invalid or incomplete string field"
+  "message_contains": "bootstrap.revision: must be v followed by a positive integer, such as v1"
 }

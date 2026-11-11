@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: role does not start with agent-role-<name>-.
-# Expected: ValueError containing 'invalid or incomplete string field' (see role-wrong-prefix.expect.json).
+# Expected: ValueError; the message is pinned in role-wrong-prefix.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

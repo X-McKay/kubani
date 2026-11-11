@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: roleManifest is not in secrets.
-# Expected: ValueError containing 'provision path must be a declared encrypted Secret' (see provision-path-not-declared.expect.json).
+# Expected: ValueError; the message is pinned in provision-path-not-declared.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

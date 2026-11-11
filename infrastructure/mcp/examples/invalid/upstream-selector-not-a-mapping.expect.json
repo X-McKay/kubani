@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "upstream Pod selector required"
+  "message_contains": "upstreams[0].selector: must be a non-empty mapping of Pod labels"
 }

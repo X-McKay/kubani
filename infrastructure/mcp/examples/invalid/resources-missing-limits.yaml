@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: resources has requests but no limits.
-# Expected: ValueError containing 'missing or unknown declaration fields' (see resources-missing-limits.expect.json).
+# Expected: ValueError; the message is pinned in resources-missing-limits.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1

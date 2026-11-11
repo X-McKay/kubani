@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "distinct credential paths required"
+  "message_contains": "provision.roleManifest and provision.workloadManifest: must be two different paths"
 }

@@ -1,4 +1,4 @@
 {
   "error": "ValueError",
-  "message_contains": "invalid or incomplete string field"
+  "message_contains": "upstreams[0].selector keys: must be a label key such as app.kubernetes.io/name"
 }

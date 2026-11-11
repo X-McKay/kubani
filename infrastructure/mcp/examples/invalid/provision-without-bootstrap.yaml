@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: provision is declared but bootstrap is not.
-# Expected: ValueError containing 'unsupported provisioning profile or missing bootstrap' (see provision-without-bootstrap.expect.json).
+# Expected: ValueError; the message is pinned in provision-without-bootstrap.expect.json.
 version: 1
 name: example-full
 profile: container-sse-v1

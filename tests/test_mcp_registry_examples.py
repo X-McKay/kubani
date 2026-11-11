@@ -41,7 +41,17 @@ EXPECTATIONS = sorted(INVALID_DIR.glob("*.expect.json"))
 
 # Messages raised in model.py that no example can trigger, with the reason.
 # The coverage test fails when this list is stale as well as when it is short.
-UNREACHABLE = {}
+# Keyed by the message as test_..._exercised prints it: "{}" stands for a formatted value.
+UNREACHABLE = {
+    "{}: resolves outside the repository": (
+        "defence in depth: every symlink component is refused first, so a path "
+        "that passes the earlier checks cannot resolve outside the root"
+    ),
+    "{}: name is already used by another backend": (
+        "the file name must equal the name (checked first) and file names are "
+        "unique within a directory, so two files cannot share a name"
+    ),
+}
 
 
 def _secret(namespace, name, keys, *, encrypted=True, kind="Secret"):
@@ -67,6 +77,7 @@ FAKE_SECRETS = {
     "plaintext": ("mcp", "example-api", ["API_TOKEN"], {"encrypted": False}),
     "not-a-secret": ("mcp", "example-api", ["API_TOKEN"], {"kind": "ConfigMap"}),
 }
+RAW_SUPPORT = {"not-a-mapping.enc.yaml": "- not\n- a mapping\n"}
 
 
 def build_root(tmp_path, example: Path) -> Path:
@@ -76,6 +87,8 @@ def build_root(tmp_path, example: Path) -> Path:
     support = root / "infrastructure/example"
     for stem, (ns, name, keys, extra) in FAKE_SECRETS.items():
         (support / f"{stem}.enc.yaml").write_text(_secret(ns, name, keys, **extra))
+    for file_name, text in RAW_SUPPORT.items():
+        (support / file_name).write_text(text)
     (support / "linked").symlink_to(".")
     backends = root / "infrastructure/mcp/backends"
     backends.mkdir(parents=True)
@@ -146,38 +159,85 @@ def test_invalid_example_is_refused_as_expected(example, tmp_path):
     assert expect["message_contains"] in chain_text(exc)
 
 
-def _raised_messages(path: Path) -> set[str]:
-    """Leading literal text of every ValueError/TypeError raised in a module."""
-    found = set()
+def _signature(call: ast.Call) -> str:
+    """The message of a raise as text, with "{}" where a value is formatted in."""
+
+    def text(node) -> str:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.JoinedStr):
+            return "".join(text(v) for v in node.values)
+        if isinstance(node, ast.FormattedValue):
+            return "{}"
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+            return text(node.left) + text(node.right)
+        return "{}"
+
+    return text(call.args[0])
+
+
+def _raise_sites(path: Path) -> dict[int, str]:
+    """Line -> message signature for every `raise ValueError/TypeError(...)` in a module."""
+    sites = {}
     for node in ast.walk(ast.parse(path.read_text())):
         if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
             continue
-        func = node.exc.func
-        if getattr(func, "id", None) not in ("ValueError", "TypeError"):
-            continue
-        arg = node.exc.args[0]
-        while isinstance(arg, ast.BinOp):  # "text: " + ", ".join(...)
-            arg = arg.left
-        if isinstance(arg, ast.JoinedStr):  # f"text: {value}"
-            arg = arg.values[0]
-        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-            found.add(arg.value)
-    return found
+        if getattr(node.exc.func, "id", None) in ("ValueError", "TypeError"):
+            sites[node.lineno] = _signature(node.exc)
+    return sites
+
+
+def _raised_lines(path: Path, examples, tmp_path) -> set[int]:
+    """Lines of `path` where an exception was raised while loading any example.
+
+    Uses sys.settrace, restricted to that one file, and records the line of
+    every 'exception' event; only lines that are raise statements are kept by
+    the caller. This is exact about which raise statement ran, whatever its
+    message says, so messages may be built from field paths.
+    """
+    target = str(path)
+    seen: set[int] = set()
+
+    def local(frame, event, arg):
+        if event == "exception":
+            seen.add(frame.f_lineno)
+        return local
+
+    def tracer(frame, event, arg):
+        return local if frame.f_code.co_filename == target else None
+
+    previous = sys.gettrace()
+    sys.settrace(tracer)
+    try:
+        for i, example in enumerate(examples):
+            refusal(tmp_path / str(i), example)
+    finally:
+        sys.settrace(previous)
+    return seen
 
 
 def test_every_raise_in_model_is_exercised_by_an_invalid_example(tmp_path):
-    observed = []
-    for i, example in enumerate(INVALID):
-        exc = refusal(tmp_path / str(i), example)
-        if exc is not None:
-            observed.append(chain_text(exc))
-    uncovered = {
-        m
-        for m in _raised_messages(ROOT / "infrastructure/scripts/ops/mcp_registry/model.py")
-        if not any(m in text for text in observed)
-    }
+    path = ROOT / "infrastructure/scripts/ops/mcp_registry/model.py"
+    sites = _raise_sites(path)
+    hit = _raised_lines(path, INVALID, tmp_path)
+    uncovered = {sig for line, sig in sites.items() if line not in hit}
     assert uncovered == set(UNREACHABLE), (
-        "model.py messages with no invalid example (add one, or list it in "
-        f"UNREACHABLE with the reason): {sorted(uncovered - set(UNREACHABLE))}; "
+        "model.py refusals no invalid example reaches (add an example, or list "
+        f"the message in UNREACHABLE with the reason): {sorted(uncovered - set(UNREACHABLE))}; "
         f"stale UNREACHABLE entries: {sorted(set(UNREACHABLE) - uncovered)}"
     )
+
+
+def test_each_refusal_in_model_has_its_own_message():
+    sigs = list(_raise_sites(ROOT / "infrastructure/scripts/ops/mcp_registry/model.py").values())
+    dupes = sorted({s for s in sigs if sigs.count(s) > 1})
+    assert dupes == [], f"two raise sites share a message: {dupes}"
+
+
+def test_expectations_name_a_field_or_a_file():
+    """A message_contains of only a generic phrase pins nothing about the field."""
+    generic = ("must be", "unknown field", "missing field", "still holds")
+    for expect_file in EXPECTATIONS:
+        phrase = json.loads(expect_file.read_text())["message_contains"]
+        if any(phrase.startswith(g) for g in generic):
+            raise AssertionError(f"{expect_file.name}: {phrase!r} does not name a field path")

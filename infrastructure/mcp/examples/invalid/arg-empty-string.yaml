@@ -1,6 +1,6 @@
 # INVALID: breaks exactly one rule.
 # Rule broken: one argument is an empty string.
-# Expected: ValueError containing 'invalid or incomplete string field' (see arg-empty-string.expect.json).
+# Expected: ValueError; the message is pinned in arg-empty-string.expect.json.
 version: 1
 name: example-minimal
 profile: container-sse-v1
