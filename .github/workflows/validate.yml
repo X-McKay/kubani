@@ -73,11 +73,14 @@ jobs:
 
       - name: Kustomize builds
         run: |
-          for dir in infrastructure/gitops/infrastructure \
-                     infrastructure/gitops/apps/databases \
-                     infrastructure/gitops/infrastructure/tetragon/policies \
-                     infrastructure/gitops/apps \
-                     infrastructure/gitops/flux-system; do
+          roots=$( { grep -h '^  path:' infrastructure/gitops/flux-system/*-kustomization.yaml \
+                       | sed -E 's|^  path: *\./?||; s|[" ]||g'; \
+                     printf '%s\n' infrastructure/gitops/flux-system \
+                       infrastructure/gitops/apps/databases \
+                       infrastructure/gitops/infrastructure/tetragon/policies \
+                       infrastructure/gitops/apps/keycloak \
+                       infrastructure/gitops/apps/agent-platform/workloads; } | sort -u )
+          for dir in $roots; do
             echo "building $dir"
             kubectl kustomize "$dir" > /dev/null
           done
@@ -86,51 +89,17 @@ jobs:
         run: |
           uv run --locked python infrastructure/scripts/ops/mcp-registry.py render --check
           uv run --locked python infrastructure/scripts/ops/mcp-registry.py check
-          uv run --locked python -m unittest discover -s tests -p 'test_mcp_registry*.py' -v
-          uv run --locked python -m unittest tests.test_db_admin_identity tests.test_db_admin_gateway tests.test_db_admin_backend.BackendManifests tests.test_db_admin_release -v
 
-      - name: Generic agent onboarding preflight
-        run: uv run --locked python -B -m unittest discover -s tests -p test_agent_preflight.py -v
-      - name: Agent operations tooling and sync headers
-        run: |
-          uv run --locked python -B -m unittest discover -s tests -p 'test_agent_ops*.py' -v
-          uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync
+      - name: Agent operations sync headers
+        run: uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync
 
-      - name: Shared-service policy tests
-        run: >-
-          uv run python -m unittest
-          tests.test_postgres_backup_recovery
-          tests.test_authentik_upgrade_rehearsal
-          tests.test_authentik_live_upgrade
-          tests.test_live_service_probes
-          tests.test_inference_bench_auth
-          tests.test_tenant_signers
-          tests.test_arc_dind_mtu
-          tests.test_t17_operator -v
-
-      - name: Inference completion bounds (pinned gateway, local stub)
+      # Same command as `just test`. RUN_GATEWAY_IMAGE_TESTS enables the pinned
+      # gateway image tests (inference completion bounds, budget conformance),
+      # which need the Docker daemon this runner provides.
+      - name: Test suite
         env:
           RUN_GATEWAY_IMAGE_TESTS: "1"
-        run: uv run python -m unittest discover -s tests -p test_inference_completion_bound.py -v
-
-      - name: Budget conformance wiring and pinned gateway bounds
-        env:
-          RUN_GATEWAY_IMAGE_TESTS: "1"
-        run: uv run python -m unittest discover -s tests -p "test_budget_*.py" -v
-
-      - name: Checkpoint qualification template invariants
-        run: uv run python -m unittest discover -s tests -p test_checkpoint_templates.py -v
-
-      - name: Lifecycle qualification template invariants
-        run: uv run python -m unittest discover -s tests -p test_lifecycle_templates.py -v
-
-      - name: Transport qualification template invariants
-        run: uv run python -m unittest discover -s tests -p test_transport_templates.py -v
-
-      - name: Other-tenant fixture planning and unchanged Alice PKCE
-        run: |
-          uv run --locked --with 'PyJWT[crypto]==2.13.0' python -m unittest discover -s tests -p 'test_conformance_other_tenant*.py' -v
-          uv run --locked --with 'PyJWT[crypto]==2.13.0' python -m unittest discover -s tests -p test_conformance_human_token.py -v
+        run: uv run --locked python -B -m pytest
 
       - name: Shell scripts parse
         run: |

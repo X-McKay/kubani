@@ -16,5 +16,10 @@ dependencies = [
 dev = [
     "ansible-lint>=25.0.0",
     "pre-commit>=4.0.0",
+    "pytest>=8.0",
     "yamllint>=1.35.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"

@@ -125,35 +125,32 @@ hooks-check:
 # than preflight because `preflight` is already the Ansible pre-provision play.
 pre-push-check: hooks-check validate-local drift-offline
 
+# Build every root Flux reconciles (the `path:` of each flux-system Kustomization) plus extras.
 validate-gitops-build:
-    for dir in \
-        infrastructure/gitops/infrastructure \
-        infrastructure/gitops/apps/databases \
-        infrastructure/gitops/infrastructure/tetragon/policies \
-        infrastructure/gitops/apps \
-        infrastructure/gitops/apps/keycloak \
-        infrastructure/gitops/apps/agent-platform/workloads \
-        infrastructure/gitops/flux-system; do \
-        echo "Validating $dir"; \
-        kubectl kustomize "$dir" >/dev/null; \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    roots=$( { grep -h '^  path:' infrastructure/gitops/flux-system/*-kustomization.yaml \
+                 | sed -E 's|^  path: *\./?||; s|[" ]||g'; \
+               printf '%s\n' infrastructure/gitops/flux-system \
+                 infrastructure/gitops/apps/databases \
+                 infrastructure/gitops/infrastructure/tetragon/policies \
+                 infrastructure/gitops/apps/keycloak \
+                 infrastructure/gitops/apps/agent-platform/workloads; } | sort -u )
+    for dir in $roots; do
+        echo "Validating $dir"
+        kubectl kustomize "$dir" >/dev/null
     done
 
+# The whole suite via pytest; args forward, e.g. `just test tests/test_agent_ops.py -k name` (conftest fails on an empty test file).
+test *ARGS:
+    uv run --locked python -B -m pytest {{ARGS}}
+
 test-infrastructure-policy:
-    uv run python -m unittest \
-        tests.test_postgres_backup_recovery \
-        tests.test_authentik_upgrade_rehearsal \
-        tests.test_authentik_live_upgrade \
-        tests.test_live_service_probes \
-        tests.test_temporal_db_init \
-        tests.test_inference_compare \
-        tests.test_inference_bench_auth \
-        tests.test_tenant_signers \
-        tests.test_arc_dind_mtu \
-        tests.test_t17_operator -v
+    just test tests/test_postgres_backup_recovery.py tests/test_authentik_upgrade_rehearsal.py tests/test_authentik_live_upgrade.py tests/test_live_service_probes.py tests/test_temporal_db_init.py tests/test_inference_compare.py tests/test_inference_bench_auth.py tests/test_tenant_signers.py tests/test_arc_dind_mtu.py tests/test_t17_operator.py
 
 # Docker-only local regression; no kubeconfig, JWT or real model required.
 test-inference-completion-bound:
-    RUN_GATEWAY_IMAGE_TESTS=1 uv run python -m unittest discover -s tests -p test_inference_completion_bound.py -v
+    RUN_GATEWAY_IMAGE_TESTS=1 just test tests/test_inference_completion_bound.py
 
 validate-flux:
     ./infrastructure/scripts/validate_kustomizations.sh
@@ -192,7 +189,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test-infrastructure-policy mcp-check test-mcp-registry test-agent-preflight agent-check-sync test-agent-ops hooks-check
+validate-local: inventory secrets-check validate-gitops-build test mcp-check agent-check-sync hooks-check
 
 validate: validate-local validate-cluster
 
@@ -314,25 +311,24 @@ new-service name namespace:
 
 # One non-secret registry entry per supported MCP server. Identity writes require apply.
 mcp *ARGS:
-    uv run --locked --with 'PyJWT[crypto]==2.13.0' python infrastructure/scripts/ops/mcp-registry.py {{ARGS}}
+    uv run --locked python infrastructure/scripts/ops/mcp-registry.py {{ARGS}}
 
 mcp-check:
     uv run --locked python infrastructure/scripts/ops/mcp-registry.py render --check
     uv run --locked python infrastructure/scripts/ops/mcp-registry.py check
 
 test-mcp-registry:
-    uv run --locked python -m unittest discover -s tests -p 'test_mcp_registry*.py' -v
-    uv run --locked python -m unittest tests.test_db_admin_identity tests.test_db_admin_gateway tests.test_db_admin_backend.BackendManifests tests.test_db_admin_release -v
+    just test tests/test_mcp_registry*.py tests/test_db_admin_identity.py tests/test_db_admin_gateway.py tests/test_db_admin_release.py tests/test_db_admin_backend.py
 
 # Local compatibility only; --live adds read-only MCP registration evidence.
 agent-preflight AGENT *ARGS:
-    uv run --locked --with 'PyJWT[crypto]==2.13.0' python -B infrastructure/scripts/ops/agent-preflight.py {{AGENT}} {{ARGS}}
+    uv run --locked python -B infrastructure/scripts/ops/agent-preflight.py {{AGENT}} {{ARGS}}
 
 test-agent-preflight:
-    uv run --locked python -B -m unittest discover -s tests -p 'test_agent_preflight.py' -v
+    just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: ls | run AGENT --task ... | status/wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve
+# Applied agents: state | ls | register | run AGENT --task ... | status/wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 
@@ -341,4 +337,4 @@ agent-check-sync *ARGS:
     uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync "$@"
 
 test-agent-ops:
-    uv run --locked python -B -m unittest discover -s tests -p 'test_agent_ops*.py' -v
+    just test tests/test_agent_ops*.py
