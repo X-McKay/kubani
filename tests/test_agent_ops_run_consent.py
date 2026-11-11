@@ -686,6 +686,29 @@ class ConsentCommandTests(Case):
         who = []
         run._say_who(who.append, {"preferredUsername": "al\x1b[2Kice\u202e", "subject": "s"})
         self.assertEqual(who, ["Signed in as al?[2Kice?."])
+        # Every name on the line, and what is printable yet shows as nothing or reorders the line: a Hangul filler, a
+        # braille blank, a combining mark, a Hebrew letter.
+        intro = run._show([].append, "t\x1b[2Kt", "a\x1b[2Ka", "r\u3164\u2800\u0301\u05d0r", "s\x1b[2Ks", {})
+        self.assertTrue(intro.startswith("a?[2Ka (tenant t?[2Kt, release r????r) will act as you for session s?[2Ks, on the task above"), intro)
+        self.assertTrue(intro.isascii() and intro.isprintable(), intro)
+        # A name is never cut silently: two that differ only past the cut would otherwise read the same.
+        self.assertEqual(run._plain("r" * 256), "r" * 256)
+        self.assertEqual(run._plain("r" * 300), "r" * 256 + "...(300 characters)")
+
+    def test_reading_a_request_leaves_no_descriptor_open(self):
+        held = self.tmp / "held"
+        held.mkdir(mode=0o700)
+        os.chmod(held, 0o700)
+        (held / "request.json").write_text("{}")
+        before = len(os.listdir("/proc/self/fd"))
+        for _ in range(3):
+            self.assertEqual(run._own_request(held), {})
+        os.unlink(held / "request.json")
+        os.mkdir(held / "request.json")
+        for _ in range(3):
+            with self.assertRaises(delegation.ConsentError):
+                run._own_request(held)
+        self.assertEqual(len(os.listdir("/proc/self/fd")), before)
 
     def test_a_request_that_is_not_a_regular_file_is_refused(self):
         kube = self.kube([DEPOSITED, ACCEPTED])
@@ -1008,6 +1031,19 @@ class CommandLineTests(Case):
         self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason"}))
         self.assertRegex(document["reason"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
         self.assertEqual(err, f"error: {document['reason']}\n")
+        # The same after the run directory exists, here a started workflow whose answer lacks a field: the document names
+        # the session and the directory, so the run can still be found.
+        answer = {k: v for k, v in ACCEPTED.items() if k != "workflow_id"}
+        code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(self.tmp / "f")], self.kube([answer]), self.browser(), interactive=True)
+        document = json.loads(out)
+        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "ERROR", {"status", "reason", "sessionId", "dir"}, str(self.tmp / "f")))
+        self.assertRegex(document["reason"], r"^unexpected KeyError at run\.py:\d+$")
+        self.assertEqual(json.loads((self.tmp / "f" / "request.json").read_text())["session_id"], document["sessionId"])
+        for secret in self.secrets():
+            self.assertNotIn(secret, out + err)
+        # Only `run` and `consent` promise one document: any other command lets an unforeseen error through as it is.
+        with patch.object(live, "listing", unforeseen), self.assertRaises(KeyError):
+            self.run_cli(["ls"], kube)
         self.assertNotIn("must not be printed", out + err)
         self.assertEqual(kube.exec_calls, [])
 

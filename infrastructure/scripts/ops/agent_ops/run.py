@@ -119,9 +119,17 @@ def shown_digest(tenant: str, agent: str, release, session: str, task) -> str:
     return hashlib.sha256(json.dumps(shown, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
+PLAIN_CHARS = 256  # above the 253 of a Kubernetes name
+
+
 def _plain(value) -> str:
-    """A value read from a file or a token, as it may be put on a terminal: printable characters only, and bounded."""
-    return "".join(ch if ch.isprintable() else "?" for ch in str(value))[:256]
+    """A name read from a file or a token, as it may be put on a terminal: visible ASCII only, and a cut is said.
+
+    Printable is not enough: blank-looking letters, combining marks and right-to-left letters are all printable. The names
+    shown this way are Kubernetes names and UUIDs, so nothing legitimate is lost; an account name outside ASCII shows `?`.
+    """
+    text = "".join(ch if " " <= ch <= "~" else "?" for ch in str(value))
+    return text if len(text) <= PLAIN_CHARS else f"{text[:PLAIN_CHARS]}...({len(text)} characters)"
 
 
 def _show(say, tenant: str, agent: str, release, session: str, task) -> str:
@@ -312,7 +320,10 @@ def submit(
     sign_in=None,
     say=None,
     now=time.time,
+    started: dict | None = None,
 ) -> tuple[int, dict]:
+    """`started`, when given, receives the session id and the run directory once the directory exists, for a caller that
+    has to name the run after an exception this function does not handle."""
     kube = kube or live.Kube()
     p = plan(root, kube, agent, release=release, grant_handle=grant_handle, task=task)
     inline = False
@@ -328,6 +339,8 @@ def submit(
     runner = Runner(kube, p["tenant"], out)  # the pod is located before a run directory exists and before anyone is asked to consent
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
     os.chmod(out, 0o700)  # whatever the umask: `consent` trusts a run directory only at exactly this mode
+    if started is not None:
+        started.update(sessionId=session, dir=str(out))
     public = {"action": "submit", "tenant": p["tenant"], "agent": agent, "release": p["release"], "session_id": session, "task": task, "max_boundaries": max_boundaries}
     _private(out / "request.json", json.dumps(public, indent=2, sort_keys=True) + "\n")
     request = dict(public, grant_handle=grant_handle)

@@ -110,6 +110,7 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     root = args.root
+    started: dict = {}  # the session id and directory of a `run`, once it has them
     try:
         if args.command == "ls":
             rows = live.listing(root, live.Kube())
@@ -141,6 +142,7 @@ def main(argv=None) -> int:
                 out=args.out,
                 consent_timeout=args.consent_timeout,
                 browser=args.browser,
+                started=started,
             )
             emit(envelope)
             return code
@@ -183,7 +185,7 @@ def main(argv=None) -> int:
             raise
         # `run` and `consent` end their own interrupts with what they know; this is one that arrived outside those places.
         print("interrupted", file=sys.stderr)
-        emit({"status": "INTERRUPTED", "reason": "interrupted before the command finished; a run directory, when one was created, holds what was written by then"})
+        emit({"status": "INTERRUPTED", "reason": "interrupted before the command finished; a run directory, when one was created, holds what was written by then", **started})
         return run.INTERRUPTED
     except ERRORS as exc:
         print(f"refused: {exc}", file=sys.stderr)
@@ -199,11 +201,12 @@ def main(argv=None) -> int:
         if args.command not in ONE_DOCUMENT:
             raise
         # Anything unforeseen still ends as one document. Only the exception's type and place are named: its message is not
-        # known to be free of what a remote answer or a token carried.
+        # known to be free of what a remote answer or a token carried. A run that had a directory by then is named, because
+        # a workflow may have been started and `receipt.json`, when it was written, is the only way back to it.
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         reason = f"unexpected {type(exc).__name__} at {Path(frame.filename).name}:{frame.lineno}"
         print(f"error: {reason}", file=sys.stderr)
-        emit({"status": "ERROR", "reason": reason})
+        emit({"status": "ERROR", "reason": reason, **started})
         return 1
     return 2
 
