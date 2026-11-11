@@ -23,7 +23,7 @@ Do not reuse these passwords outside the registry.
 ## Internal vs External Access
 
 - External clients authenticate to `https://registry.almckay.io`.
-- Cluster nodes continue to use the internal mirror endpoints configured in [infrastructure/ansible/files/registries.yaml](/home/al/git/kubani/infrastructure/ansible/files/registries.yaml:1), which resolve to the registry Service IP and do not depend on the external ingress path.
+- Cluster nodes continue to use the internal mirror endpoints configured in [infrastructure/ansible/files/registries.yaml](../../../infrastructure/ansible/files/registries.yaml:1), which resolve to the registry Service IP and do not depend on the external ingress path.
 
 That separation keeps node-local image pulls stable while restricting the external ingress.
 
