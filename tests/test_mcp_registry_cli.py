@@ -1,9 +1,11 @@
 """Operator command boundaries: offline add, explicit identity writes, safe reads."""
 
+import importlib
 import importlib.util
 import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +20,8 @@ PATH = (
 SPEC = importlib.util.spec_from_file_location("mcp_registry_cli", PATH)
 cli = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cli)
+sys.path.insert(0, str(PATH.parent))
+kube = importlib.import_module("mcp_registry.kube")
 
 
 class CliTests(unittest.TestCase):
@@ -42,6 +46,7 @@ class CliTests(unittest.TestCase):
                 admin=Mock(),
                 configure=Mock(return_value={"planned": [], "changed": []}),
             ),
+            kube=kube,
             provision=SimpleNamespace(
                 plan=Mock(return_value={"status": "ready"}),
                 apply=Mock(return_value={"status": "created"}),
@@ -164,7 +169,7 @@ class CliTests(unittest.TestCase):
                 metadata['namespace'] = namespace
             obj = {'apiVersion':version, 'kind':kind, 'metadata':metadata}
             run = Mock(return_value=subprocess.CompletedProcess([], 0, json.dumps(obj), ''))
-            reader = cli.KubeReader(None, run=run)
+            reader = kube.KubeReader(None, run=run)
             self.assertEqual(reader(version, kind, namespace, 'public'), obj)
             self.assertEqual('--namespace' in run.call_args.args[0], bool(namespace))
             for wrong in [dict(obj, kind='Secret'), dict(obj, metadata=dict(metadata, name='wrong')), dict(obj, metadata=dict(metadata, namespace='wrong'))]:
@@ -178,7 +183,7 @@ class CliTests(unittest.TestCase):
 
     def test_kubectl_secret_read_requests_name_only(self):
         run = Mock(return_value=subprocess.CompletedProcess([], 0, "db-secret", ""))
-        reader = cli.KubeReader("/example/config", run=run)
+        reader = kube.KubeReader("/example/config", run=run)
         actual = reader("v1", "Secret", "mcp", "db-secret")
         self.assertEqual(actual["metadata"]["name"], "db-secret")
         argv = run.call_args.args[0]
@@ -188,7 +193,7 @@ class CliTests(unittest.TestCase):
 
     def test_kubectl_notfound_is_none_and_errors_never_expose_output(self):
         run = Mock(return_value=subprocess.CompletedProcess([], 0, "", ""))
-        reader = cli.KubeReader(None, run=run)
+        reader = kube.KubeReader(None, run=run)
         self.assertIsNone(reader("v1", "Service", "mcp", "server"))
         run.return_value = subprocess.CompletedProcess([], 1, "", "PRIVATE_ERROR")
         with self.assertRaisesRegex(RuntimeError, "cluster read failed") as found:
@@ -197,7 +202,7 @@ class CliTests(unittest.TestCase):
 
     def test_kubectl_refuses_unapproved_kind_and_flag_names(self):
         run = Mock()
-        reader = cli.KubeReader(None, run=run)
+        reader = kube.KubeReader(None, run=run)
         for version, kind, namespace, name in [
             ("v1", "Pod", "mcp", "server"),
             ("v1", "Secret", "mcp", "--all"),

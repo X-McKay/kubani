@@ -350,15 +350,12 @@ class Adapters(unittest.TestCase):
         api.call.assert_called_once_with("clients", method="GET")
 
     def test_metadata_only_secret_transport_reused(self):
-        spec = importlib.util.spec_from_file_location(
-            "registry_reader_test", OPS / "mcp-registry.py"
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        from mcp_registry import kube
+
         process = Mock(
             return_value=SimpleNamespace(returncode=0, stdout="credential-name")
         )
-        response = module.KubeReader(None, run=process)(
+        response = kube.KubeReader(None, run=process)(
             "v1", "Secret", "mcp", "credential-name"
         )
         self.assertEqual(set(response), {"kind", "apiVersion", "metadata"})
