@@ -411,6 +411,31 @@ Borrowed practices applied throughout: a test manifest that fails when a
 registered test did not run; the permission table of section 12; a threat table
 kept as data with a generated copy checked for drift.
 
+### Phase 0 progress, 2026-11-11
+
+Done, on the branch that carries this document and, for the SDK, on the zetra
+branch `delivery/model-free-agents`; none of it is merged or deployed:
+
+- One test runner: every test module runs, and a run fails if a test file
+  contributes no tests. The seven modules that nothing selected now run.
+- `validate-gitops-build` builds all eight roots Flux reconciles, derived from
+  the Flux Kustomizations.
+- `just agent run` defaults to the most recently approved release;
+  `check-sync` refuses an unknown name; failures of kubectl, gh and git state
+  their cause; `cancel` exits 0 when accepted.
+- `just agent-preflight` works against the workspace layout.
+- Production commands no longer load conformance scripts by file path; the
+  Keycloak administrator client is one module.
+- The broken secret-generation scripts and unreferenced files are removed.
+- The SDK runs an agent that declares no model, with the check, test kit,
+  scaffold option and documentation to match.
+
+Not done in phase 0: platform images built by a pipeline and the move of the
+conformance harness out of the runner image, both waiting on the decisions in
+pull request 420; the command-line tools' shared exit-code and output contract,
+which phase 2 settles when the session interface defines it; and the
+restructuring of the agent platform documentation.
+
 ## 16. To confirm before building
 
 Confirmed by Al on 2026-11-11: a release is produced by continuous integration
