@@ -175,10 +175,18 @@ creation_rules:
 
 ### 2. Create a Kubernetes Secret
 
-Create a plain Kubernetes secret manifest:
+Write the plain Secret manifest **outside** the repository, so that the
+plaintext can never be committed. Name the file `secret.enc.yaml`: the creation
+rule in `.sops.yaml` matches on the input file's name, and SOPS refuses a file
+it has no rule for.
+
+```bash
+staged=$(mktemp -d)
+"${EDITOR:-vi}" "$staged/secret.enc.yaml"
+```
 
 ```yaml
-# Example: infrastructure/gitops/apps/postgresql/secret.yaml
+# Example contents of $staged/secret.enc.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -186,24 +194,20 @@ metadata:
   namespace: database
 type: Opaque
 stringData:
-  postgres-password: supersecret123
+  postgres-password: <generated value>
   username: myapp
-  password: myapppassword
+  password: <generated value>
   database: myapp
 ```
 
 ### 3. Encrypt the Secret
 
-Encrypt the secret using SOPS:
+Encrypt it into place. Run this from the repository root: SOPS looks for
+`.sops.yaml` from the working directory.
 
 ```bash
-sops --encrypt infrastructure/gitops/apps/postgresql/secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
-```
-
-**Alternative (using .sops.yaml config)**:
-```bash
-# SOPS will automatically use .sops.yaml configuration
-sops --encrypt secret.yaml > secret.enc.yaml
+SOPS_AGE_KEY_FILE=age.key sops --encrypt "$staged/secret.enc.yaml" \
+  > infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 **Encrypted Output Example**:
@@ -243,15 +247,15 @@ sops:
 
 ### 4. Delete the Plain Secret
 
-**IMPORTANT**: Never commit unencrypted secrets to Git!
+**IMPORTANT**: Never commit unencrypted secrets to Git! The plaintext was
+written outside the repository; remove it once the encrypted file exists.
 
 ```bash
-# Delete the plain secret file
-rm infrastructure/gitops/apps/postgresql/secret.yaml
+# Remove the plaintext
+shred -u "$staged/secret.enc.yaml"
 
-# Verify only encrypted file exists
-ls infrastructure/gitops/apps/postgresql/
-# Output: secret.enc.yaml
+# Check that the committed file is encrypted
+grep -c 'ENC\[' infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 ### 5. Commit to Git
@@ -269,8 +273,8 @@ git push
 
 ### Creating Secrets for Each Service
 
-There is no generator script. Each service's secret is created with the
-procedure above, one file at a time:
+There is no generator script. Each service's secret is created with steps 2 to
+5 above, one file at a time:
 
 1. Generate each value yourself, alphanumeric only, for example
    `openssl rand -hex 24`. Some consumers word-split their config, so shell
@@ -278,7 +282,7 @@ procedure above, one file at a time:
 2. Write the plaintext Secret **outside** the repository, in a file named
    `secret.enc.yaml` so the `.sops.yaml` creation rule matches on the input
    filename.
-3. Encrypt it into place:
+3. Encrypt it into place, from the repository root:
    `SOPS_AGE_KEY_FILE=age.key sops --encrypt <staged>/secret.enc.yaml > <target>/secret.enc.yaml`
 4. Remove the plaintext (`shred -u <staged>/secret.enc.yaml`) and commit only the
    `.enc.yaml`.

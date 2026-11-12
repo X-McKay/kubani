@@ -72,18 +72,7 @@ jobs:
         run: uv run ansible-inventory -i infrastructure/ansible/inventory/hosts.yml --list > /dev/null
 
       - name: Kustomize builds
-        run: |
-          roots=$( { grep -h '^  path:' infrastructure/gitops/flux-system/*-kustomization.yaml \
-                       | sed -E 's|^  path: *\./?||; s|[" ]||g'; \
-                     printf '%s\n' infrastructure/gitops/flux-system \
-                       infrastructure/gitops/apps/databases \
-                       infrastructure/gitops/infrastructure/tetragon/policies \
-                       infrastructure/gitops/apps/keycloak \
-                       infrastructure/gitops/apps/agent-platform/workloads; } | sort -u )
-          for dir in $roots; do
-            echo "building $dir"
-            kubectl kustomize "$dir" > /dev/null
-          done
+        run: ./infrastructure/scripts/validate_gitops_build.sh
 
       - name: MCP registry generation and full registration wiring
         run: |

@@ -125,25 +125,13 @@ hooks-check:
 # than preflight because `preflight` is already the Ansible pre-provision play.
 pre-push-check: hooks-check validate-local drift-offline
 
-# Build every root Flux reconciles (the `path:` of each flux-system Kustomization) plus extras.
+# Build every root Flux reconciles (the `path:` of each flux-system Kustomization); CI runs the same script.
 validate-gitops-build:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    roots=$( { grep -h '^  path:' infrastructure/gitops/flux-system/*-kustomization.yaml \
-                 | sed -E 's|^  path: *\./?||; s|[" ]||g'; \
-               printf '%s\n' infrastructure/gitops/flux-system \
-                 infrastructure/gitops/apps/databases \
-                 infrastructure/gitops/infrastructure/tetragon/policies \
-                 infrastructure/gitops/apps/keycloak \
-                 infrastructure/gitops/apps/agent-platform/workloads; } | sort -u )
-    for dir in $roots; do
-        echo "Validating $dir"
-        kubectl kustomize "$dir" >/dev/null
-    done
+    ./infrastructure/scripts/validate_gitops_build.sh
 
 # The whole suite via pytest; args forward, e.g. `just test tests/test_agent_ops.py -k name` (conftest fails on an empty test file).
 test *ARGS:
-    uv run --locked python -B -m pytest {{ARGS}}
+    uv run --locked python -B -m pytest "$@"
 
 test-infrastructure-policy:
     just test tests/test_postgres_backup_recovery.py tests/test_authentik_upgrade_rehearsal.py tests/test_authentik_live_upgrade.py tests/test_live_service_probes.py tests/test_temporal_db_init.py tests/test_inference_compare.py tests/test_inference_bench_auth.py tests/test_tenant_signers.py tests/test_arc_dind_mtu.py tests/test_t17_operator.py

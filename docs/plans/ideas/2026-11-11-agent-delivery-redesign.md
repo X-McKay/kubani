@@ -448,14 +448,17 @@ branch `delivery/model-free-agents`; none of it is merged or deployed:
 - Production commands no longer load conformance scripts by file path; the
   Keycloak administrator client is one module.
 - The broken secret-generation scripts and unreferenced files are removed.
+- The three operator tools share one outcome contract
+  (`docs/infrastructure/configuration/cli-contract.md`), and the tool-backend
+  definitions have a corpus of examples that the suite runs.
 - The SDK runs an agent that declares no model, with the check, test kit,
   scaffold option and documentation to match.
 
 Not done in phase 0: platform images built by a pipeline and the move of the
 conformance harness out of the runner image, both waiting on the decisions in
-pull request 420; the command-line tools' shared exit-code and output contract,
-which phase 2 settles when the session interface defines it; and the
-restructuring of the agent platform documentation.
+pull request 420; and the restructuring of the agent platform documentation.
+The outcome contract keeps each tool's existing exit codes; phase 2 revisits
+them when the session interface defines its own.
 
 ## 16. To confirm before building
 
@@ -505,7 +508,10 @@ Risks:
 
 ## 17. Audit items independent of this redesign
 
-Found by the audit, and worth doing whatever is decided above:
+Found by the audit on Kubani `bf8c063b`, and worth doing whatever is decided
+above. This is the record of what was found. Each item was fixed in phase 0
+(see "Phase 0 progress"), except two that remain: the seven conformance Job
+files in the live workloads directory, and the documentation restructuring.
 
 - `infrastructure/scripts/secrets.py`, `create_encrypted_secrets.py` and
   `setup_sops.py` are broken: `secrets.py` imports itself in place of the
