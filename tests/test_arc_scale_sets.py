@@ -113,9 +113,17 @@ class ScaleSetParity(unittest.TestCase):
                 self.assertEqual(spec["nodeSelector"], {"topology.kubani.io/role": "platform"})
                 dind = next(c for c in spec["initContainers"] if c["name"] == "dind")
                 self.assertTrue(dind["securityContext"]["privileged"])
-                self.assertEqual(dind["resources"]["limits"], {"memory": "12Gi"})
                 runner = container(spec, "runner")
-                self.assertEqual(runner["resources"]["limits"], {"memory": "4Gi"})
+                for part in (dind, runner):
+                    # The scheduler counts requests only, so the memory a
+                    # runner pod may use is the memory it asks for.
+                    resources = part["resources"]
+                    self.assertEqual(resources["limits"], {"memory": "4Gi"})
+                    self.assertEqual(resources["requests"]["memory"], "4Gi")
+                storage = next(v for v in spec["volumes"] if v["name"] == "dind-storage")
+                # tmpfs pages are charged to dind, so its storage must leave
+                # room under the limit for dockerd and the build itself.
+                self.assertEqual(storage["emptyDir"], {"medium": "Memory", "sizeLimit": "3Gi"})
                 for image in (runner["image"], dind["image"]):
                     self.assertIn("@sha256:", image)
                     self.assertTrue(image.startswith("registry.almckay.io/mirror/"))

@@ -186,27 +186,50 @@ separate revocation only. To rotate, follow "Rotating a Credential" in
 `.claude/rules/secrets.md`; a new runner pod picks up the new Secret, since
 runners are ephemeral.
 
-### After the Secret exists
+### What has been shown on the runner
 
-Before the first release, show that the guard refuses a job that is not a push
-to `main` running `platform-release.yml` (for example a `workflow_dispatch`
-test workflow that targets `kubani-zetra`): it must fail at "Set up runner"
-with `kubani runner guard: ... may not use this runner`. Then confirm the
-docker client in the runner finds the login (`docker pull` of a private image,
-or the first push), which has not been tested. Two things in particular are
-unproven: that the Kata runtime lays the one Secret file over the scratch
-directory, and that buildx keeps its state in that directory without trouble.
+On 2026-11-12, after the Secret and the scale set were reconciled:
+
+- **A release ran.** The merge of the release workflow to zetra `main` (zetra
+  `4657884`, run 43273326047) was admitted by the guard, built
+  `registry-controller`, pushed it with the mounted login and read back the
+  digest it had reported. So the Kata runtime does lay the one Secret file over
+  the scratch directory, and buildx works in that directory.
+- **The guard refused.** Two throwaway workflows pushed to a zetra branch, one
+  of them using the file name `platform-release.yml`, both asked for
+  `kubani-zetra` and both failed at "Set up runner" with `ref
+  'refs/heads/test/guard-refusal' may not use this runner (only
+  refs/heads/main)`; their one step never ran.
+
+Not shown on the runner: a refusal for the workflow file alone (that needs a
+second workflow on `main`; the tests run the guard script for it), a Go image
+build, and the arm64 `capture` build.
 
 ### Memory on rig0
 
-A runner pod requests 1.5Gi of memory and may use 16Gi (dockerd's storage is
-tmpfs charged to the pod). The scheduler counts only the request, so this pod
-and both `kubani-zetra-agents` pods can run on rig0 at once: 48Gi of limits
-where all pods on rig0 together may use about 27Gi (measured 2026-11-12, with
-about 4Gi in use). One build at its limit fits; two do not, and the kernel
-would then kill processes in pods on rig0, most likely a build. Until the pods
-request what they may use, do not merge an image change to zetra `main` while
-an agent release is running, and push agent release tags one at a time.
+A runner pod requests the memory it may use: 4Gi for the runner container and
+4Gi for the build sidecar, of which up to 3Gi is dockerd's tmpfs storage, plus
+160Mi of Kata overhead. Both scale sets use the same figures. The scheduler
+therefore counts a build at its limit. All pods on rig0 together may use about
+27Gi and other pods request about 6Gi (2026-11-12), so two runner pods fit and
+a third stays Pending until one ends; its job waits in the queue.
+
+Where the figures come from (`kubectl top pod -n arc-runners --containers`,
+sampled every 10 seconds):
+
+| Job | Build sidecar peak | Runner peak |
+|---|---|---|
+| agent release, quiet network (2026-11-06) | about 1.4Gi | about 3.6Gi while signing and scanning |
+| platform image `registry-controller` (2026-11-12) | 1.39Gi | 0.45Gi |
+
+Before 2026-11-12 the limits were 12Gi and 4Gi with requests of 1Gi and 512Mi,
+so three pods could be scheduled with 48Gi of limits. The sidecar hit 12Gi four
+times on 2026-11-06, when a process in it grew from 1 to 8Gi in 30 seconds
+while `apt` downloads stalled; those builds failed, and with a 4Gi limit the
+same event fails sooner. A build that is killed at 4Gi without a stalled
+network needs a higher figure here: raise the sidecar's limit and request
+together, in both files, and keep three pods from fitting on rig0 at once. No
+Go image has been built on the runner yet, so that is the first place to look.
 
 ### NetworkPolicies
 
