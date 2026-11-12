@@ -299,11 +299,11 @@ class AgentOps(unittest.TestCase):
 
     def test_unrecognized_arguments_never_echo_their_values_into_the_document(self):
         marker = "VALUE-MARKER-9f3a"
-        for argv, named in (
-            (["status", "--receipt", "r", "--grant-handle", marker], "--grant-handle"),
-            (["status", "--receipt", "r", f"--grant-handle={marker}"], "--grant-handle"),
-            (["ls", marker], None),
-            (["state", "--json", "--token", marker, "-x", marker, f"--other={marker}"], "--token, -x, --other"),
+        for argv in (
+            ["status", "--receipt", "r", "--grant-handle", marker],
+            ["status", "--receipt", "r", f"--grant-handle={marker}"],
+            ["ls", marker],
+            ["state", "--json", "--token", marker, "-x", marker, f"--other={marker}"],
         ):
             with self.subTest(argv=argv):
                 code, out, err = call(agent_cli, argv)
@@ -313,14 +313,12 @@ class AgentOps(unittest.TestCase):
                 self.assertIn("usage:", err)
                 document = only_document(out)
                 self.assertEqual((document["ok"], document["error"]["code"], document["error"]["retryable"]), (False, "invalid-arguments", False))
-                message = document["error"]["message"]
-                self.assertTrue(message.endswith("; usage is on stderr"), message)
-                self.assertIn(f"unrecognized options: {named};" if named else "unrecognized arguments (values are not shown);", message)
+                self.assertEqual(document["error"]["message"], "unrecognized arguments (values are not shown); usage is on stderr")
 
-    def test_other_argument_errors_keep_argparses_message_in_the_document(self):
+    def test_required_arguments_missing_keep_argparses_message_in_the_document(self):
         code, out, err = call(agent_cli, ["run"])
-        self.assertIn("the following arguments are required: agent", only_document(out)["error"]["message"])
-        self.assertEqual(outcome.usage_message("argument --x: invalid choice"), "argument --x: invalid choice")
+        self.assertEqual(only_document(out)["error"]["message"], "the following arguments are required: agent; usage is on stderr")
+
 
     def test_help_is_untouched(self):
         code, out, _ = call(agent_cli, ["--help"])
@@ -429,7 +427,7 @@ class AgentPreflightArguments(unittest.TestCase):
         self.assertNotIn(marker, out)
         self.assertIn(marker, err)
         message = only_document(out)["error"]["message"]
-        self.assertEqual(message, "unrecognized options: --grant-handle, --secret; usage is on stderr")
+        self.assertEqual(message, "unrecognized arguments (values are not shown); usage is on stderr")
 
 
 class McpRegistry(unittest.TestCase):
@@ -569,7 +567,7 @@ class McpRegistry(unittest.TestCase):
                     finally:
                         target.side_effect = None
                     error = document["error"]
-                    self.assertEqual((status, error["code"], error["retryable"], document["error_type"], document["stage"]), (1, expected, expected == "unavailable", "KeycloakHTTPError", stage if stage != "identity-authentication" else "identity-authentication"))
+                    self.assertEqual((status, error["code"], error["retryable"], document["error_type"], document["stage"]), (1, expected, expected == "unavailable", "RuntimeError", stage if stage != "identity-authentication" else "identity-authentication"))
                     self.assertTrue(error["message"].endswith(f"(HTTP {status_code})"), error["message"])
                     self.assertNotIn(marker, json.dumps(document), "the exception's text is never shown")
                     self.assertEqual(error["retryable"], outcome.CODES[error["code"]])
@@ -616,6 +614,91 @@ class McpRegistry(unittest.TestCase):
                 self.assertIn("usage:", err.getvalue())
                 document = only_document(out.getvalue())
                 self.assertEqual((document["ok"], document["error"]["code"], document["error"]["retryable"]), (False, "invalid-arguments", False))
+
+
+class ArgumentErrorsNeverEchoWhatWasTyped(unittest.TestCase):
+    """`usage_message` keeps only text the parser defines: no typed word, value or choice reaches the document."""
+
+    MARKER = "VALUE-MARKER-9f3a"
+    ENDING = "; usage is on stderr"
+
+    def test_each_shape_of_argparse_message(self):
+        m = self.MARKER
+        for message, expected in (
+            ("the following arguments are required: agent, --tag", "the following arguments are required: agent, --tag"),
+            ("argument --max-boundaries: expected one argument", "argument --max-boundaries: the value is invalid or missing"),
+            (f"argument --max-boundaries: '{m}' is not a whole number", "argument --max-boundaries: the value is invalid or missing"),
+            (f"argument --consent-timeout: invalid float value: '{m}'", "argument --consent-timeout: the value is invalid or missing"),
+            (f"argument --no-wait: ignored explicit argument '{m}'", "argument --no-wait: the value is invalid or missing"),
+            (f"argument command: invalid choice: '{m}' (choose from 'ls', 'state')", "argument command: the value is invalid or missing (choose from 'ls', 'state')"),
+            (f"argument action: invalid choice: '{m} (choose from x)' (choose from 'plan', 'apply')", "argument action: the value is invalid or missing (choose from 'plan', 'apply')"),
+            (f"ambiguous option: --no={m} could match --no-wait, --no-browser", "an option was ambiguous (could match --no-wait, --no-browser)"),
+            (f"ambiguous option: {m} could match could match --a, --b", "an option was ambiguous (could match --a, --b)"),
+            (f"unrecognized arguments: --grant-handel -{m} {m}", "unrecognized arguments (values are not shown)"),
+            (f"something argparse has not said before: {m}", "invalid arguments (the text is not shown)"),
+            (f"the following: {m}", "invalid arguments (the text is not shown)"),
+        ):
+            with self.subTest(message=message):
+                shown = outcome.usage_message(message)
+                self.assertEqual(shown, expected + self.ENDING)
+                self.assertNotIn(m, shown)
+
+    def assert_echoes_nothing(self, module, cases):
+        for label, argv in cases:
+            with self.subTest(tool=module.__name__, case=label):
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as caught:
+                    module.main(argv)
+                self.assertEqual(caught.exception.code, 2)
+                self.assertNotIn(self.MARKER, out.getvalue())
+                self.assertIn(self.MARKER, err.getvalue(), "what argparse writes to stderr is unchanged")
+                document = only_document(out.getvalue())
+                self.assertEqual((document["ok"], document["error"]["code"]), (False, "invalid-arguments"))
+                self.assertTrue(document["error"]["message"].endswith(self.ENDING), document["error"]["message"])
+
+    def test_agent_ops(self):
+        m = self.MARKER
+        self.assert_echoes_nothing(
+            agent_cli,
+            [
+                ("dash word after an unknown option", ["status", "--receipt", "r", "--grant-handel", f"-{m}"]),
+                ("short option with an attached value", ["run", "sample", f"-g{m}"]),
+                ("ambiguous abbreviation with =", ["run", "sample", f"--no={m}"]),
+                ("invalid choice", [m]),
+                ("whole-number type error", ["run", "sample", "--max-boundaries", m]),
+                ("number type error", ["run", "sample", "--wait-timeout", m]),
+                ("float type error", ["run", "sample", "--consent-timeout", m]),
+                ("explicit value for a flag", ["run", "sample", f"--no-wait={m}"]),
+                ("unrecognized value", ["ls", m]),
+            ],
+        )
+
+    def test_agent_preflight(self):
+        m = self.MARKER
+        base = ["sample", "--source", "/s", "--tag", "t"]
+        self.assert_echoes_nothing(
+            preflight_cli,
+            [
+                ("dash word after an unknown option", [*base, "--grant-handel", f"-{m}"]),
+                ("short option with an attached value", [*base, f"-g{m}"]),
+                ("explicit value for a flag", [*base, f"--live={m}"]),
+                ("unrecognized value", [*base, m]),
+            ],
+        )
+
+    def test_mcp_registry(self):
+        m = self.MARKER
+        self.assert_echoes_nothing(
+            mcp_cli,
+            [
+                ("dash word after an unknown option", ["status", "x", "--grant-handel", f"-{m}"]),
+                ("short option with an attached value", ["status", "x", f"-g{m}"]),
+                ("invalid command", [m]),
+                ("invalid choice", ["provision", m, "x"]),
+                ("explicit value for a flag", ["render", f"--check={m}"]),
+                ("unrecognized value", ["check", m]),
+            ],
+        )
 
 
 if __name__ == "__main__":

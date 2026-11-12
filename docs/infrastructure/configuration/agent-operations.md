@@ -139,7 +139,9 @@ and submits again. These endings have `error.code` `not-confirmed` (not
 retryable): a `SUBMIT_UNCONFIRMED` after a call that did not answer or whose
 answer cannot be placed; a Ctrl-C while the submit call was in flight or while
 following; an error raised while following, which prints `FOLLOW_FAILED` and
-not `REFUSED` or `ERROR` once the receipt exists; and the `--wait-timeout`
+not `REFUSED` or `ERROR` once the receipt exists; an interrupt that arrives after
+the receipt exists, outside the places `run` handles interrupts itself, which
+is reported with status `FOLLOW_FAILED`, code `not-confirmed` and exit 130; and the `--wait-timeout`
 ending with exit 124. They keep their exit codes and carry `sessionId` and
 `dir`; with a receipt they also carry `receiptPath` and `next`, the command
 `just agent status --receipt <path>`. A `SUBMIT_UNCONFIRMED` whose reason is one
@@ -417,6 +419,7 @@ The interval is read from zetra `18aee61`; no removal has been observed.
 | the sign-in of `consent --session` is not completed in time | exit 124 with `deposited: false` and `timedOut: true`; the run keeps waiting until its timeout |
 | the APS refuses the deposit, run started from a terminal | `run` exits 2, `SUBMIT_UNCONFIRMED`: `remote submit failed: deposit refused: <reason>; the policy service holds no grant from this run`; no receipt |
 | the APS refuses the deposit, `consent --session` | exit 2 with `deposited: false` and `remote deposit failed: deposit refused: <reason>; this command deposited nothing`; no `consent.json`; the run keeps waiting |
+| the deposit was confirmed but the consent command could not write `consent.json` (an `OSError`, or Ctrl-C) | exit 1 (130 when interrupted) with `deposited: true`, `recordWritten: false`, code `not-confirmed` and a reason that says the policy service holds the grant; no `consent.json`; `deposit.attempted` stays; the run keeps waiting until its timeout, and repeating the command is refused |
 | the consent command's deposit fails another way, is not confirmed, or does not answer within 60 seconds | exit 2 with `deposited: null` and a reason that says a grant may be held; no `consent.json`; `deposit.attempted` stays; the run keeps waiting |
 | `consent.json` is for another session or cannot be read | `run` exits 1, `NOT_SUBMITTED`; no workflow was started; if a consent command deposited a token, a grant may be held |
 | `consent.json` does not carry the digest of this run's tenant, agent, release, session and task | `run` exits 1, `NOT_SUBMITTED`; no workflow was started and a grant may be held |

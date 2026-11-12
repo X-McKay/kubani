@@ -166,10 +166,19 @@ class FollowEndings(Case):
         self.assertEqual(document["status"], "INTERRUPTED")
         self.assert_not_confirmed(document, 130, receipt=True)
 
-    def test_interrupt_outside_the_places_run_handles_itself_after_the_receipt(self):
-        with patch.object(run, "follow", side_effect=KeyboardInterrupt):
+    def test_interrupt_outside_the_places_run_handles_itself_once_the_submission_is_attempted(self):
+        real = run._private
+
+        def interrupted_writing_the_receipt(path, text, *args, **kwargs):
+            if Path(path).name == "receipt.json":
+                raise KeyboardInterrupt  # `submit` handles an interrupt in the submit call and in `follow`, not here
+            return real(path, text, *args, **kwargs)
+
+        with patch.object(run, "_private", interrupted_writing_the_receipt):
             document, _ = self.ended([ACCEPTED])
-        self.assert_not_confirmed(document, 130, receipt=True)
+        self.assert_ending(document, 130, "not-confirmed", False)
+        self.assertEqual((document["sessionId"], document["dir"]), (json.loads((self.out / "request.json").read_text())["session_id"], str(self.out)))
+        self.assertEqual(document["status"], "SUBMIT_UNCONFIRMED", "no receipt was written")
 
     def test_run_that_gives_up_waiting(self):
         document, _ = self.ended([ACCEPTED, *[RUNNING] * 200], "--wait-timeout", "0.05", "--poll-interval", "0.01")

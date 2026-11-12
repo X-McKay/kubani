@@ -243,7 +243,8 @@ def main(argv=None):
         refusal = {
             "status": "refused",
             "stage": stage,
-            "error_type": "ValueError" if isinstance(error, Refusal) else type(error).__name__,
+            # KeycloakHTTPError subclasses RuntimeError and is named so here: the document's `error_type` kept its value when the subclass was introduced.
+            "error_type": "ValueError" if isinstance(error, Refusal) else "RuntimeError" if isinstance(error, KeycloakHTTPError) else type(error).__name__,
             "note": "No conflicting identity is overwritten. Inspect configuration and any partial operation before retry.",
         }
         # Only stages that read committed files may show the message: nothing

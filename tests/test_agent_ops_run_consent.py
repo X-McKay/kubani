@@ -977,6 +977,56 @@ class CommandLineTests(Case):
         self.assertIn(self.idp.issuer + delegation.AUTH_PATH, err)
         self.assert_secrets_only_on_stdin(kube, 0, out, err)
 
+    def consent_whose_record_cannot_be_renamed(self, failure):
+        """A waiting run, then its `consent` command through `main`, whose deposit is confirmed and whose record rename fails."""
+        kube, browser = self.kube([DEPOSITED, ACCEPTED]), self.browser()
+        self.start_waiting(kube)
+        real = os.rename
+
+        def rename(src, dst, *args, **kwargs):
+            if Path(dst).name == "consent.json":
+                raise failure
+            return real(src, dst, *args, **kwargs)
+
+        with patch.object(run.os, "rename", rename):
+            code, out, _ = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, browser, interactive=True)
+        document = json.loads(out)
+        self.assertEqual([c["action"] for c in kube.exec_calls], ["deposit"])
+        self.assertFalse((self.out / "consent.json").exists())
+        self.assertTrue((self.out / run.DEPOSIT_ATTEMPT).exists(), "the attempt mark stays: a grant is held")
+        self.assertIs(document["deposited"], True)
+        self.assertIs(document["ok"], False)
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
+        for text in (document["reason"], document["error"]["message"]):
+            self.assertIn("deposit was confirmed", text)
+            self.assertIn("consent record", text)
+            self.assertIn(run.GRANT_MAY_BE_HELD, text)
+        return code, document
+
+    def test_a_record_that_cannot_be_written_after_a_confirmed_deposit_says_so(self):
+        code, document = self.consent_whose_record_cannot_be_renamed(OSError("disk full"))
+        self.assertEqual(code, 1)
+        self.assertEqual(document["interrupted"], False)
+
+    def test_an_interrupt_while_writing_the_record_after_a_confirmed_deposit_says_so(self):
+        code, document = self.consent_whose_record_cannot_be_renamed(KeyboardInterrupt())
+        self.assertEqual(code, 130)
+        self.assertEqual(document["interrupted"], True)
+
+    def test_an_exception_in_the_consent_phase_is_not_a_submission_that_may_have_started(self):
+        """Nothing is sent until after the consent phase, so a failure there keeps its own code and is not `not-confirmed`."""
+        for name, failure, expected in (("os", OSError("no tty"), (1, "failed", "ERROR")), ("key", KeyError("not printed"), (1, "internal", "ERROR"))):
+            for phase in ("_signed_in_here", "_awaited"):
+                with self.subTest(failure=name, phase=phase):
+                    kube = self.kube([ACCEPTED])
+                    out = self.tmp / f"{name}-{phase}"
+                    with patch.object(run, phase, side_effect=failure):
+                        code, text, _ = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--out", str(out)], kube, interactive=(phase == "_signed_in_here"))
+                    document = json.loads(text)
+                    self.assertEqual((code, document["error"]["code"], document["status"]), expected)
+                    self.assertNotEqual(document["error"]["code"], "not-confirmed")
+                    self.assertEqual(kube.exec_calls, [], "nothing was sent")
+
     def test_every_ending_carries_ok_and_a_code_from_the_closed_set(self):
         def codes(argv, kube, browser=None, interactive=None):
             code, out, _ = self.run_cli(argv, kube, browser, interactive=interactive)

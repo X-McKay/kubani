@@ -698,8 +698,15 @@ def consent(
             return 2, tag(dict(base, deposited=None, **who, reason=f"remote deposit did not confirm the deposit; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "not-confirmed")
         record["depositedAt"] = _utc(now())
         # Renamed into place: the waiting run acts on this file the moment it exists, so it must never be seen half written.
-        _private(staged, json.dumps(record, indent=2, sort_keys=True) + "\n")
-        os.rename(staged, out / CONSENT_RECORD)
+        try:
+            _private(staged, json.dumps(record, indent=2, sort_keys=True) + "\n")
+            os.rename(staged, out / CONSENT_RECORD)
+        except (OSError, KeyboardInterrupt) as exc:
+            # The deposit is confirmed; only the record the waiting run reads is missing. Say so, and keep the attempt mark.
+            interrupted = isinstance(exc, KeyboardInterrupt)
+            why = "interrupted" if interrupted else f"failed ({type(exc).__name__})"
+            reason = f"the deposit was confirmed but writing the consent record for the waiting run {why}, so that run will not start; the policy service holds the grant: {GRANT_MAY_BE_HELD}; do not repeat this command"
+            return (INTERRUPTED if interrupted else 1), tag(dict(base, deposited=True, **who, interrupted=interrupted, recordWritten=False, reason=reason), "not-confirmed")
         attempt.unlink(missing_ok=True)
     result = dict(base, deposited=True, **who, refreshTokenIssued=terms["refreshTokenIssued"], grantRequestedUntil=terms["expiresAt"])
     if not terms["refreshTokenIssued"]:

@@ -179,6 +179,14 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_CREDENTIAL_MARKER", json.dumps(result))
         self.assertEqual(result["error_type"], "RuntimeError")
 
+    def test_a_keycloak_http_error_still_reports_error_type_runtime_error(self):
+        from keycloak_admin import KeycloakHTTPError
+
+        self.modules.identity.admin.side_effect = KeycloakHTTPError("Keycloak admin HTTP 403; response omitted", 403)
+        code, result = self.invoke(["identity", "plan", "existing"])
+        self.assertEqual(code, 1)
+        self.assertEqual(result["error_type"], "RuntimeError")
+
     def test_public_rbac_reads_use_exact_scope_and_identity(self):
         for version, kind, namespace in [('v1', 'ServiceAccount', 'mcp'), ('v1', 'Namespace', ''), ('rbac.authorization.k8s.io/v1', 'ClusterRole', ''), ('rbac.authorization.k8s.io/v1', 'ClusterRoleBinding', '')]:
             metadata = {'name':'public'}

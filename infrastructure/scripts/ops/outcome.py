@@ -43,22 +43,40 @@ _check_table()
 
 
 def usage_message(message: str) -> str:
-    """The text of an argument error as it may go into a document: never a value the person typed.
+    """The text of an argument error as it may go into a document: only text the parser defines, never text typed.
 
-    argparse's "unrecognized arguments: ..." lists the arguments as given, values included, so that message is
-    replaced by one that names only the options (words starting with `-`, cut at any `=`). Other messages are kept.
+    argparse echoes what was typed in most of its messages (a value, an unknown word, an ambiguous abbreviation, a
+    rejected choice, the text a type function quotes), and one flag of these tools carries a credential. So only four
+    shapes are kept, each cut down to what the parser itself defines:
+
+    - "the following arguments are required: ..." lists argument names only and is kept;
+    - "argument NAME: ..." keeps `argument NAME:` and says the value is invalid or missing, and for an invalid choice
+      also the parenthesised list of choices;
+    - "ambiguous option: WORD could match A, B" keeps the candidates and drops WORD;
+    - "unrecognized arguments: ..." and anything else become a fixed sentence.
+
+    What argparse writes to stderr is not touched. Every variant ends by saying where the usage is.
     """
-    prefix = "unrecognized arguments: "
-    if not message.startswith(prefix):
-        return message
-    names: list[str] = []
-    for word in message[len(prefix) :].split():
-        if word.startswith("-"):
-            name = word.split("=", 1)[0]
-            if name not in names:
-                names.append(name)
-    shown = f"unrecognized options: {', '.join(names[:10])}" if names else "unrecognized arguments (values are not shown)"
-    return f"{shown}; usage is on stderr"
+    ending = "; usage is on stderr"
+    required = "the following arguments are required: "
+    if message.startswith(required) and "\n" not in message:
+        return message + ending
+    if message.startswith("argument "):
+        name, separator, rest = message[len("argument ") :].partition(": ")
+        if separator and name and " " not in name:
+            shown = f"argument {name}: the value is invalid or missing"
+            tail = rest.rfind("(choose from ")
+            if rest.startswith("invalid choice: ") and tail != -1 and rest.endswith(")"):
+                shown += f" {rest[tail:]}"
+            return shown + ending
+    if message.startswith("ambiguous option: "):
+        _, separator, candidates = message.rpartition(" could match ")
+        if separator and "\n" not in candidates:
+            return f"an option was ambiguous (could match {candidates})" + ending
+        return "an option was ambiguous" + ending
+    if message.startswith("unrecognized arguments: "):
+        return "unrecognized arguments (values are not shown)" + ending
+    return "invalid arguments (the text is not shown)" + ending
 
 
 def error(code: str, message: str, *, retryable: bool | None = None, proofs: list | None = None) -> dict:

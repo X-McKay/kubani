@@ -96,7 +96,11 @@ Where one code stands for several causes, and the cause was not at hand:
   answer, answered unreadably, did not confirm, or was interrupted; `deposited`
   is `null`) is `not-confirmed` too: a second deposit for the same session is
   refused by the policy service (`this session already has a grant`) while no
-  consent record is written, so the run that waits would still give up. `wait
+  consent record is written, so the run that waits would still give up. A
+  `consent --session` whose deposit was confirmed but whose record for the waiting
+  run could not be written (an `OSError`, exit 1, or Ctrl-C, exit 130) is
+  `not-confirmed` as well, with `deposited: true` and `recordWritten: false`: the
+  policy service holds the grant, so repeating the command is refused too. `wait
   --receipt` passing its own deadline stays `timeout`, and so does a `cancel`
   whose call did not answer: repeating either is safe.
 - `failed` is the code for a sign-in step that did not succeed (an `error=`
@@ -133,17 +137,21 @@ Unchanged by the contract; `ok` is true exactly when the exit code is 0.
 
 Malformed arguments keep argparse's behaviour: usage and the message on stderr,
 exit 2. The `invalid-arguments` document is added on stdout by a parser subclass
-that every subparser inherits. For `unrecognized arguments`, whose argparse
-message lists the values that were typed, the document's message names only the
-options (words starting with `-`, cut at any `=`) and says that usage is on
-stderr; stderr itself is unchanged.
+that every subparser inherits. argparse echoes what was typed in most of its
+messages, and `--grant-handle` carries a credential, so the document's message
+holds only text the parser defines and ends by saying that usage is on stderr:
+the list of missing arguments is kept; `argument NAME: ...` becomes `argument
+NAME: the value is invalid or missing`, followed by the list of choices when the
+value was an invalid choice; an ambiguous option keeps the candidates and drops
+the typed word; unrecognized arguments, and any other message, become a fixed
+sentence. stderr itself is unchanged.
 
 ## Redaction
 
 `just mcp` stages that can touch a credential (`provision`, `identity`,
 `status`, and the authentication step before the last two) never put an
 exception's text in the document. `error.message` is one fixed sentence chosen by
-the code (a Keycloak HTTP status code, a number, may follow it), and `error_type` still names the exception's type. Only the offline
+the code (a Keycloak HTTP status code, a number, may follow it), and `error_type` still names the exception's type (a Keycloak HTTP error is reported as `RuntimeError`, as before the error got its own subclass). Only the offline
 stages (`add`, `render`, `check`) may show a message, and only for `ValueError`
 and `OSError`, which read committed files and touch no credential.
 
