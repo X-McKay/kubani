@@ -184,7 +184,7 @@ The preceding historical matrix and all failed receipts remain preserved.
 Investigator's actual read-only live preflight passed all 18 registration layers.
 This verifies registration and public RBAC configuration, not human delegation,
 functional calls or release qualification. See the
-[Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification)
+[Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification-registration-time-snapshot)
 for unchanged runtime and identity evidence. No agent session was started.
 
 ## Explicit model-free fixtures (2026-11-08)

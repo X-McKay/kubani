@@ -411,11 +411,13 @@ def submit(
     except KeyboardInterrupt:
         return _not_submitted(out, session, INTERRUPTED, f"interrupted while the submit call was in flight; whether a workflow was started is not known{held}", status="SUBMIT_UNCONFIRMED", kind="not-confirmed", consent=consent)
     except RunError as exc:
-        # Whatever the cause (no answer, an unreadable answer, a refusal the pod worded): repeating this command would mint
-        # another session id and submit again, so no cause makes it safe to repeat.
-        if "deposit" in request and any(answer in str(exc) for answer in NO_GRANT_ANSWERS):
+        # No answer, or an answer that cannot be read: a session may have been started, and repeating this command would
+        # mint another session id and submit again, so it ends `not-confirmed`. An answer the pod gives before it asks for
+        # anything to be started (NO_GRANT_ANSWERS) is a plain refusal: nothing was started and there is nothing to follow up.
+        definite = any(answer in str(exc) for answer in NO_GRANT_ANSWERS)
+        if "deposit" in request and definite:
             held = "; the policy service holds no grant from this run"
-        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", kind="not-confirmed", consent=consent)
+        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", kind="refused" if definite else "not-confirmed", consent=consent)
     finally:
         request.pop("deposit", None)
     if accepted.get("granted") is False:

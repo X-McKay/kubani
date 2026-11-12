@@ -100,13 +100,23 @@ class SubmitEndings(Case):
         self.assertIn("returned no JSON", document["reason"])
         self.assert_not_confirmed(document, 2, receipt=False)
 
-    def test_submit_call_the_pod_answers_with_an_error(self):
-        for answer in ("session identity already exists", "workflow start failed", "deposit refused: the policy service did not accept the token"):
+    def test_submit_call_the_pod_answers_with_an_error_it_cannot_place(self):
+        # Not one of the answers the pod gives before it asks for anything to be started: a session may exist.
+        document, _ = self.ended([{"error": "workflow start failed"}])
+        self.assertEqual(document["status"], "SUBMIT_UNCONFIRMED")
+        self.assert_not_confirmed(document, 2, receipt=False)
+
+    def test_submit_call_the_pod_refuses_before_starting_anything(self):
+        # These answers come before the pod asks for a session to be started: a plain refusal, nothing to follow up.
+        for answer in ("session identity already exists", "deposit refused: the policy service did not accept the token"):
             with self.subTest(answer=answer):
                 self.out = self.tmp / ("run-" + str(abs(hash(answer))))
                 document, _ = self.ended([{"error": answer}])
                 self.assertEqual(document["status"], "SUBMIT_UNCONFIRMED")
-                self.assert_not_confirmed(document, 2, receipt=False)
+                self.assertIs(document["ok"], False)
+                self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("refused", False))
+                self.assertIn(answer, document["error"]["message"])
+                self.assertNotIn("next", document)
 
     def test_interrupt_while_the_submit_call_is_in_flight(self):
         document, _ = self.ended([interrupts])

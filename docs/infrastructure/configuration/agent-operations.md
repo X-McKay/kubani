@@ -135,13 +135,17 @@ the session. Whether a workflow exists depends on the reason (read from
 
 Once a submission has been attempted, no ending of `run` that is not a
 confirmed finish of the session is safe to repeat: `run` mints a new session id
-and submits again. Those endings (every `SUBMIT_UNCONFIRMED`, whatever its
-reason, a Ctrl-C while the submit call was in flight or while following, an
-error raised while following, which prints `FOLLOW_FAILED` and not `REFUSED`
-or `ERROR` once the receipt exists, and the `--wait-timeout` ending with exit
-124) all have `error.code` `not-confirmed` (not retryable), keep their exit
-codes, and carry `sessionId` and `dir`; with a receipt they also carry
-`receiptPath` and `next`, the command `just agent status --receipt <path>`.
+and submits again. These endings have `error.code` `not-confirmed` (not
+retryable): a `SUBMIT_UNCONFIRMED` after a call that did not answer or whose
+answer cannot be placed; a Ctrl-C while the submit call was in flight or while
+following; an error raised while following, which prints `FOLLOW_FAILED` and
+not `REFUSED` or `ERROR` once the receipt exists; and the `--wait-timeout`
+ending with exit 124. They keep their exit codes and carry `sessionId` and
+`dir`; with a receipt they also carry `receiptPath` and `next`, the command
+`just agent status --receipt <path>`. A `SUBMIT_UNCONFIRMED` whose reason is one
+of the runner's refusals before it starts anything (`deposit refused: ...`,
+`session identity already exists`, `invalid request`, a session id that is not
+a UUID) has `error.code` `refused`: nothing was started.
 See [the CLI contract](cli-contract.md#codes).
 
 Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document

@@ -583,7 +583,7 @@ class RunTests(unittest.TestCase):
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=out, kube=kube_for_run([{"error": "session identity already exists"}]))
             # An own-identity run has no grant to speak of; the remote answer is passed on as it came.
             self.assertEqual((code, envelope["status"], envelope["reason"]), (2, "SUBMIT_UNCONFIRMED", "remote submit failed: session identity already exists"))
-            self.assertEqual(envelope.kind, "not-confirmed")
+            self.assertEqual(envelope.kind, "refused")
             self.assertEqual(sorted(p.name for p in out.iterdir()), ["request.json", "status.json"])
             self.assertEqual(json.loads((out / "status.json").read_text()), envelope)
 

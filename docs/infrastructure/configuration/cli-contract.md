@@ -81,13 +81,17 @@ Where one code stands for several causes, and the cause was not at hand:
   submission is attempted, unless the session is confirmed started and closed or
   confirmed not started: repeating `run` mints a new session id and submits
   again, so no such ending is safe to repeat. It covers a submit call that timed
-  out, returned something unreadable or was refused, an interrupt while the
-  submit call was in flight or while following the run, any error raised while
+  out or returned something that cannot be read or placed, an interrupt while
+  the submit call was in flight or while following the run, any error raised while
   following (including one that escapes as `REFUSED` or `ERROR`), and `run`'s
   own wait passing `--wait-timeout` (exit 124). The exit code is the one the
   ending always had. The document carries `sessionId` and `dir`, and once the
   receipt exists `receiptPath` and `next`, the exact command to run instead:
-  `just agent status --receipt <path>` (or `wait`, to keep following). A
+  `just agent status --receipt <path>` (or `wait`, to keep following). A submit
+  call the runner refuses before it asks for anything to be started (`deposit
+  refused: ...`, `session identity already exists`, `invalid request`, a session
+  id that is not a UUID) is `refused`, not `not-confirmed`: nothing was started
+  and there is nothing to follow up. A
   `consent --session` whose deposit may have taken effect (the call did not
   answer, answered unreadably, did not confirm, or was interrupted; `deposited`
   is `null`) is `not-confirmed` too: a second deposit for the same session is
