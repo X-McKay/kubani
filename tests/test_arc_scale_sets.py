@@ -153,6 +153,9 @@ class RegistryLogin(unittest.TestCase):
             volume["secret"]["items"], [{"key": ".dockerconfigjson", "path": "config.json"}]
         )
         self.assertFalse(volume["secret"].get("optional", False))
+        # Root owns the file and the runner user reads it, so a stricter
+        # mode stops every release at its first step.
+        self.assertEqual(volume["secret"]["defaultMode"], 0o444)
         holders = [
             c["name"]
             for c in spec["containers"] + spec["initContainers"]
@@ -172,15 +175,34 @@ class RegistryLogin(unittest.TestCase):
         volumes = {v["name"]: v for v in template(ZETRA)["volumes"]}
         self.assertEqual(volumes["docker-config"], {"name": "docker-config", "emptyDir": {}})
 
-    def test_the_secret_is_not_in_the_build_until_it_exists(self):
-        kustomization = load(ARC / "kustomization.yaml")["resources"]
-        self.assertIn("scale-set-zetra.yaml", kustomization)
-        self.assertIn("job-guard-zetra.yaml", kustomization)
-        listed = (ARC / "kustomization.yaml").read_text()
+    def test_the_secret_is_built_with_the_scale_set_that_mounts_it(self):
+        resources = load(ARC / "kustomization.yaml")["resources"]
+        for name in (
+            "scale-set-zetra.yaml",
+            "job-guard-zetra.yaml",
+            "registry-platform-push.enc.yaml",
+        ):
+            self.assertIn(name, resources)
+            self.assertTrue((ARC / name).is_file(), name)
+
+    def test_the_secret_file_is_the_object_the_volume_names(self):
+        # Only what SOPS leaves readable is checked; the value stays encrypted.
+        secret = load(ARC / "registry-platform-push.enc.yaml")
+        volume = next(
+            v for v in template(ZETRA)["volumes"] if v["name"] == "registry-push"
+        )["secret"]
+        self.assertEqual(secret["kind"], "Secret")
+        self.assertEqual(secret["type"], "kubernetes.io/dockerconfigjson")
         self.assertEqual(
-            "registry-platform-push.enc.yaml" in listed,
-            (ARC / "registry-platform-push.enc.yaml").exists(),
+            secret["metadata"],
+            {"name": volume["secretName"], "namespace": load(ZETRA)["metadata"]["namespace"]},
         )
+        values = {**secret.get("data", {}), **secret.get("stringData", {})}
+        self.assertEqual(list(values), [item["key"] for item in volume["items"]])
+        for value in values.values():
+            self.assertTrue(value.startswith("ENC["))
+        self.assertTrue(secret["sops"]["age"])
+        self.assertTrue(secret["sops"]["mac"])
 
 
 class ZetraGuard(unittest.TestCase):

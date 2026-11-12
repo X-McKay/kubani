@@ -3,8 +3,9 @@
 # (set the zetra-agents repo variable RELEASE_RUNNER to that value).
 #
 # Credentials: Secret arc-github-app (github-app.enc.yaml), the kubani-arc
-# GitHub App installed on zetra-agents only, with Administration read/write
-# and Metadata read. No webhook; the listener long-polls GitHub.
+# GitHub App installed on zetra-agents and zetra (scale-set-zetra.yaml), with
+# Administration read/write and Metadata read. No webhook; the listener
+# long-polls GitHub.
 #
 # zetra-agents is public, so the runner itself refuses every job except a
 # release-tag push of release.yml (job-guard.yaml); see the GitHub-side

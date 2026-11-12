@@ -111,6 +111,25 @@ repository back it, and are set by the repository owner:
 A job the guard admits can read the registry login below; the guard and the
 branch protection are what limit that.
 
+**What the protection of `main` rests on.** "No bypass" covers people and
+pushes. It does not cover these, which are therefore part of the protection:
+
+- **The kubani-arc App's private key** (Secret `arc-runners/arc-github-app`).
+  Actions Runner Controller needs the App to hold Administration read/write on
+  each repository it serves, and that permission can also change or delete
+  rulesets and add deploy keys. Whoever holds the key can remove the ruleset,
+  push to `main` and get a job the guard admits. In the cluster that is the ARC
+  controller's service account, whose Role reads Secrets in `arc-runners` (the
+  App key and the registry login both). Runner pods cannot: they run under a
+  service account with no permissions and `netpol.yaml` keeps them from the API
+  server.
+- **What is already on `main`.** Any code the release workflow runs (the
+  workflow, its action and script, and every action it uses, which zetra's
+  tests require to be pinned by commit hash) runs beside the login. A re-run of
+  an old push to `main` runs that commit's copy of the workflow.
+- **Automatic merging.** Anything allowed to merge a pull request without a
+  person (auto-merge, a dependency bot) is a way onto `main`.
+
 ### The registry login
 
 The runner container (only that container, and only on this scale set) has the
@@ -174,7 +193,20 @@ to `main` running `platform-release.yml` (for example a `workflow_dispatch`
 test workflow that targets `kubani-zetra`): it must fail at "Set up runner"
 with `kubani runner guard: ... may not use this runner`. Then confirm the
 docker client in the runner finds the login (`docker pull` of a private image,
-or the first push), which has not been tested.
+or the first push), which has not been tested. Two things in particular are
+unproven: that the Kata runtime lays the one Secret file over the scratch
+directory, and that buildx keeps its state in that directory without trouble.
+
+### Memory on rig0
+
+A runner pod requests 1.5Gi of memory and may use 16Gi (dockerd's storage is
+tmpfs charged to the pod). The scheduler counts only the request, so this pod
+and both `kubani-zetra-agents` pods can run on rig0 at once: 48Gi of limits
+where all pods on rig0 together may use about 27Gi (measured 2026-11-12, with
+about 4Gi in use). One build at its limit fits; two do not, and the kernel
+would then kill processes in pods on rig0, most likely a build. Until the pods
+request what they may use, do not merge an image change to zetra `main` while
+an agent release is running, and push agent release tags one at a time.
 
 ### NetworkPolicies
 

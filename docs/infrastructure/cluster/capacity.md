@@ -18,7 +18,7 @@ rule).
 | Node | Role | CPU alloc | Mem alloc (GiB) | Mem ceiling % | Notes |
 |---|---|---|---|---|---|
 | asio | control plane, etcd | 8 | 15 | 65 | no new app workloads |
-| rig0 | platform node | 27.5 | 50 | 75 | target for all new services |
+| rig0 | platform node | 27.5 | 25 | 75 | target for all new services; 25.4 GiB allocatable of 59 GiB (measured 2026-11-12, the rest is reserved for the workstation), and `kubectl top nodes` counts the workstation's own processes against it |
 | sparky | GPU, tainted nvidia.com/gpu | 15.5 | 110 | 80 | only vLLM, Alloy, DCGM; unified memory so GPU-resident bytes count |
 | strix | small worker, database role | 7 | 13 | 80 | overflow only; Postgres and FalkorDB use spare memory as cache, so stays at the 80% stop-the-line threshold rather than above it |
 
@@ -70,7 +70,13 @@ baseline.
 | T23 checkpoint worker (temporary one-shot Job, inactive template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | T24 lifecycle worker (temporary Deployment, zero-replica template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
-| ARC runner kubani-zetra (platform image builds; one ephemeral Kata pod per job, 0 idle, at most 1: runner 250m / 512Mi plus dind 500m / 1Gi requests; dind memory limit covers its 8Gi tmpfs) | arc-runners | 750m / — | 1536Mi / 16Gi (runner 4Gi, dind 12Gi) | rig0 (platform role, Kata) |
+| ARC runner kubani-zetra-agents (agent releases; one ephemeral Kata pod per job, 0 idle, at most 2: runner 250m / 512Mi plus dind 500m / 1Gi requests, plus Kata overhead 600m / 160Mi; dind memory limit covers its 8Gi tmpfs) | arc-runners | 1350m / — each | 1696Mi / 16Gi each (runner 4Gi, dind 12Gi) | rig0 (platform role, Kata) |
+| ARC runner kubani-zetra (platform image builds; the same pod, at most 1) | arc-runners | 1350m / — | 1696Mi / 16Gi | rig0 (platform role, Kata) |
+| ARC listeners, one per scale set (2; no requests or limits set) | arc-systems | — / — | — / — | rig0 (platform role) |
+
+The three ARC runner pods request about 5Gi together and may use 48Gi, more
+than all pods on rig0 may use (about 27Gi). One build at its limit fits; see
+"Memory on rig0" in `infrastructure/gitops/apps/arc-runners/README.md`.
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,

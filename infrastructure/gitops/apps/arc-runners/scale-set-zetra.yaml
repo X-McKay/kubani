@@ -158,7 +158,10 @@ spec:
               # runs as user `runner`, HOME=/home/runner). It is writable
               # scratch because the client and buildx write there; only the
               # login file is laid over it, read-only, from the Secret. The
-              # dind container does not mount either.
+              # dind container does not mount either. A disk emptyDir, like
+              # `work`: the zetra-agents release keeps its docker client
+              # configuration under `work` and builds with it, so this is
+              # the medium already in use for that directory.
               - name: docker-config
                 mountPath: /home/runner/.docker
               - name: registry-push
