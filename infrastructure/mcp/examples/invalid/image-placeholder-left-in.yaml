@@ -1,0 +1,26 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the scaffold placeholder was never replaced.
+# Expected: ValueError; the message is pinned in image-placeholder-left-in.expect.json.
+version: 1
+name: example-minimal
+profile: container-sse-v1
+workload:
+  image: REQUIRED_IMAGE_AT_SHA256_DIGEST
+  args:
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  secretEnv: []
+authorization:
+  role: agent-role-example-minimal-read
+  tools:
+  - echo
+  scopeDescription: Illustrative echo backend with no credentials
+secrets: []
+upstreams: []

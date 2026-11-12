@@ -72,44 +72,11 @@ kubectl version --client
 
 Age encryption uses a key pair: a public key for encryption and a private key for decryption. The public key can be shared freely, while the private key must be kept secure.
 
-### Automated Setup (Recommended)
-
-Use the provided setup script to generate keys and configure SOPS automatically:
-
-```bash
-# From the repository root
-uv run python scripts/setup_sops.py
-```
-
-This script will:
-1. Generate an age key pair
-2. Save the private key to `age.key` (with restricted permissions)
-3. Create `.sops.yaml` configuration file
-4. Generate a Kubernetes secret manifest (`sops-age-secret.yaml`)
-5. Provide next steps for applying the secret to your cluster
-
-**Output Example**:
-```
-🔐 Setting up SOPS and age encryption infrastructure...
-
- Step 1: Generating age key pair...
-[OK] Age key pair generated successfully
-   Public key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
-
- Step 2: Saving age private key to age.key...
-[OK] Private key saved to age.key
-   ⚠️  Keep this file secure! It's needed to decrypt secrets.
-
- Step 3: Creating SOPS configuration at .sops.yaml...
-[OK] SOPS configuration created at .sops.yaml
-
- Step 4: Creating Kubernetes secret manifest at sops-age-secret.yaml...
-[OK] Kubernetes secret manifest created at sops-age-secret.yaml
-```
-
 ### Manual Setup
 
-If you prefer to set up manually or need to understand the process:
+There is no setup script; keys and SOPS configuration are created by hand. The
+repository already has a key and a `.sops.yaml`, so only repeat this for a new
+clone's key or a rotation (see `.claude/rules/secrets.md`).
 
 #### 1. Generate Age Key Pair
 
@@ -208,10 +175,18 @@ creation_rules:
 
 ### 2. Create a Kubernetes Secret
 
-Create a plain Kubernetes secret manifest:
+Write the plain Secret manifest **outside** the repository, so that the
+plaintext can never be committed. Name the file `secret.enc.yaml`: the creation
+rule in `.sops.yaml` matches on the input file's name, and SOPS refuses a file
+it has no rule for.
+
+```bash
+staged=$(mktemp -d)
+"${EDITOR:-vi}" "$staged/secret.enc.yaml"
+```
 
 ```yaml
-# Example: infrastructure/gitops/apps/postgresql/secret.yaml
+# Example contents of $staged/secret.enc.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -219,24 +194,20 @@ metadata:
   namespace: database
 type: Opaque
 stringData:
-  postgres-password: supersecret123
+  postgres-password: <generated value>
   username: myapp
-  password: myapppassword
+  password: <generated value>
   database: myapp
 ```
 
 ### 3. Encrypt the Secret
 
-Encrypt the secret using SOPS:
+Encrypt it into place. Run this from the repository root: SOPS looks for
+`.sops.yaml` from the working directory.
 
 ```bash
-sops --encrypt infrastructure/gitops/apps/postgresql/secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
-```
-
-**Alternative (using .sops.yaml config)**:
-```bash
-# SOPS will automatically use .sops.yaml configuration
-sops --encrypt secret.yaml > secret.enc.yaml
+SOPS_AGE_KEY_FILE=age.key sops --encrypt "$staged/secret.enc.yaml" \
+  > infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 **Encrypted Output Example**:
@@ -276,15 +247,15 @@ sops:
 
 ### 4. Delete the Plain Secret
 
-**IMPORTANT**: Never commit unencrypted secrets to Git!
+**IMPORTANT**: Never commit unencrypted secrets to Git! The plaintext was
+written outside the repository; remove it once the encrypted file exists.
 
 ```bash
-# Delete the plain secret file
-rm infrastructure/gitops/apps/postgresql/secret.yaml
+# Remove the plaintext
+shred -u "$staged/secret.enc.yaml"
 
-# Verify only encrypted file exists
-ls infrastructure/gitops/apps/postgresql/
-# Output: secret.enc.yaml
+# Check that the committed file is encrypted
+grep -c 'ENC\[' infrastructure/gitops/apps/postgresql/secret.enc.yaml
 ```
 
 ### 5. Commit to Git
@@ -300,46 +271,25 @@ git commit -m "Add encrypted PostgreSQL credentials"
 git push
 ```
 
-### Automated Secret Generation
+### Creating Secrets for Each Service
 
-Use the provided script to generate all production service secrets:
+There is no generator script. Each service's secret is created with steps 2 to
+5 above, one file at a time:
 
-```bash
-# Generate all secrets with auto-generated passwords
-uv run python scripts/create_encrypted_secrets.py \
-  --cloudflare-token "your-api-token" \
-  --cloudflare-email "your-email@example.com" \
-  --cloudflare-zone-id "your-zone-id"
-```
+1. Generate each value yourself, alphanumeric only, for example
+   `openssl rand -hex 24`. Some consumers word-split their config, so shell
+   metacharacters can break the container.
+2. Write the plaintext Secret **outside** the repository, in a file named
+   `secret.enc.yaml` so the `.sops.yaml` creation rule matches on the input
+   filename.
+3. Encrypt it into place, from the repository root:
+   `SOPS_AGE_KEY_FILE=age.key sops --encrypt <staged>/secret.enc.yaml > <target>/secret.enc.yaml`
+4. Remove the plaintext (`shred -u <staged>/secret.enc.yaml`) and commit only the
+   `.enc.yaml`.
 
-This creates encrypted secrets for:
-- PostgreSQL (database credentials)
-- Redis (authentication password)
-- Authentik (application secrets)
-- Cloudflare (API token for cert-manager)
-
-**Output**:
-```
- Creating service credentials...
-
-1. Creating PostgreSQL credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/postgresql/secret.enc.yaml
-   Database: authentik
-   Username: authentik
-   Password: xK9mP2... (truncated)
-
-2. Creating Redis credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/redis/secret.enc.yaml
-   Password: yL3nQ8... (truncated)
-
-3. Creating Authentik credentials...
-   [OK] Created encrypted secret at infrastructure/gitops/apps/authentik/secret.enc.yaml
-   Secret key: zM4oR7... (truncated)
-   Bootstrap password: aB5pS1... (truncated)
-
-4. Creating Cloudflare API token secret...
-   [OK] Created encrypted secret at infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml
-```
+The secrets the platform needs are PostgreSQL, Redis, Authentik and the
+Cloudflare API token for cert-manager. Rotation, including the restart the
+consuming workload needs afterwards, is in `.claude/rules/secrets.md`.
 
 ## Editing Encrypted Secrets
 
@@ -593,14 +543,12 @@ done
 
 4. **Update Kubernetes secret**:
 ```bash
-# Create new secret manifest
+# Build the Secret and apply it from stdin. Never write the manifest to a
+# file: it would hold the private key in plain text.
 kubectl create secret generic sops-age \
   --from-file=age.agekey=age-new.key \
   --namespace=flux-system \
-  --dry-run=client -o yaml > sops-age-secret-new.yaml
-
-# Apply to cluster
-kubectl apply -f sops-age-secret-new.yaml
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 5. **Verify Flux can decrypt**:
@@ -676,11 +624,9 @@ kubectl create secret generic sops-age \
 kubectl get secret sops-age -n flux-system
 ```
 
-**Alternative: Apply from manifest**:
-```bash
-# Use the generated manifest from setup script
-kubectl apply -f sops-age-secret.yaml
-```
+Do not write this Secret to a manifest file, even a temporary one. A file named
+`sops-age-secret.yaml` holds the private key in plain text; the repository
+ignores that name and its hooks refuse to commit it.
 
 ### Verify Flux Decryption
 

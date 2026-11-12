@@ -157,12 +157,21 @@ def run(
             "Existing source preflight checked capabilities, configured budget reservation, signer and checkout provenance.",
             "Resolve the bounded source receipt errors and rerun with a clean source and unused prospective tag.",
         )
+    except source.SourceEnvironmentError as exc:
+        add(
+            "source_compatibility",
+            "unavailable",
+            f"{exc}",
+            "Run `uv sync --locked` in the source checkout, then rerun the preflight.",
+        )
     except Exception:  # noqa: BLE001 - sanitize credential/process-bearing exceptions
         add(
             "source_compatibility",
             "unavailable",
-            "Source checker failed, timed out or returned an invalid bounded receipt.",
-            "Use a trusted compatible source checkout with tools/zetra_agents; inspect it locally and retry.",
+            "The source checker failed, timed out or returned an invalid bounded receipt "
+            "(its own output is discarded).",
+            "In the source checkout run `uv sync --locked`, then `uv run --locked zetra-agents "
+            "preflight AGENT --tag TAG --kubani KUBANI` to see its diagnostics, and retry.",
         )
     candidate = None
     candidate_semantics = None

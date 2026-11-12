@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "workload.args[1]: must be a non-empty argument"
+}

@@ -1,0 +1,5 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the file is not parseable YAML.
+# Expected: ValueError; the message is pinned in invalid-yaml-syntax.expect.json.
+version: 1
+name: [unclosed

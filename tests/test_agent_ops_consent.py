@@ -678,7 +678,8 @@ class CommandTests(ConsentCase):
         self.assertEqual(code, 1)
         self.assertFalse(json.loads(out)["wouldBeAcceptedForDeposit"])
         code, out, err = self.run_cli(["consent", "--check", "sample", "--browser"], self.browser(error="access_denied"))
-        self.assertEqual((code, json.loads(out)), (2, {"status": "REFUSED", "reason": "Keycloak returned the error access_denied instead of an authorization code"}))
+        reason = "Keycloak returned the error access_denied instead of an authorization code"
+        self.assertEqual((code, json.loads(out)), (2, {"status": "REFUSED", "reason": reason, "ok": False, "error": {"code": "failed", "message": reason, "retryable": False}}))
         self.assertEqual(err.splitlines()[-1], "refused: Keycloak returned the error access_denied instead of an authorization code")
 
     def test_without_exactly_one_mode_the_command_refuses_and_starts_nothing(self):
@@ -754,7 +755,7 @@ class CommandTests(ConsentCase):
             document = json.loads(out)
             self.assertEqual(set(document) & {"scope", "token", "access_token", "id_token", "refresh_token", "code", "code_verifier", "state", "nonce"}, set(), name)
             if code == 2:
-                self.assertEqual(set(document), {"status", "reason"}, name)
+                self.assertEqual(set(document), {"status", "reason", "ok", "error"}, name)
 
 
 class ModuleShapeTests(unittest.TestCase):

@@ -9,6 +9,8 @@ from pathlib import Path
 
 import yaml
 
+import outcome
+
 AGENTS_DIR = Path("infrastructure/gitops/apps/agents")
 SIGNERS = Path("infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml")
 NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\Z")
@@ -26,8 +28,10 @@ ATTESTATIONS = frozenset(
 )
 
 
-class LayoutError(Exception):
+class LayoutError(outcome.Coded):
     """The committed tree does not have the expected shape."""
+
+    default_code = "validation-failed"
 
 
 @dataclass(frozen=True)
@@ -67,7 +71,7 @@ def load_one(path: Path, kind: str) -> dict:
 def agent_dirs(root: Path) -> list[AgentDir]:
     base = root / AGENTS_DIR
     if not base.is_dir():
-        raise LayoutError(f"{base} is missing")
+        raise LayoutError(f"{base} is missing", "not-found")
     found = []
     for tenant in sorted(p for p in base.iterdir() if p.is_dir()):
         for agent in sorted(p for p in tenant.iterdir() if p.is_dir()):
@@ -81,7 +85,7 @@ def agent_dirs(root: Path) -> list[AgentDir]:
 def find_agent(root: Path, agent: str) -> AgentDir:
     matches = [d for d in agent_dirs(root) if d.agent == agent]
     if len(matches) != 1:
-        raise LayoutError(f"agent {agent!r}: expected exactly one committed directory, found {len(matches)}")
+        raise LayoutError(f"agent {agent!r}: expected exactly one committed directory, found {len(matches)}", "not-found" if not matches else "conflict")
     return matches[0]
 
 
@@ -93,7 +97,7 @@ def find_release(root: Path, name: str) -> tuple[AgentDir, Path, dict]:
             if doc["metadata"].get("name") == name:
                 hits.append((d, file, doc))
     if len(hits) != 1:
-        raise LayoutError(f"AgentRelease {name!r}: expected exactly one committed file, found {len(hits)}")
+        raise LayoutError(f"AgentRelease {name!r}: expected exactly one committed file, found {len(hits)}", "not-found" if not hits else "conflict")
     return hits[0]
 
 
@@ -108,7 +112,7 @@ def signer_pin(root: Path, tenant: str) -> dict:
     doc = load_one_plain(root / SIGNERS)
     data = doc.get("data") or {}
     if tenant not in data:
-        raise LayoutError(f"{SIGNERS}: no signer pin for tenant {tenant}")
+        raise LayoutError(f"{SIGNERS}: no signer pin for tenant {tenant}", "not-found")
     pin = json.loads(data[tenant])
     pattern = pin.get("subjectRegExp", "")
     if not pattern.startswith("^") or not pattern.endswith("$"):

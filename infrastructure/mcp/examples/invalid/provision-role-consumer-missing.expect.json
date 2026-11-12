@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "bootstrap.manifest: expected exactly 1 MCP_PASSWORD env var in the Job, found 0"
+}

@@ -1,0 +1,27 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: workload carries an unknown field.
+# Expected: ValueError; the message is pinned in workload-unknown-field.expect.json.
+version: 1
+name: example-minimal
+profile: container-sse-v1
+workload:
+  image: registry.example.com/example/echo-mcp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  args:
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  secretEnv: []
+  replicas: 3
+authorization:
+  role: agent-role-example-minimal-read
+  tools:
+  - echo
+  scopeDescription: Illustrative echo backend with no credentials
+secrets: []
+upstreams: []

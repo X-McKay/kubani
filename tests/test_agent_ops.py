@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import ast
 import hashlib
+import importlib.util
 import json
 import os
 import py_compile
@@ -20,6 +22,10 @@ import yaml
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
 from agent_ops import approve, layout, live, register, run, stage, state, sync  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location("agent_ops_cli", OPS / "agent-ops.py")
+cli = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cli)
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "example/agents"
@@ -391,9 +397,30 @@ class LiveTests(unittest.TestCase):
         with self.assertRaises(live.LiveError):
             live.resolve_release(views, "missing", None)
         views.append(view("sample-4"))
-        with self.assertRaises(live.LiveError):
+        # Two runnable releases with no approval times cannot be ordered: still a refusal.
+        with self.assertRaisesRegex(live.LiveError, "do not order them; pass --release"):
             live.resolve_release(views, "sample", None)
         self.assertEqual(live.resolve_release(views, "sample", "sample-4").name, "sample-4")
+
+    def test_newest_runnable_release_is_the_default(self):
+        old = view("sample-old", approved_at="2026-11-06T16:55:03Z")
+        new = view("sample-new", approved_at="2026-11-09T00:11:27Z")
+        not_ready = view("sample-newest", approved_at="2026-11-10T00:00:00Z", ready=False)
+        self.assertEqual(live.resolve_release([old, new, not_ready], "sample", None).name, "sample-new")
+        self.assertEqual(live.resolve_release([new, old], "sample", None).name, "sample-new")
+        self.assertEqual(live.resolve_release([old, new], "sample", "sample-old").name, "sample-old")  # --release still pins
+
+    def test_unorderable_releases_are_still_refused(self):
+        same = [view("a-1", approved_at="2026-11-06T16:55:03Z"), view("a-2", approved_at="2026-11-06T16:55:03Z")]
+        with self.assertRaisesRegex(live.LiveError, "a-1, a-2"):
+            live.resolve_release(same, "sample", None)
+        missing = [view("a-1", approved_at="2026-11-06T16:55:03Z"), view("a-2", approved_at="not a time")]
+        with self.assertRaises(live.LiveError):
+            live.resolve_release(missing, "sample", None)
+
+    def test_releases_read_the_approval_time(self):
+        kube = FakeKube({("agentreleases", None, "t"): {"items": [{"metadata": {"name": "r"}, "spec": {"agent": "sample", "approval": {"approved": True, "approvedAt": "2026-11-06T16:55:03Z"}}}]}})
+        self.assertEqual(live.releases(kube, "t")[0].approved_at, "2026-11-06T16:55:03Z")
 
     def test_runner_pod_requires_exactly_one_ready_pod(self):
         def pod(name, ready=True, phase="Running"):
@@ -416,10 +443,22 @@ class LiveTests(unittest.TestCase):
         self.assertIn("none", text)
 
 
-def kube_for_run(exec_results, identity_mode="agent", delegation_required=False):
+class BytesKube(FakeKube):
+    """A FakeKube whose next exec answers with the given bytes as they are, for an answer that is not a JSON document."""
+
+    def exec(self, pod, namespace, container, argv, stdin, timeout):
+        if not (self.exec_results and isinstance(self.exec_results[0], bytes)):
+            return super().exec(pod, namespace, container, argv, stdin, timeout)
+        self.argvs.append(list(argv))
+        self.stdins.append(stdin)
+        self.exec_calls.append(json.loads(stdin[int(argv[-1]) :]))
+        return subprocess.CompletedProcess(argv, 0, stdout=self.exec_results.pop(0), stderr=b"")
+
+
+def kube_for_run(exec_results, identity_mode="agent", delegation_required=False, kube_class=FakeKube):
     pod = {"metadata": {"name": "runner-1", "uid": "uid-1"}, "status": {"phase": "Running", "containerStatuses": [{"name": "runner", "ready": True, "containerID": "c", "imageID": "i", "restartCount": 0}]}}
     release = {"metadata": {"name": RELEASE}, "spec": {"agent": "sample", "approval": {"approved": True}}, "status": {"ready": True, "signatureVerified": True, "policyDrift": False, "identityMode": identity_mode, "delegationRequired": delegation_required, "conditions": [{"type": "Ready", "status": "True", "reason": "Ready"}]}}
-    return FakeKube({("agentreleases", None, "tenant-test"): {"items": [release]}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
+    return kube_class({("agentreleases", None, "tenant-test"): {"items": [release]}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
 
 
 class RunTests(unittest.TestCase):
@@ -527,8 +566,9 @@ class RunTests(unittest.TestCase):
             root = make_root(Path(tmp))
             clock = iter([0, 1000, 1000, 1000]).__next__
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "a", kube=kube_for_run([accepted, running]), wait_timeout=5, sleep=lambda s: None, clock=clock)
-            self.assertEqual(code, 124)
+            self.assertEqual((code, envelope.kind), (124, "not-confirmed"))
             self.assertEqual(envelope["cleanup"], "NOT_CONFIRMED")
+            self.assertEqual(envelope["next"], f"just agent status --receipt {Path(tmp) / 'a' / 'receipt.json'}")
             failed = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "FAILED"}, "result": {"outcome": "FAILED"}, "confirmed": False}
             kube = kube_for_run([accepted, failed])
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "b", kube=kube, sleep=lambda s: None)
@@ -543,6 +583,7 @@ class RunTests(unittest.TestCase):
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=out, kube=kube_for_run([{"error": "session identity already exists"}]))
             # An own-identity run has no grant to speak of; the remote answer is passed on as it came.
             self.assertEqual((code, envelope["status"], envelope["reason"]), (2, "SUBMIT_UNCONFIRMED", "remote submit failed: session identity already exists"))
+            self.assertEqual(envelope.kind, "refused")
             self.assertEqual(sorted(p.name for p in out.iterdir()), ["request.json", "status.json"])
             self.assertEqual(json.loads((out / "status.json").read_text()), envelope)
 
@@ -799,6 +840,191 @@ class StageSourceTests(unittest.TestCase):
             root = synced_root(Path(tmp))
             with self.assertRaises(stage.StageError):
                 staged(root, {"agents/sample/agent.yaml": manifest, "uv.lock": "other\n"})
+
+
+def completed_failure(stderr, code=1):
+    return subprocess.CalledProcessError(code, ["x"], stderr=stderr)
+
+
+class FailureCauseTests(unittest.TestCase):
+    def raised(self, exc, call):
+        with patch("subprocess.run", side_effect=exc):
+            try:
+                call()
+            except Exception as caught:  # noqa: BLE001
+                return str(caught)
+        self.fail("nothing raised")
+
+    def test_kubectl_get_names_each_cause(self):
+        get = lambda: live.Kube("/k").get("pods", None, "ns")  # noqa: E731
+        self.assertIn("not installed", self.raised(FileNotFoundError(2, "no"), get))
+        self.assertIn("timed out after 30 seconds", self.raised(subprocess.TimeoutExpired(["kubectl"], 30), get))
+        denied = 'Error from server (Forbidden): pods is forbidden: User "x" cannot list resource "pods"'
+        text = self.raised(completed_failure("noise\n" + denied + "\n\n"), get)
+        self.assertIn("kubectl exited 1", text)
+        self.assertTrue(text.endswith(denied), text)
+        long = self.raised(completed_failure("e" * 1000), get)
+        self.assertLess(len(long), 300)
+        self.assertIn("kubectl exited 1", self.raised(completed_failure(""), get))
+
+    def test_gh_download_failure_names_the_cause_and_hints_at_auth(self):
+        call = lambda: stage.download("o/r", "t", Path("/nonexistent"))  # noqa: E731
+        self.assertIn("gh is not installed", self.raised(FileNotFoundError(2, "no"), call))
+        self.assertIn("timed out after 120 seconds", self.raised(subprocess.TimeoutExpired(["gh"], 120), call))
+        text = self.raised(completed_failure("first\nHTTP 404: Not Found"), call)
+        self.assertIn("HTTP 404: Not Found", text)
+        self.assertNotIn("first", text)
+        self.assertIn("gh auth status", text)
+
+    def test_source_checkout_failure_carries_the_last_stderr_line(self):
+        call = lambda: sync._git(Path("/src"), "rev-parse", "HEAD")  # noqa: E731
+        text = self.raised(completed_failure("fatal: detected dubious ownership", 128), call)
+        self.assertIn("exited 128: fatal: detected dubious ownership", text)
+        self.assertIn("not installed", self.raised(FileNotFoundError(2, "no"), call))
+        self.assertIn("timed out", self.raised(subprocess.TimeoutExpired(["git"], 30), call))
+
+
+class CheckSyncNamesTests(unittest.TestCase):
+    def test_unknown_agent_is_refused_naming_the_valid_ones(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            with self.assertRaisesRegex(sync.SyncError, "nosuch.*committed agents are: sample"):
+                sync.check(root, agents=["nosuch"])
+            with self.assertRaises(sync.SyncError):
+                sync.check(root, agents=["sample", "nosuch"])
+            self.assertEqual(sync.check(root, agents=["sample"])["agents"][0]["agent"], "sample")
+            with patch("sys.stderr"):
+                self.assertEqual(cli.main(["--root", str(root), "check-sync", "nosuch"]), 2)
+
+
+class CliFlagTests(unittest.TestCase):
+    def parse(self, *argv):
+        with patch("sys.stderr"), patch.object(run, "submit", side_effect=SystemExit(99)):
+            try:
+                return cli.main(["run", "sample", "--task", "x", *argv])
+            except SystemExit as exc:
+                return exc.code
+
+    def test_numeric_flags_must_be_positive(self):
+        for flag in ("--poll-interval", "--wait-timeout", "--max-boundaries"):
+            for bad in ("0", "-1", "abc"):
+                self.assertEqual(self.parse(flag, bad), 2, (flag, bad))
+        for bad in ("nan", "inf"):
+            self.assertEqual(self.parse("--poll-interval", bad), 2)
+        self.assertEqual(self.parse("--max-boundaries", "1.5"), 2)
+        self.assertEqual(self.parse("--poll-interval", "0.5", "--wait-timeout", "1", "--max-boundaries", "3"), 99)  # got as far as submit
+
+    def test_status_and_cancel_take_no_wait_flags(self):
+        for command in ("status", "cancel"):
+            for flag in ("--wait-timeout", "--poll-interval"):
+                with patch("sys.stderr"), self.assertRaises(SystemExit) as caught:
+                    cli.main([command, "--receipt", "r.json", flag, "5"])
+                self.assertEqual(caught.exception.code, 2)
+        with patch("sys.stderr"), patch.object(run, "resume", side_effect=SystemExit(99)), self.assertRaises(SystemExit) as caught:
+            cli.main(["wait", "--receipt", "r.json", "--wait-timeout", "5", "--poll-interval", "1"])
+        self.assertEqual(caught.exception.code, 99)
+
+    def test_every_flag_and_positional_has_help(self):
+        holder = {}
+
+        def capture(self, *a, **k):
+            holder["p"] = self
+            raise SystemExit(0)
+
+        with patch.object(argparse.ArgumentParser, "parse_args", capture), self.assertRaises(SystemExit):
+            cli.main([])
+        subs = next(a for a in holder["p"]._actions if isinstance(a, argparse._SubParsersAction))
+        missing = [(name, action.dest) for name, sp in subs.choices.items() for action in sp._actions if not action.help]
+        self.assertEqual(missing, [])
+
+
+class ReleaseChoiceTests(unittest.TestCase):
+    ACCEPTED = {"workflow_id": "w", "run_id": "r", "namespace": "agents-tenant-test", "task_queue": "sessions-tenant-test"}
+
+    def kube(self, exec_results):
+        pod = {"metadata": {"name": "runner-1", "uid": "uid-1"}, "status": {"phase": "Running", "containerStatuses": [{"name": "runner", "ready": True, "containerID": "c", "imageID": "i", "restartCount": 0}]}}
+
+        def release(name, when):
+            return {"metadata": {"name": name}, "spec": {"agent": "sample", "approval": {"approved": True, "approvedAt": when}}, "status": {"ready": True, "signatureVerified": True, "policyDrift": False, "identityMode": "agent", "delegationRequired": False}}
+
+        items = [release("sample-old", "2026-11-06T16:55:03Z"), release("sample-new", "2026-11-09T00:11:27Z")]
+        return FakeKube({("agentreleases", None, "tenant-test"): {"items": items}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
+
+    def test_default_run_uses_the_newest_and_records_the_choice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            out = Path(tmp) / "a"
+            code, envelope = run.submit(root, "sample", {"request": "go"}, wait=False, out=out, kube=self.kube([self.ACCEPTED]))
+            self.assertEqual(code, 0)
+            self.assertEqual((envelope["receipt"]["release"], envelope["receipt"]["releaseChoice"]), ("sample-new", "default"))
+            self.assertEqual(json.loads((out / "receipt.json").read_text())["releaseChoice"], "default")
+
+    def test_pinned_run_records_an_explicit_choice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            out = Path(tmp) / "a"
+            code, envelope = run.submit(root, "sample", {"request": "go"}, release="sample-old", wait=False, out=out, kube=self.kube([self.ACCEPTED]))
+            self.assertEqual((envelope["receipt"]["release"], envelope["receipt"]["releaseChoice"]), ("sample-old", "explicit"))
+            self.assertEqual(json.loads((out / "receipt.json").read_text())["releaseChoice"], "explicit")
+
+    def test_listing_shows_the_release_run_would_use(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            row = live.listing(root, self.kube([]))[0]
+            self.assertEqual(row["runnable"], "sample-new")
+            self.assertEqual(row["readyReleases"], ["sample-new", "sample-old"])
+
+    def receipt(self, tmp):
+        root = make_root(Path(tmp))
+        out = Path(tmp) / "a"
+        run.submit(root, "sample", {"request": "go"}, release="sample-old", wait=False, out=out, kube=self.kube([self.ACCEPTED]))
+        return out / "receipt.json"
+
+    def test_a_receipt_without_the_choice_still_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.receipt(tmp)
+            receipt = json.loads(path.read_text())
+            del receipt["releaseChoice"]
+            path.write_text(json.dumps(receipt))
+            code, envelope = run.resume(path, "status", kube=self.kube([{"workflow_id": "w", "run_id": "r", "status": "RUNNING", "query": {}}]))
+            self.assertEqual((code, envelope["status"], getattr(envelope, "kind", None)), (0, "RUNNING", None))
+
+    def status_through_main(self, answers):
+        """`status` run through the command entry point, with the real `resume` and a fake runner answering `answers`."""
+        import contextlib
+        import io
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.receipt(tmp)
+            out = io.StringIO()
+            with patch.object(live, "Kube", lambda: self.kube(answers)), contextlib.redirect_stdout(out):
+                code = cli.main(["--root", tmp, "status", "--receipt", str(path)])
+            return code, json.loads(out.getvalue())
+
+    def test_status_of_a_running_session_succeeds_through_main(self):
+        code, document = self.status_through_main([{"workflow_id": "w", "run_id": "r", "status": "RUNNING", "query": {"state": "RUNNING"}}])
+        self.assertEqual((code, document["ok"], document["status"], document["cleanup"]), (0, True, "RUNNING", "NOT_CONFIRMED"))
+        self.assertNotIn("error", document)
+        self.assertEqual({"receipt", "status", "query", "cleanup", "ok"}, set(document))
+
+    def test_status_of_a_closed_session_keeps_its_exit_code_through_main(self):
+        base = {"workflow_id": "w", "run_id": "r", "query": {"state": "CLEANED"}}
+        code, document = self.status_through_main([dict(base, status="COMPLETED", confirmed=True), dict(base, status="COMPLETED", report="# R\n", workspace=[])])
+        self.assertEqual((code, document["ok"], document["status"]), (0, True, "COMPLETED"))
+        for status, confirmed in (("COMPLETED", False), ("FAILED", True), ("CANCELED", False), ("TIMED_OUT", False)):
+            with self.subTest(status=status, confirmed=confirmed):
+                code, document = self.status_through_main([dict(base, status=status, confirmed=confirmed)])
+                self.assertEqual((code, document["ok"], document["error"]["code"]), (1, False, "failed"))
+
+    def test_cancel_exits_zero_only_when_the_runner_accepted_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.receipt(tmp)
+            code, envelope = run.resume(path, "cancel", kube=self.kube([{"workflow_id": "w", "run_id": "r", "cancel_requested": True}]))
+            self.assertEqual((code, envelope["cancel"]["cancel_requested"]), (0, True))
+            code, _ = run.resume(path, "cancel", kube=self.kube([{"workflow_id": "w", "run_id": "r", "cancel_requested": False}]))
+            self.assertEqual(code, 1)
+            code, _ = run.resume(path, "cancel", kube=self.kube([{"workflow_id": "w", "run_id": "r"}]))
+            self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

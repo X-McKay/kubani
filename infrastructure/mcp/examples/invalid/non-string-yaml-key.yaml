@@ -1,0 +1,5 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: a mapping key is not a string.
+# Expected: ValueError; the message is pinned in non-string-yaml-key.expect.json.
+version: 1
+2: two

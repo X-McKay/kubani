@@ -14,13 +14,38 @@ TIMEOUT = 45
 BRIDGE = r"""
 import contextlib, json, os, sys
 from pathlib import Path
-sys.path.insert(0, sys.argv[1])
+if sys.argv[1]:  # legacy checkout only; a workspace checkout's own environment supplies the package
+    sys.path.insert(0, sys.argv[1])
 # Source is explicitly selected executable trusted local input, not a sandbox.
 with open(os.devnull, "w") as discard, contextlib.redirect_stdout(discard), contextlib.redirect_stderr(discard):
     from zetra_agents import layout, preflight
     result = preflight.check(Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5])
 sys.stdout.write(json.dumps(result, allow_nan=False, sort_keys=True))
 """
+
+
+NO_ENVIRONMENT = "The source checkout has no environment (.venv); the preflight never installs one."
+
+
+class SourceEnvironmentError(RuntimeError):
+    """The selected checkout cannot run its checker; the message is fixed and safe to show."""
+
+
+def interpreter(source: Path):
+    """Return (python, extra sys.path entry) for the selected checkout.
+
+    A workspace checkout gets its tooling from the environment `uv sync --locked`
+    builds in `.venv`; that interpreter is used as is (never resolved, so it still
+    finds its pyvenv.cfg, which `-I` does not disturb). A checkout from before the
+    workspace move keeps its `tools/zetra_agents` and runs on this interpreter.
+    """
+    legacy = source / "tools"
+    if (legacy / "zetra_agents").is_dir():
+        return sys.executable, str(legacy)
+    python = source / ".venv" / "bin" / "python"
+    if not python.is_file():
+        raise SourceEnvironmentError(NO_ENVIRONMENT)
+    return str(python), ""
 
 
 def _pairs(items):
@@ -96,15 +121,16 @@ def validate(value, agent, tag):
 def check(source: Path, root: Path, agent: str, tag: str):
     """No shell, CLI imports, credentials or network setup; never expose stderr."""
     # Files bound memory while polling bounds output on disk and execution time.
+    python, extra_path = interpreter(source)
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         proc = subprocess.Popen(
             [
-                sys.executable,
+                python,
                 "-I",
                 "-B",
                 "-c",
                 BRIDGE,
-                str(source / "tools"),
+                extra_path,
                 str(source),
                 str(root),
                 agent,

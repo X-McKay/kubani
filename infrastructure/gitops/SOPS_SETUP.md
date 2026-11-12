@@ -9,19 +9,11 @@ This guide explains how to set up SOPS (Secrets OPerationS) with age encryption 
 - `kubectl` configured to access your cluster
 - Flux CD installed in your cluster
 
-## Quick Setup
+## Setup
 
-Run the automated setup script:
-
-```bash
-python scripts/setup_sops.py
-```
-
-This will:
-1. Generate an age key pair
-2. Create `.sops.yaml` configuration file
-3. Create a Kubernetes secret manifest for Flux
-4. Provide next steps
+There is no setup script. Follow the steps below; the repository's day-to-day
+workflow is in
+[Secrets Management](../../docs/infrastructure/configuration/secrets.md).
 
 ## Manual Setup
 
@@ -55,25 +47,15 @@ This tells SOPS to:
 
 ### 3. Create Kubernetes Secret for Flux
 
-Create a secret containing your age private key:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: sops-age
-  namespace: flux-system
-type: Opaque
-stringData:
-  age.agekey: |
-    # Your age private key from age.key
-    AGE-SECRET-KEY-1...
-```
-
-Apply it to your cluster:
+Create the secret that holds your age private key, straight from `age.key` and
+applied from stdin. Never write it to a manifest file: the file would hold the
+private key in plain text.
 
 ```bash
-kubectl apply -f sops-age-secret.yaml
+kubectl create secret generic sops-age \
+  --from-file=age.agekey=age.key \
+  --namespace=flux-system \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### 4. Configure Flux Kustomization

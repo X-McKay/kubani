@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "workload.secretEnv[DATABASE_URI].secretKeyRef.key: must be DATABASE_URI"
+}

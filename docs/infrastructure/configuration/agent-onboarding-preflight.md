@@ -3,6 +3,15 @@
 Run one agent against an explicit trusted source checkout and the current Kubani
 candidate before requesting a prospective release tag:
 
+Prerequisite: the source checkout needs its own environment. Create it once, and
+again after its `uv.lock` changes:
+
+```sh
+cd ../zetra-agents && uv sync --locked
+```
+
+Then:
+
 ```sh
 just agent-preflight investigator --source ../zetra-agents --tag investigator/v1.2.3
 just agent-preflight db-admin --source ../zetra-agents --tag db-admin/v1.2.3 --live
@@ -16,9 +25,27 @@ the entire invocation must be disconnected. A pre-provisioned equivalent is
 The pre-provisioned environment also needs PyJWT[crypto] 2.13.0 for `--live`;
 the offline checker never imports that authentication dependency.
 
-The source checkout is **trusted executable local input**: the adapter imports its
-`zetra_agents.layout` and `zetra_agents.preflight` modules in an isolated Python
-subprocess, with bounded execution time and output. This is not a security sandbox.
+The source checkout is **trusted executable local input**: the adapter runs
+`zetra_agents.layout` and `zetra_agents.preflight` in an isolated Python subprocess
+(`-I -B`), with bounded execution time and output. This is not a security sandbox.
+The subprocess uses the interpreter of the checkout's own virtual environment,
+`<source>/.venv/bin/python`, because the uv-workspace agent repository has no
+`tools/` directory: `zetra-agents` is an installed dependency pinned by its
+`uv.lock` (the zetra repository's `platform/agent-tools`). The preflight never
+installs or syncs anything. If `.venv` is missing, the `source_compatibility`
+check is `unavailable` and tells you to run `uv sync --locked` in the source
+checkout; the command reports that case as `not-found` (not retryable, because
+repeating it cannot succeed until the environment exists) and leaves the check's
+own state `unavailable`. The source check therefore runs the interpreter and the
+installed packages of the source checkout's own environment, which is not under
+version control: the source receipt vouches for the files it hashes, and not for
+everything in that environment. A checkout from before the workspace move, which still has
+`tools/zetra_agents`, keeps working: that directory is put on `sys.path` of
+Kubani's interpreter, as before. If the environment exists but is stale or broken,
+the check reports a generic failure (the child's output is discarded); run
+`uv run --locked zetra-agents preflight AGENT --tag TAG --kubani KUBANI` in the
+source checkout to see its diagnostics.
+
 Use an updated reviewed source checkout containing the compatible version 1 checker
 and its effective aggregate model-budget validation. Kubani reuses the implementation
 from that checkout; the receipt's source HEAD identifies the implementation checked.
@@ -51,7 +78,9 @@ never applies objects, bootstraps identities, runs tools, creates grants or sess
 or reconciles configuration. Missing authorization returns unavailable evidence and
 never initiates a privilege change.
 
-The command emits one versioned JSON result. Each check has a stable code, state,
+The command emits one versioned JSON result; a failed result also carries
+`error.code` and the checks as `error.proofs` (see the
+[CLI outcome contract](cli-contract.md)). Each check has a stable code, state,
 required flag, agent/backend, bounded explanation and remediation. Exit 0 means
 all required checks passed or were not applicable. Required fail, unavailable and
 not_checked states exit 1; incomplete or conflicting requested live evidence fails.
@@ -155,7 +184,7 @@ The preceding historical matrix and all failed receipts remain preserved.
 Investigator's actual read-only live preflight passed all 18 registration layers.
 This verifies registration and public RBAC configuration, not human delegation,
 functional calls or release qualification. See the
-[Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification)
+[Kubernetes registration verification](mcp-backend-registry.md#kubernetes-verification-registration-time-snapshot)
 for unchanged runtime and identity evidence. No agent session was started.
 
 ## Explicit model-free fixtures (2026-11-08)

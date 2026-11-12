@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "profile: must be container-sse-v1 (or existing-streamable-http-v1 for the reviewed Kubernetes backend)"
+}

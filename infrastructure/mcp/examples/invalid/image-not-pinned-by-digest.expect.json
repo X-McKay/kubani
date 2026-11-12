@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "workload.image: must be an image reference pinned by digest, <image>@sha256:<64 hex digits>"
+}

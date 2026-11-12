@@ -17,16 +17,10 @@ This directory contains the Kubernetes manifests for deploying PostgreSQL databa
 
 ## Creating the Encrypted Secret
 
-The PostgreSQL credentials secret must be created and encrypted using SOPS:
-
-```bash
-# Generate encrypted secret using the script
-uv run python scripts/create_encrypted_secrets.py \
-  --age-public-key <your-age-public-key> \
-  --output-dir infrastructure/gitops/apps
-
-# This will create infrastructure/gitops/apps/postgresql/secret.enc.yaml
-```
+The PostgreSQL credentials secret must be created and encrypted using SOPS, as
+`infrastructure/gitops/apps/postgresql/secret.enc.yaml`. See
+[Secrets Management](../../../../docs/infrastructure/configuration/secrets.md#creating-secrets-for-each-service)
+for the procedure.
 
 The secret should contain:
 - `postgres-password`: Admin password for postgres user

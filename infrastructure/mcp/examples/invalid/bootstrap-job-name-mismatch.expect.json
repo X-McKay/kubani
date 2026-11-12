@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "bootstrap.manifest: expected the Job's metadata.name to equal bootstrap.name, found a different name"
+}

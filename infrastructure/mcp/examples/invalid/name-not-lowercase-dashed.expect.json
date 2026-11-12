@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "name: must be a lower-case name of letters, digits and single dashes, starting with a letter"
+}

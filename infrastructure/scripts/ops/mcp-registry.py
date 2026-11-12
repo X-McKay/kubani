@@ -10,113 +10,98 @@ import os
 import re
 import subprocess
 import sys
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import outcome  # noqa: E402
+from keycloak_admin import KeycloakHTTPError  # noqa: E402  (importing it contacts nothing)
+
+RETRY_STATUSES = frozenset({408, 429})
+OFFLINE_STAGES = frozenset({"add", "render", "check"})
 NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
-KUBE_NAME = re.compile(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?")
-RESOURCES = {
-    ("v1", "Service"): "services",
-    ("v1", "ConfigMap"): "configmaps",
-    ("v1", "Secret"): "secrets",
-    ("v1", "Namespace"): "namespaces",
-    ("v1", "ServiceAccount"): "serviceaccounts",
-    ("rbac.authorization.k8s.io/v1", "ClusterRoleBinding"): "clusterrolebindings.rbac.authorization.k8s.io",
-    ("rbac.authorization.k8s.io/v1", "ClusterRole"): "clusterroles.rbac.authorization.k8s.io",
-    ("apps/v1", "Deployment"): "deployments.apps",
-    ("batch/v1", "Job"): "jobs.batch",
-    ("networking.k8s.io/v1", "NetworkPolicy"): "networkpolicies.networking.k8s.io",
-    (
-        "gateway.networking.k8s.io/v1",
-        "HTTPRoute",
-    ): "httproutes.gateway.networking.k8s.io",
-    ("gateway.networking.k8s.io/v1", "Gateway"): "gateways.gateway.networking.k8s.io",
-    (
-        "agentgateway.dev/v1alpha1",
-        "AgentgatewayBackend",
-    ): "agentgatewaybackends.agentgateway.dev",
-    (
-        "agentgateway.dev/v1alpha1",
-        "AgentgatewayPolicy",
-    ): "agentgatewaypolicies.agentgateway.dev",
+# What a stage that can touch a credential says about a failure: one fixed sentence per code, never the exception's text.
+FIXED_MESSAGES = {
+    "unavailable": "a service or tool this stage depends on could not be reached or did not answer; the exception text is withheld",
+    "refused": "the identity provider refused the request and repeating it will not change that; the response is withheld",
+    "timeout": "a service or tool this stage depends on did not answer in time; the exception text is withheld",
+    "not-found": "the named backend is not registered",
+    "conflict": "existing state conflicts with the request; the exception text is withheld",
+    "validation-failed": "an input or a response broke a rule; the exception text is withheld",
+    "internal": "an unexpected error occurred; only its type is shown",
 }
 
 
+class Refusal(ValueError):
+    """A refusal this file raises itself, with the outcome code it ends as. Its message is a fixed sentence written here."""
+
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+
+def emit(document):
+    print(json.dumps(document, sort_keys=True))
+
+
+class Parser(argparse.ArgumentParser):
+    """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
+
+    def error(self, message):
+        emit(outcome.document({}, outcome.error("invalid-arguments", outcome.usage_message(message))))
+        super().error(message)
+
+
+def classify(stage, error):
+    """The outcome code of an exception raised in `stage`, decided from its type and stage, never from its text."""
+    if isinstance(error, Refusal):
+        return error.code
+    if isinstance(error, (subprocess.TimeoutExpired, TimeoutError)):
+        return "timeout"
+    if stage in OFFLINE_STAGES:
+        if isinstance(error, FileExistsError):
+            return "conflict"
+        if isinstance(error, FileNotFoundError):
+            return "unavailable" if error.filename in ("kubectl", "kustomize") else "not-found"
+        if isinstance(error, ValueError):
+            return "validation-failed"
+        return "failed" if isinstance(error, OSError) else "internal"
+    if isinstance(error, KeycloakHTTPError):
+        # Keycloak answered. A 4xx is a decision about this request (a 403, a 409) and repeating it changes nothing; a 5xx did not
+        # decide anything. 408 and 429 are the 4xx that ask for the request to be sent again.
+        return "unavailable" if error.status >= 500 or error.status in RETRY_STATUSES else "refused"
+    if isinstance(error, (OSError, RuntimeError, subprocess.SubprocessError, urllib.error.URLError)):
+        return "unavailable"
+    if isinstance(error, ValueError):
+        return "unavailable" if stage == "identity-authentication" else "conflict" if stage == "identity" else "validation-failed"
+    return "internal"
+
+
+def invalid_registration(issues):
+    proofs = [{"check": "registry-validation", "ok": False, "detail": issue} for issue in issues]
+    return outcome.error("check-failed", f"{len(issues)} registration checks did not hold; see proofs", proofs=proofs)
 def modules():
     # Import lazily: help and offline commands do not initialize credentials.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     return SimpleNamespace(
         **{
             name: importlib.import_module("mcp_registry." + name)
-            for name in ("model", "render", "check", "identity", "status", "provision")
+            for name in (
+                "model",
+                "render",
+                "check",
+                "identity",
+                "status",
+                "provision",
+                "kube",
+            )
         }
     )
 
 
-class KubeReader:
-    """Bounded exact-object reads; Secret reads return only the object's name."""
-
-    def __init__(self, kubeconfig, *, run=None):
-        self.kubeconfig = kubeconfig
-        self.run = run or subprocess.run
-
-    def __call__(self, api_version, kind, namespace, name):
-        resource = RESOURCES.get((api_version, kind))
-        if (
-            resource is None
-            or not isinstance(name, str)
-            or not KUBE_NAME.fullmatch(name)
-        ):
-            raise ValueError("unsupported object identity")
-        cluster_scoped = kind in {"Namespace", "ClusterRoleBinding", "ClusterRole"}
-        if cluster_scoped and namespace != "":
-            raise ValueError("cluster-scoped namespace must be empty")
-        if not cluster_scoped and (
-            not isinstance(namespace, str) or not KUBE_NAME.fullmatch(namespace)
-        ):
-            raise ValueError("invalid namespace")
-        argv = ["kubectl"]
-        if self.kubeconfig:
-            argv += ["--kubeconfig", str(self.kubeconfig)]
-        argv += ["--request-timeout=10s", "get", resource, name, "--ignore-not-found"]
-        if not cluster_scoped:
-            argv += ["--namespace", namespace]
-        argv += ["-o", "jsonpath={.metadata.name}" if kind == "Secret" else "json"]
-        result = self.run(argv, capture_output=True, text=True, timeout=15, check=False)
-        if result.returncode:
-            raise RuntimeError("cluster read failed")
-        raw = result.stdout.strip()
-        if not raw:
-            return None
-        if len(raw.encode()) > 4 * 1024 * 1024:
-            raise ValueError("cluster object exceeds bound")
-        if kind == "Secret":
-            if raw != name:
-                raise ValueError("secret identity differs")
-            return {
-                "apiVersion": "v1",
-                "kind": "Secret",
-                "metadata": {"name": name, "namespace": namespace},
-            }
-        value = json.loads(raw)
-        if (
-            not isinstance(value, dict)
-            or value.get("kind") != kind
-            or value.get("apiVersion") != api_version
-            or value.get("metadata", {}).get("name") != name
-            or (
-                not cluster_scoped
-                and value.get("metadata", {}).get("namespace") != namespace
-            )
-        ):
-            raise ValueError("cluster object identity differs")
-        if cluster_scoped and value.get("metadata", {}).get("namespace", "") != "":
-            raise ValueError("cluster object namespace differs")
-        return value
-
-
 def parser():
-    result = argparse.ArgumentParser(description=__doc__)
+    result = Parser(description=__doc__)
     result.add_argument(
         "--root", type=Path, default=Path(__file__).resolve().parents[3]
     )
@@ -148,19 +133,19 @@ def parser():
 
 def add_definition(root, name, model):
     if not NAME.fullmatch(name) or len(name) > 40:
-        raise ValueError("invalid backend name")
+        raise Refusal("invalid backend name", "invalid-arguments")
     parent = root
     for part in ("infrastructure", "mcp", "backends"):
         parent = parent / part
         if parent.is_symlink():
-            raise ValueError("refusing symlinked registry path")
+            raise Refusal("refusing symlinked registry path", "refused")
     for path in parent.glob("*.yaml"):
         if path.is_symlink():
-            raise ValueError("symlink declaration refused")
+            raise Refusal("symlink declaration refused", "refused")
         # Collision inventory only: a previous add intentionally leaves a scaffold.
         for entry in model.yaml_documents(path):
             if isinstance(entry, dict) and entry.get("name") == name:
-                raise ValueError("backend already registered")
+                raise Refusal("backend already registered", "conflict")
     text = model.scaffold(name)
     target = parent / (name + ".yaml")
     parent.mkdir(parents=True, exist_ok=True)
@@ -187,11 +172,11 @@ def main(argv=None):
             entries = services.model.load_registry(root, provisioning=True)
             selected = [entry for entry in entries if entry["name"] == args.name]
             if len(selected) != 1:
-                raise ValueError("backend must be uniquely registered")
+                raise Refusal("backend must be uniquely registered", "not-found" if not selected else "conflict")
             operation = getattr(services.provision, args.action)
             output = operation(root, selected[0])
             if output.get("status") not in {"ready", "preserved", "created"}:
-                print(json.dumps(output, sort_keys=True))
+                emit(outcome.document(output, outcome.error("conflict", "existing state or sources prevent credential preparation; see status and issues")))
                 return 1
         elif args.command == "render":
             if args.write:
@@ -209,17 +194,13 @@ def main(argv=None):
                 ]
                 output = {"status": "current" if not stale else "stale", "files": stale}
                 if stale:
-                    print(json.dumps(output, sort_keys=True))
+                    proofs = [{"path": path, "state": "stale" if path in stale else "current"} for path in sorted(expected)]
+                    emit(outcome.document(output, outcome.error("check-failed", f"{len(stale)} generated files are stale or missing; see proofs", proofs=proofs)))
                     return 1
         else:
             issues = services.check.check(root)
             if issues:
-                print(
-                    json.dumps(
-                        {"status": "invalid-registration", "issues": issues},
-                        sort_keys=True,
-                    )
-                )
+                emit(outcome.document({"status": "invalid-registration", "issues": issues}, invalid_registration(issues)))
                 return 1
             if args.command == "check":
                 output = {"status": "valid", "scope": "offline-registration"}
@@ -227,7 +208,7 @@ def main(argv=None):
                 entries = services.model.load_registry(root)
                 selected = [entry for entry in entries if entry["name"] == args.name]
                 if len(selected) != 1:
-                    raise ValueError("backend must be uniquely registered")
+                    raise Refusal("backend must be uniquely registered", "not-found" if not selected else "conflict")
                 descriptor = services.model.descriptor(selected[0])
                 stage = "identity-authentication"
                 api = services.identity.admin()
@@ -240,27 +221,45 @@ def main(argv=None):
                     output = services.status.inspect_registration(
                         services.render.objects(root, args.name),
                         descriptor,
-                        read_object=KubeReader(args.kubeconfig),
+                        read_object=services.kube.KubeReader(args.kubeconfig),
                         api=api,
                     )
                     if not output.get("complete"):
-                        print(json.dumps(output, sort_keys=True))
+                        layers = output.get("layers", [])
+                        open_layers = [layer for layer in layers if not layer.get("complete")]
+                        if open_layers and all(str(layer.get("state", "")).startswith("unavailable") for layer in open_layers):
+                            failure = outcome.error("unavailable", f"{len(open_layers)} registration layers could not be read; see layers")
+                        else:
+                            failure = outcome.error("check-failed", f"{len(open_layers)} registration layers are not current and ready; see proofs", proofs=list(layers))
+                        emit(outcome.document(output, failure))
                         return 1
-        print(json.dumps(output, sort_keys=True))
+        emit(outcome.document(output))
         return 0
+    except KeyboardInterrupt:
+        emit(outcome.document({}, outcome.error("interrupted", "interrupted before the command finished")))
+        raise
     except Exception as error:  # noqa: BLE001 - never expose credential-bearing exceptions
         # Exceptions can contain credential-bearing HTTP/process responses.
-        print(
-            json.dumps(
-                {
-                    "status": "refused",
-                    "stage": stage,
-                    "error_type": type(error).__name__,
-                    "note": "No conflicting identity is overwritten. Inspect configuration and any partial operation before retry.",
-                },
-                sort_keys=True,
-            )
-        )
+        refusal = {
+            "status": "refused",
+            "stage": stage,
+            # KeycloakHTTPError subclasses RuntimeError and is named so here: the document's `error_type` kept its value when the subclass was introduced.
+            "error_type": "ValueError" if isinstance(error, Refusal) else "RuntimeError" if isinstance(error, KeycloakHTTPError) else type(error).__name__,
+            "note": "No conflicting identity is overwritten. Inspect configuration and any partial operation before retry.",
+        }
+        # Only stages that read committed files may show the message: nothing
+        # there touches a credential. Every other stage reports the type only.
+        code = classify(stage, error)
+        if stage in OFFLINE_STAGES and isinstance(error, (ValueError, OSError)):
+            message = str(error) or type(error).__name__
+        elif stage in OFFLINE_STAGES:
+            message = "an unexpected error ended the stage; only the exception type is shown" if code == "internal" else "the stage did not finish; only the exception type is shown"
+        else:
+            message = FIXED_MESSAGES.get(code, FIXED_MESSAGES["internal"])
+            if isinstance(error, KeycloakHTTPError):
+                message += f" (HTTP {error.status})"  # a number; the response and the exception text stay withheld
+        # `error` was a string here for offline refusals; it is now the contract's object and its `message` is that string.
+        emit(outcome.document(refusal, outcome.error(code, message)))
         return 1
 
 

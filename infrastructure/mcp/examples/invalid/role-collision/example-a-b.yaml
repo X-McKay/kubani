@@ -1,0 +1,27 @@
+# INVALID (set rule, so this example is a directory): breaks exactly one rule.
+# Rule broken: two backends declare the same Keycloak role. The role prefix check is
+# per backend, so 'example-a' and 'example-a-b' can both write agent-role-example-a-b-read.
+# Expected: ValueError; the message is pinned in ../role-collision.expect.json.
+version: 1
+name: example-a-b
+profile: container-sse-v1
+workload:
+  image: registry.example.com/example/echo-mcp@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  args:
+  - --transport=sse
+  port: 8000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  secretEnv: []
+authorization:
+  role: agent-role-example-a-b-read
+  tools:
+  - echo
+  scopeDescription: Illustrative echo backend with no credentials
+secrets: []
+upstreams: []

@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "provision.host: must be a cluster-local host of the form <service>.<namespace>.svc.cluster.local"
+}

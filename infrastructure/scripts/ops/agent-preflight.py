@@ -5,13 +5,43 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+import traceback
 from pathlib import Path
 
+import outcome
 from agent_preflight.core import run
+from agent_preflight.source import NO_ENVIRONMENT
+
+BLOCKING = ("fail", "not_checked", "unavailable")
+
+
+class Parser(argparse.ArgumentParser):
+    """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
+
+    def error(self, message):
+        emit(outcome.document({}, outcome.error("invalid-arguments", outcome.usage_message(message))))
+        super().error(message)
+
+
+def emit(document):
+    print(json.dumps(document, sort_keys=True, allow_nan=False))
+
+
+def failure_for(result):
+    """Why a receipt with `ok` false failed: a check that did not hold, or only checks whose evidence could not be had."""
+    blocking = [c for c in result.get("checks", []) if c.get("required") and c.get("state") in BLOCKING]
+    only = blocking[0] if len(blocking) == 1 else {}
+    if only.get("code") == "source_compatibility" and only.get("state") == "unavailable" and only.get("explanation") == NO_ENVIRONMENT:
+        # Repeating the command cannot succeed until the source checkout has an environment; the check keeps its own state.
+        return outcome.error("not-found", "the source checkout has no environment (.venv) and the preflight never installs one; run `uv sync --locked` in it, then rerun (see checks)")
+    if blocking and all(c["state"] == "unavailable" for c in blocking):
+        return outcome.error("unavailable", f"{len(blocking)} required checks could not be evaluated; their evidence was unavailable (see checks)")
+    return outcome.error("check-failed", f"{len(blocking)} required checks did not hold; see proofs", proofs=list(result.get("checks", [])))
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = Parser(description=__doc__)
     parser.add_argument("agent")
     parser.add_argument(
         "--source",
@@ -29,8 +59,16 @@ def main(argv=None):
         "--root", type=Path, default=Path(__file__).resolve().parents[3]
     )
     args = parser.parse_args(argv)
-    result = run(args.root, args.source, args.agent, args.tag, live_scope=args.live)
-    print(json.dumps(result, sort_keys=True, allow_nan=False))
+    try:
+        result = run(args.root, args.source, args.agent, args.tag, live_scope=args.live)
+    except KeyboardInterrupt:
+        emit(outcome.document({}, outcome.error("interrupted", "interrupted before the preflight finished")))
+        raise
+    except Exception as exc:  # noqa: BLE001 - one document however it ends; the message names the type and place only
+        traceback.print_exc(file=sys.stderr)  # what the uncaught exception printed before this document existed
+        emit(outcome.document({}, outcome.error("internal", outcome.unexpected(exc))))
+        return 1
+    emit(outcome.document(result, None if result["ok"] else failure_for(result)))
     return 0 if result["ok"] else 1
 
 

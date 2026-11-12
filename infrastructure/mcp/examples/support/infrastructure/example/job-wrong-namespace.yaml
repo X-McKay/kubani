@@ -1,0 +1,23 @@
+# Support file for the examples corpus (not a backend). Job namespace differs from bootstrap.namespace.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: example-db-role-v1
+  namespace: elsewhere
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: apply
+        image: registry.example.com/example/psql:1
+        env:
+        - name: MCP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: example-db-role
+              key: password
+      volumes:
+      - name: sql
+        configMap:
+          name: example-sql

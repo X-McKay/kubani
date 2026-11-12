@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "bootstrap.manifest: expected exactly 1 Job to find the role credential consumer, found 2"
+}

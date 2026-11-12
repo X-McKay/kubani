@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "authorization.tools: must be a non-empty list of tool names"
+}

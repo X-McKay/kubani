@@ -50,20 +50,23 @@ mise install
 ### Generate Age Encryption Key
 
 ```bash
-# Run the SOPS setup script
-uv run python scripts/setup_sops.py
+age-keygen -o age.key
 ```
 
-This creates:
-- `age.key` - Private key (keep secure, don't commit!)
-- `.sops.yaml` - Encryption configuration (commit this)
-- `sops-age-secret.yaml` - Kubernetes secret for Flux (apply this)
+`age.key` is the private key (keep secure, don't commit!). Put its public key in
+`.sops.yaml` (commit that). See
+[Secrets Management](../configuration/secrets.md#age-key-generation) for the full
+procedure.
 
 ### Apply Age Secret to Cluster
 
 ```bash
-# Apply the age secret so Flux can decrypt secrets
-kubectl apply -f sops-age-secret.yaml
+# Create the age secret from stdin so Flux can decrypt secrets. Never write
+# the manifest to a file: it would hold the private key in plain text.
+kubectl create secret generic sops-age \
+  --from-file=age.agekey=age.key \
+  --namespace=flux-system \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # Verify it was created
 kubectl get secret sops-age -n flux-system
@@ -105,38 +108,28 @@ kubectl get secret sops-age -n flux-system
 
 ## Step 3: Create Encrypted Secrets (5 minutes)
 
-### Run the Secret Creation Script
+### Encrypt Each Secret
 
-```bash
-# Interactive script to create all encrypted secrets
-uv run python scripts/create_encrypted_secrets.py
-```
+There is no generator script. For each file listed below, write the plaintext
+Secret outside the repository as `secret.enc.yaml`, encrypt it with
+`SOPS_AGE_KEY_FILE=age.key sops --encrypt`, and delete the plaintext. The full
+procedure is in
+[Secrets Management](../configuration/secrets.md#creating-secrets-for-each-service).
 
-### What You'll Be Asked
+The values you need:
 
-The script will prompt you for:
+1. **Cloudflare API Token** (the token from Step 2)
+2. **PostgreSQL**: admin password, application username (default: `authentik`),
+   application password, database name (default: `authentik`)
+3. **Redis**: password
+4. **Authentik**: secret key, PostgreSQL password (same as above), bootstrap
+   admin password, bootstrap API token
 
-1. **Cloudflare API Token** (paste the token from Step 2)
-2. **PostgreSQL Credentials**:
-   - Admin password (or press Enter to generate)
-   - Application username (default: `authentik`)
-   - Application password (or press Enter to generate)
-   - Database name (default: `authentik`)
-
-3. **Redis Credentials**:
-   - Password (or press Enter to generate)
-
-4. **Authentik Credentials**:
-   - Secret key (or press Enter to generate)
-   - PostgreSQL password (reuses from above)
-   - Bootstrap admin password (or press Enter to generate)
-   - Bootstrap API token (or press Enter to generate)
-
-**Tip**: Press Enter to auto-generate secure random passwords for all credentials.
+Generate each password yourself (alphanumeric, for example `openssl rand -hex 24`).
 
 ### What Gets Created
 
-The script creates encrypted secrets in:
+The encrypted secrets live in:
 - `infrastructure/gitops/infrastructure/cert-manager/cloudflare-secret.enc.yaml`
 - `infrastructure/gitops/apps/postgresql/secret.enc.yaml`
 - `infrastructure/gitops/apps/redis/secret.enc.yaml`
@@ -399,9 +392,11 @@ sops -d infrastructure/gitops/apps/postgresql/secret.enc.yaml
 
 **Solution:**
 ```bash
-# Recreate age secret
-kubectl delete secret sops-age -n flux-system
-kubectl apply -f sops-age-secret.yaml
+# Replace the age secret, from stdin (never from a manifest file)
+kubectl create secret generic sops-age \
+  --from-file=age.agekey=age.key \
+  --namespace=flux-system \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # Force Flux reconciliation
 flux reconcile kustomization apps --with-source
@@ -555,7 +550,6 @@ kubectl get certificate -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.meta
 - **[Secrets Management Guide](../configuration/secrets.md)**: Detailed SOPS and age encryption guide
 - **[DNS Configuration Guide](../configuration/dns.md)**: DNS records and Cloudflare API usage
 - **[Authentication Guide](../configuration/authentication.md)**: Authentik SSO integration and OAuth2/OIDC setup
-- **[Service Validation Guide](../gitops/guides/service-validation.md)**: Comprehensive validation procedures
 - **[GitOps Service Deployment](../gitops/guides/deploying-services.md)**: In-depth GitOps workflow
 
 ## Summary

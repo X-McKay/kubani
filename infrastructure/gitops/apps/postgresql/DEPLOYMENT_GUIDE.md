@@ -82,44 +82,13 @@ echo "Traefik IP: $TRAEFIK_IP"
 
 ### Step 1: Create Encrypted Secret
 
-Generate the encrypted PostgreSQL credentials:
-
-```bash
-# Generate encrypted secret using the script
-uv run python scripts/create_encrypted_secrets.py \
-  --age-public-key $(grep 'age:' .sops.yaml | awk '{print $2}') \
-  --output-dir infrastructure/gitops/apps
-
-# This creates infrastructure/gitops/apps/postgresql/secret.enc.yaml
-```
-
-Alternatively, create the secret manually:
-
-```bash
-# Create unencrypted secret first
-cat > /tmp/postgresql-secret.yaml <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgresql-credentials
-  namespace: database
-type: Opaque
-stringData:
-  postgres-password: "$(openssl rand -base64 32)"
-  username: "authentik"
-  password: "$(openssl rand -base64 32)"
-  database: "authentik"
-EOF
-
-# Encrypt with SOPS
-sops --encrypt \
-  --age $(grep 'age:' .sops.yaml | awk '{print $2}') \
-  --encrypted-regex '^(data|stringData)$' \
-  /tmp/postgresql-secret.yaml > infrastructure/gitops/apps/postgresql/secret.enc.yaml
-
-# Clean up temporary file
-rm /tmp/postgresql-secret.yaml
-```
+Create the encrypted PostgreSQL credentials at
+`infrastructure/gitops/apps/postgresql/secret.enc.yaml`. Follow
+[Secrets Management](../../../../docs/infrastructure/configuration/secrets.md#creating-secrets-for-each-service):
+write the plaintext Secret outside the repository as `secret.enc.yaml`, with
+`postgres-password`, `username`, `password` and `database` under `stringData`,
+encrypt it with `SOPS_AGE_KEY_FILE=age.key sops --encrypt`, and delete the
+plaintext.
 
 ### Step 2: Update Kustomization
 

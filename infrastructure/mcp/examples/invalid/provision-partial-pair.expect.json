@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "provision.roleManifest and provision.workloadManifest: only one of the two Secret files exists; both or neither are required"
+}

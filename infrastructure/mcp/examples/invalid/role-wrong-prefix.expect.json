@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "authorization.role: must be agent-role-<backend name>-<suffix> with a lower-case suffix of letters, digits and dashes"
+}

@@ -1,0 +1,26 @@
+# INVALID: breaks exactly one rule.
+# Rule broken: the workload differs from the reviewed contract.
+# Expected: ValueError; the message is pinned in http-profile-workload-mismatch.expect.json.
+version: 1
+name: kubernetes
+profile: existing-streamable-http-v1
+workload:
+  namespace: mcp
+  service: kubernetes-mcp
+  port: 9090
+  path: /mcp
+  protocol: StreamableHTTP
+authorization:
+  role: agent-role-kubernetes-read
+  tools:
+  - events_list
+  - pods_get
+  - pods_list_in_namespace
+  - pods_log
+  - resources_get
+  - resources_list
+  scopeDescription: Illustrative scope text
+secrets: []
+upstreams: []
+references: []
+externalReferences: []

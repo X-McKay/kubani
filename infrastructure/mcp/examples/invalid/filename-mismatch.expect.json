@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "filename-mismatch.yaml: the file name without .yaml must equal the definition's name"
+}

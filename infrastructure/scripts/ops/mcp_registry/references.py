@@ -100,15 +100,23 @@ def referenced_objects(root, entry, *, external=False):
     if not isinstance(refs, list) or len(refs) != len(contract):
         raise ValueError("exact bounded public references required")
     selected, seen, cache = [], set(), {}
-    for ref in refs:
+    label = "externalReferences" if external else "references"
+    for i, ref in enumerate(refs):
         model.fields(
-            ref, ["path", "apiVersion", "kind", "namespace", "name", "canonicalSHA256"]
+            ref,
+            ["path", "apiVersion", "kind", "namespace", "name", "canonicalSHA256"],
+            path=f"{label}[{i}]",
         )
         key = tuple(ref[k] for k in ("path", "apiVersion", "kind", "namespace", "name"))
         if key not in contract or key in seen:
             raise ValueError("unexpected or duplicate public reference")
         seen.add(key)
-        model.string(ref["canonicalSHA256"], r"sha256:[a-f0-9]{64}")
+        model.string(
+            ref["canonicalSHA256"],
+            r"sha256:[a-f0-9]{64}",
+            f"{label}[{i}].canonicalSHA256",
+            "sha256: followed by 64 lower-case hex digits",
+        )
         path = model.safe_path(root, ref["path"])
         if path.stat().st_size > 1024 * 1024:
             raise ValueError("public reference file exceeds bound")
@@ -133,7 +141,9 @@ def referenced_objects(root, entry, *, external=False):
             raise ValueError("exact external view snapshot required")
         view = selected[0]
         model.fields(
-            view, ["apiVersion", "kind", "metadata", "rules", "aggregationRule"]
+            view,
+            ["apiVersion", "kind", "metadata", "rules", "aggregationRule"],
+            path="externalReferences[0] object",
         )
         if (
             view["metadata"] != {"name": "view"}
@@ -158,6 +168,7 @@ def validate(entry, root):
             "references",
             "externalReferences",
         ],
+        path="definition",
     )
     if (
         type(entry["version"]) is not int
@@ -177,10 +188,15 @@ def validate(entry, root):
     if entry["secrets"] != [] or entry["upstreams"] != []:
         raise ValueError("existing HTTP profile has no generated secrets or upstreams")
     auth = entry["authorization"]
-    model.fields(auth, ["role", "tools", "scopeDescription"])
+    model.fields(auth, ["role", "tools", "scopeDescription"], path="authorization")
     if auth["role"] != "agent-role-kubernetes-read" or auth["tools"] != TOOLS:
         raise ValueError("existing HTTP role or tools mismatch")
-    model.string(auth["scopeDescription"])
+    model.string(
+        auth["scopeDescription"],
+        None,
+        "authorization.scopeDescription",
+        "a non-empty description",
+    )
     docs = referenced_objects(root, entry)
     referenced_objects(root, entry, external=True)
     by_kind = {d["kind"]: d for d in docs if d["kind"] != "AgentgatewayPolicy"}

@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "bootstrap.sqlSha256: does not match the SHA-256 of the bootstrap.sql file; review the change and set a new bootstrap.revision"
+}

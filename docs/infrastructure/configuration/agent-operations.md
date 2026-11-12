@@ -5,11 +5,14 @@ what the November 2026 releases did by hand: copying the Agent from the source
 repository, staging a published release, approving it after the controller has
 verified it, and submitting an ordinary session. Every subcommand prints one
 JSON document and exits non-zero on refusal, so an operator or an automated
-session can act on it without parsing prose.
+session can act on it without parsing prose. Every document carries `ok`, and a
+failure carries `error.code` from a closed set; see the
+[CLI outcome contract](cli-contract.md).
 
 ```sh
 just agent state                                # Flux, platform pods, agents, releases, sandboxes, open PRs
 just agent ls                                   # agents, readiness, the release `run` would use
+just agent ls --json                            # the same rows as one object: ok, and the list under `agents`
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
 just agent consent --check investigator         # would Keycloak issue this person a depositable token; deposits nothing
@@ -43,9 +46,14 @@ reads Secrets, prints tokens or bypasses a release gate.
 ## Running a session
 
 `run` resolves the tenant from the committed directory, the release from the
-live objects (exactly one approved, Ready, signature-verified, drift-free
-release unless `--release` names one) and the identity mode from the release
-status. The command is the same for every agent; what it needs depends on the
+live objects (the approved, Ready, signature-verified, drift-free release; when
+several qualify, the one with the latest `spec.approval.approvedAt`, unless
+`--release` pins one) and the identity mode from the release status. If the
+approval times of the qualifying releases are missing or equal, they cannot be
+ordered and `run` refuses and lists their names; pass `--release`. The `run`
+output and `receipt.json` record the release used as `release` and how it was
+chosen as `releaseChoice` (`default` or `explicit`; receipts written before
+this key existed lack it and still load). The command is the same for every agent; what it needs depends on the
 identity the release reports:
 
 | Release reports | Without `--grant-handle` | With `--grant-handle` |
@@ -60,7 +68,8 @@ every agent. The receipt records `identity`, `delegated` and `consent`;
 `delegated: true` means a handle was submitted or a grant was deposited for
 the session, not that any call was made on a person's behalf.
 On 2026-11-10 `conformance` has two runnable releases and `conformance-b`
-three, so `run` needs `--release` for them. A release that requires delegation
+three; `run` takes the most recently approved of them unless `--release` names
+another. A release that requires delegation
 is run by asking the person for consent at run time; see
 [below](#consent-for-a-release-that-requires-delegation). As of 2026-11-10 that
 path has run only against test stand-ins.
@@ -124,15 +133,32 @@ the session. Whether a workflow exists depends on the reason (read from
   40-second limit included), a call that did not answer in 60 seconds, a
   `kubectl exec` that failed, and Ctrl-C while the call was in flight.
 
+Once a submission has been attempted, no ending of `run` that is not a
+confirmed finish of the session is safe to repeat: `run` mints a new session id
+and submits again. These endings have `error.code` `not-confirmed` (not
+retryable): a `SUBMIT_UNCONFIRMED` after a call that did not answer or whose
+answer cannot be placed; a Ctrl-C while the submit call was in flight or while
+following; an error raised while following, which prints `FOLLOW_FAILED` and
+not `REFUSED` or `ERROR` once the receipt exists; an interrupt that arrives after
+the receipt exists, outside the places `run` handles interrupts itself, which
+is reported with status `FOLLOW_FAILED`, code `not-confirmed` and exit 130; and the `--wait-timeout`
+ending with exit 124. They keep their exit codes and carry `sessionId` and
+`dir`; with a receipt they also carry `receiptPath` and `next`, the command
+`just agent status --receipt <path>`. A `SUBMIT_UNCONFIRMED` whose reason is one
+of the runner's refusals before it starts anything (`deposit refused: ...`,
+`session identity already exists`, `invalid request`, a session id that is not
+a UUID) has `error.code` `refused`: nothing was started.
+See [the CLI contract](cli-contract.md#codes).
+
 Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
 carries a `reason`; for a release that requires delegation the reason says
 what is known about a grant (see
 [What can go wrong](#what-can-go-wrong)). A remote call that wrote to stderr
 also leaves an `exec-NN.stderr` file. Two endings fall outside the table: a
-remote `status` call that fails while the workflow is being followed ends as
-`REFUSED` with exit 2, and an operating-system error such as a file that
-cannot be written ends as `ERROR` with exit 1; both leave what was written by
-then and write no `status.json`. Ctrl-C at a moment `run`
+remote `status` call that fails while the workflow is being followed ends with
+exit 2 (`FOLLOW_FAILED`), and an operating-system error such as a file that
+cannot be written ends with exit 1 (`ERROR`, or `FOLLOW_FAILED` once the receipt
+exists); both leave what was written by then and write no `status.json`. Ctrl-C at a moment `run`
 does not handle itself (before the run directory exists, for example) ends as
 `INTERRUPTED` with exit 130 and a document that holds only `status` and
 `reason`. No ending prints a Python traceback; an unforeseen exception's
@@ -157,7 +183,16 @@ Each run gets a new private directory, by default
 `status`, `wait` and `cancel` take `--receipt` and operate on that exact run
 only; they never submit. The runner pod's uid, container id, image id and
 restart count are re-read after every call and `runnerIdentityChanged` is
-reported if any differs.
+reported if any differs. Only `wait` takes `--wait-timeout` and
+`--poll-interval`; `status` and `cancel` reject them. `cancel` exits 0 when the
+runner accepted the cancellation (`cancel.cancel_requested: true`) and 1
+otherwise. `status` exits 0 when the session has not ended (the document has
+`ok: true` and the current `status`, such as `RUNNING`) and when it closed with
+confirmed success and cleanup, as `run` does; it exits 1 for a session that
+closed without either.
+`check-sync NAME` refuses a name that is not a committed agent (exit 2) and
+lists the valid ones. `--poll-interval`, `--wait-timeout` and
+`--max-boundaries` must be above 0.
 
 The wait is the host's polling loop and the report reader is in the remote
 script. The deployed session-runner image (built from zetra `18aee61`, kubani
@@ -384,6 +419,7 @@ The interval is read from zetra `18aee61`; no removal has been observed.
 | the sign-in of `consent --session` is not completed in time | exit 124 with `deposited: false` and `timedOut: true`; the run keeps waiting until its timeout |
 | the APS refuses the deposit, run started from a terminal | `run` exits 2, `SUBMIT_UNCONFIRMED`: `remote submit failed: deposit refused: <reason>; the policy service holds no grant from this run`; no receipt |
 | the APS refuses the deposit, `consent --session` | exit 2 with `deposited: false` and `remote deposit failed: deposit refused: <reason>; this command deposited nothing`; no `consent.json`; the run keeps waiting |
+| the deposit was confirmed but the consent command could not write `consent.json` (an `OSError`, or Ctrl-C) | exit 1 (130 when interrupted) with `deposited: true`, `recordWritten: false`, code `not-confirmed` and a reason that says the policy service holds the grant; no `consent.json`; `deposit.attempted` stays; the run keeps waiting until its timeout, and repeating the command is refused |
 | the consent command's deposit fails another way, is not confirmed, or does not answer within 60 seconds | exit 2 with `deposited: null` and a reason that says a grant may be held; no `consent.json`; `deposit.attempted` stays; the run keeps waiting |
 | `consent.json` is for another session or cannot be read | `run` exits 1, `NOT_SUBMITTED`; no workflow was started; if a consent command deposited a token, a grant may be held |
 | `consent.json` does not carry the digest of this run's tenant, agent, release, session and task | `run` exits 1, `NOT_SUBMITTED`; no workflow was started and a grant may be held |
@@ -519,9 +555,10 @@ What a missing or wrong handle produces:
 | delegation required, handle deposited in another tenant | Session Runner preflight | the same, with `APS GET refused with 403` |
 | delegation required, handle deposited for another session id | Session Runner preflight | `Forbidden` (`delegated session without a grant`); the same outcome and exit code |
 
-The release is resolved before the handle is looked at, so while investigator
-has two Ready releases, `run investigator` without `--release` is refused for
-that first.
+The release is resolved before the handle is looked at; while investigator has
+two Ready releases, `run investigator` without `--release` uses the most
+recently approved one, and refuses only if their approval times cannot order
+them.
 
 Cleanup runs for the handle a session was given whether or not preflight
 accepted it, and preflight reads the handle only for an on-behalf-of release
@@ -733,8 +770,9 @@ On the machine and for the command:
 - **PyJWT is in the synced environment** (`just setup`, or `uv sync
   --locked`). A run that would sign someone in refuses before creating a run
   directory when it is missing.
-- **`--release` is needed for investigator** while it has two Ready releases;
-  `just agent ls` shows which. The release is resolved before anything about
+- **investigator has two Ready releases**; `run` takes the most recently
+  approved unless `--release` pins the other, and `just agent ls` shows which
+  it would use. The release is resolved before anything about
   consent is looked at.
 - **Automation gives the run time.** A run that waits for consent lasts up to
   `--consent-timeout` seconds before it submits anything. An automated

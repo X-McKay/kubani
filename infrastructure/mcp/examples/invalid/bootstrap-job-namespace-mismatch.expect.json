@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "bootstrap.manifest: expected the Job's metadata.namespace to equal bootstrap.namespace, found a different namespace"
+}

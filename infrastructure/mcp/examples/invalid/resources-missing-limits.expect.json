@@ -1,0 +1,4 @@
+{
+  "error": "ValueError",
+  "message_contains": "workload.resources: missing field(s) limits"
+}

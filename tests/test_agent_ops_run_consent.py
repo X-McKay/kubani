@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from test_agent_ops import AGENT_BODY, RELEASE, kube_for_run, make_root
+from test_agent_ops import AGENT_BODY, RELEASE, BytesKube, kube_for_run, make_root
 from test_agent_ops_consent import SCOPE, Browser, FakeIdp, Stream, cli
 
 from agent_ops import delegation, live, run
@@ -977,6 +977,85 @@ class CommandLineTests(Case):
         self.assertIn(self.idp.issuer + delegation.AUTH_PATH, err)
         self.assert_secrets_only_on_stdin(kube, 0, out, err)
 
+    def consent_whose_record_cannot_be_renamed(self, failure):
+        """A waiting run, then its `consent` command through `main`, whose deposit is confirmed and whose record rename fails."""
+        kube, browser = self.kube([DEPOSITED, ACCEPTED]), self.browser()
+        self.start_waiting(kube)
+        real = os.rename
+
+        def rename(src, dst, *args, **kwargs):
+            if Path(dst).name == "consent.json":
+                raise failure
+            return real(src, dst, *args, **kwargs)
+
+        with patch.object(run.os, "rename", rename):
+            code, out, _ = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, browser, interactive=True)
+        document = json.loads(out)
+        self.assertEqual([c["action"] for c in kube.exec_calls], ["deposit"])
+        self.assertFalse((self.out / "consent.json").exists())
+        self.assertTrue((self.out / run.DEPOSIT_ATTEMPT).exists(), "the attempt mark stays: a grant is held")
+        self.assertIs(document["deposited"], True)
+        self.assertIs(document["ok"], False)
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
+        for text in (document["reason"], document["error"]["message"]):
+            self.assertIn("deposit was confirmed", text)
+            self.assertIn("consent record", text)
+            self.assertIn(run.GRANT_MAY_BE_HELD, text)
+        return code, document
+
+    def test_a_record_that_cannot_be_written_after_a_confirmed_deposit_says_so(self):
+        code, document = self.consent_whose_record_cannot_be_renamed(OSError("disk full"))
+        self.assertEqual(code, 1)
+        self.assertEqual(document["interrupted"], False)
+
+    def test_an_interrupt_while_writing_the_record_after_a_confirmed_deposit_says_so(self):
+        code, document = self.consent_whose_record_cannot_be_renamed(KeyboardInterrupt())
+        self.assertEqual(code, 130)
+        self.assertEqual(document["interrupted"], True)
+
+    def test_an_exception_in_the_consent_phase_is_not_a_submission_that_may_have_started(self):
+        """Nothing is sent until after the consent phase, so a failure there keeps its own code and is not `not-confirmed`."""
+        for name, failure, expected in (("os", OSError("no tty"), (1, "failed", "ERROR")), ("key", KeyError("not printed"), (1, "internal", "ERROR"))):
+            for phase in ("_signed_in_here", "_awaited"):
+                with self.subTest(failure=name, phase=phase):
+                    kube = self.kube([ACCEPTED])
+                    out = self.tmp / f"{name}-{phase}"
+                    with patch.object(run, phase, side_effect=failure):
+                        code, text, _ = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--out", str(out)], kube, interactive=(phase == "_signed_in_here"))
+                    document = json.loads(text)
+                    self.assertEqual((code, document["error"]["code"], document["status"]), expected)
+                    self.assertNotEqual(document["error"]["code"], "not-confirmed")
+                    self.assertEqual(kube.exec_calls, [], "nothing was sent")
+
+    def test_every_ending_carries_ok_and_a_code_from_the_closed_set(self):
+        def codes(argv, kube, browser=None, interactive=None):
+            code, out, _ = self.run_cli(argv, kube, browser, interactive=interactive)
+            document = json.loads(out)
+            self.assertIs(document["ok"], code == 0)
+            return code, document["error"]["code"], document["error"]["retryable"]
+
+        kube = self.kube([ACCEPTED])
+        base = ["run", "sample", "--task", "go", "--no-wait"]
+        # Not at a terminal, nobody consents in time.
+        self.assertEqual(codes([*base, "--consent-timeout", "0.05", "--out", str(self.tmp / "a")], kube), (3, "no-consent", True))
+        # A token the policy service would refuse.
+        self.idp.mutate = lambda t: t["access"].update(scope="openid")
+        self.assertEqual(codes([*base, "--browser", "--out", str(self.tmp / "b")], kube, self.browser(), interactive=True), (1, "refused", False))
+        self.idp.mutate = lambda t: None
+        # Keycloak itself answers with an error.
+        self.assertEqual(codes([*base, "--browser", "--out", str(self.tmp / "c")], kube, self.browser(error="access_denied"), interactive=True), (2, "failed", False))
+        # Interrupted at the sign-in, and interrupted where the run does not handle it itself.
+        with patch.object(delegation, "sign_in", interrupted):
+            self.assertEqual(codes([*base, "--out", str(self.tmp / "d")], kube, interactive=True), (130, "interrupted", True))
+        with patch.object(run, "plan", interrupted):
+            self.assertEqual(codes([*base, "--out", str(self.tmp / "e")], kube, interactive=True), (130, "interrupted", True))
+        # Refusals before a run directory exists.
+        self.assertEqual(codes([*base, "--task-json", "{}"], kube), (2, "invalid-arguments", False))
+        self.assertEqual(codes([*base, "--grant-handle", ""], kube), (2, "invalid-arguments", False))
+        self.assertEqual(codes(["consent", "sample", "--session", OTHER_SESSION, "--run-dir", str(self.tmp / "absent")], kube, interactive=True), (2, "not-found", False))
+        self.assertEqual(codes(["consent", "sample", "--session", OTHER_SESSION], kube), (2, "refused", False))
+        self.assertEqual(codes(["run", "absent-agent", "--task", "go"], kube), (2, "not-found", False))
+
     def test_every_ending_prints_exactly_one_json_document(self):
         self.idp.mutate = lambda t: t["access"].update(scope="openid")
         kube = self.kube([ACCEPTED])
@@ -1015,7 +1094,7 @@ class CommandLineTests(Case):
             with self.subTest(argv):
                 code, out, err = self.run_cli(argv, kube, self.browser(), interactive=interactive)
                 document = json.loads(out)
-                self.assertEqual((code, document["status"], set(document)), (2, "REFUSED", {"status", "reason"}))
+                self.assertEqual((code, document["status"], set(document)), (2, "REFUSED", {"status", "reason", "ok", "error"}))
                 self.assertIn(expected, document["reason"])
                 self.assertEqual(err, f"refused: {document['reason']}\n")
         # An error that is not a refusal.
@@ -1028,7 +1107,7 @@ class CommandLineTests(Case):
         with patch.object(run, "plan", unforeseen):
             code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--out", str(self.tmp / "e")], kube, interactive=True)
         document = json.loads(out)
-        self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason"}))
+        self.assertEqual((code, document["status"], set(document)), (1, "ERROR", {"status", "reason", "ok", "error"}))
         self.assertRegex(document["reason"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
         self.assertEqual(err, f"error: {document['reason']}\n")
         # The same after the run directory exists, here a started workflow whose answer lacks a field: the document names
@@ -1036,15 +1115,22 @@ class CommandLineTests(Case):
         answer = {k: v for k, v in ACCEPTED.items() if k != "workflow_id"}
         code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(self.tmp / "f")], self.kube([answer]), self.browser(), interactive=True)
         document = json.loads(out)
-        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "ERROR", {"status", "reason", "sessionId", "dir"}, str(self.tmp / "f")))
+        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "SUBMIT_UNCONFIRMED", {"status", "reason", "sessionId", "dir", "ok", "error"}, str(self.tmp / "f")))
+        # The submission was attempted, so what the session did is not known: not to be repeated, whatever the exception was.
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
         self.assertRegex(document["reason"], r"^unexpected KeyError at run\.py:\d+$")
         self.assertEqual(json.loads((self.tmp / "f" / "request.json").read_text())["session_id"], document["sessionId"])
         for secret in self.secrets():
             self.assertNotIn(secret, out + err)
-        # Only `run` and `consent` promise one document: any other command lets an unforeseen error through as it is.
-        with patch.object(live, "listing", unforeseen), self.assertRaises(KeyError):
-            self.run_cli(["ls"], kube)
         self.assertNotIn("must not be printed", out + err)
+        # Every command ends as one document: an unforeseen error in any other command names its type and place on stdout
+        # (the traceback it always printed stays on stderr) and exits 1.
+        with patch.object(live, "listing", unforeseen):
+            code, out, err = self.run_cli(["ls"], kube)
+        document = json.loads(out)
+        self.assertEqual((code, document["ok"], document["error"]["code"], document["error"]["retryable"]), (1, False, "internal", False))
+        self.assertRegex(document["error"]["message"], r"^unexpected KeyError at test_agent_ops_run_consent\.py:\d+$")
+        self.assertNotIn("must not be printed", out)
         self.assertEqual(kube.exec_calls, [])
 
     def test_await_consent_is_no_longer_an_option(self):
@@ -1065,6 +1151,98 @@ class CommandLineTests(Case):
         self.assertTrue(report["reason"].endswith("this command deposited nothing"))
         self.give_up()
         self.assertEqual(finish()[0], 3)
+
+
+class ConsentOutcomeTests(Case):
+    """Every ending of `consent --session` that follows a deposit call, through the command entry point.
+
+    A deposit that may have taken effect cannot be repeated: the policy service refuses a second deposit for the same
+    session ("this session already has a grant") while no consent record was written, so the run that waits would still
+    give up. Those endings are `not-confirmed`; a deposit the pod refused outright is not.
+    """
+
+    def kube(self, results=(), mode="on-behalf-of", required=True):
+        return kube_for_run(list(results), mode, required, kube_class=BytesKube)
+
+    run_cli = CommandLineTests.run_cli
+
+    def consent_through_main(self, deposit):
+        kube = self.kube([deposit, ACCEPTED])
+        finish = self.start_waiting(kube)
+        code, out, err = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, self.browser(), interactive=True)
+        self.give_up()
+        self.assertEqual(finish()[0], 3)  # the run that waited gave up; nothing was started
+        self.assertEqual([c["action"] for c in kube.exec_calls], ["deposit"])
+        return code, json.loads(out), err
+
+    def assert_not_confirmed(self, code, document, exit_code):
+        self.assertEqual(code, exit_code)
+        self.assertIs(document["ok"], False)
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
+        self.assertIsNone(document["deposited"])
+        self.assertEqual((document["sessionId"], document["runDir"]), (self.session, str(self.out)))
+        self.assertIn("do not repeat this command", document["error"]["message"])
+        self.assertFalse((self.out / run.CONSENT_RECORD).exists())
+
+    def test_deposit_call_that_does_not_answer(self):
+        def unanswered(request):
+            raise subprocess.TimeoutExpired("kubectl", run.EXEC_TIMEOUT)
+
+        code, document, _ = self.consent_through_main(unanswered)
+        self.assert_not_confirmed(code, document, 2)
+        self.assertIn("whether it took effect is not known", document["reason"])
+
+    def test_deposit_call_that_returns_something_unreadable(self):
+        code, document, _ = self.consent_through_main(b"<html>502</html>")
+        self.assert_not_confirmed(code, document, 2)
+
+    def test_deposit_call_the_pod_fails_without_calling_it_a_refusal(self):
+        code, document, _ = self.consent_through_main({"error": "grant deposit failed"})
+        self.assert_not_confirmed(code, document, 2)
+
+    def test_deposit_answer_that_does_not_confirm(self):
+        code, document, _ = self.consent_through_main({"session_id": OTHER_SESSION})
+        self.assert_not_confirmed(code, document, 2)
+        self.assertIn("did not confirm the deposit", document["reason"])
+
+    def test_interrupt_while_the_deposit_is_in_flight(self):
+        code, document, _ = self.consent_through_main(interrupted)
+        self.assert_not_confirmed(code, document, 130)
+        self.assertIs(document["interrupted"], True)
+
+    def test_deposit_the_pod_refused_is_a_refusal_and_nothing_was_deposited(self):
+        code, document, _ = self.consent_through_main({"error": "deposit refused: this session already has a grant"})
+        self.assertEqual((code, document["ok"], document["deposited"]), (2, False, False))
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("refused", False))
+
+    def test_sign_in_whose_token_endpoint_cannot_be_used_is_unavailable_and_nothing_was_sent(self):
+        """Before the submission is attempted a failure keeps its class: nothing left this machine, so repeating it is safe."""
+        kube = self.kube([ACCEPTED])
+        for answer in ((503, {"error": "temporarily_unavailable"}), (400, {"error": "invalid_grant"})):
+            with self.subTest(answer=answer):
+                self.idp.token = lambda fields, answer=answer: answer
+                out = self.tmp / f"unavailable-{answer[0]}"
+                code, text, _ = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(out)], kube, self.browser(), interactive=True)
+                document = json.loads(text)
+                self.assertEqual((code, document["status"], document["error"]["code"], document["error"]["retryable"]), (2, "NOT_SUBMITTED", "unavailable", True))
+                self.assertNotIn("next", document)
+        self.assertEqual(kube.exec_calls, [])
+
+    def test_fetch_failures_are_unavailable(self):
+        with self.assertRaises(delegation.ConsentError) as caught:
+            delegation._fetch(self.idp.issuer + "/no/such/endpoint", "token endpoint")
+        self.assertEqual((caught.exception.code, str(caught.exception)), ("unavailable", "the token endpoint answered HTTP 404 (not_found)"))
+        with patch.object(delegation, "HTTP_TIMEOUT", 1), self.assertRaises(delegation.ConsentError) as caught:
+            delegation._fetch("http://127.0.0.1:1/x", "token endpoint")
+        self.assertEqual(caught.exception.code, "unavailable")
+
+    def test_deposit_that_succeeds_is_ok(self):
+        kube = self.kube([DEPOSITED, ACCEPTED])
+        finish = self.start_waiting(kube)
+        code, out, _ = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, self.browser(), interactive=True)
+        document = json.loads(out)
+        self.assertEqual((code, document["ok"], document["deposited"]), (0, True, True))
+        self.assertEqual(finish()[0], 0)
 
 
 class TerminalTests(Case):
