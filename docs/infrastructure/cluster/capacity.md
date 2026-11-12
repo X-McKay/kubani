@@ -70,6 +70,7 @@ baseline.
 | T23 checkpoint worker (temporary one-shot Job, inactive template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | T24 lifecycle worker (temporary Deployment, zero-replica template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
+| ARC runner kubani-zetra (platform image builds; one ephemeral Kata pod per job, 0 idle, at most 1: runner 250m / 512Mi plus dind 500m / 1Gi requests; dind memory limit covers its 8Gi tmpfs) | arc-runners | 750m / — | 1536Mi / 16Gi (runner 4Gi, dind 12Gi) | rig0 (platform role, Kata) |
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,

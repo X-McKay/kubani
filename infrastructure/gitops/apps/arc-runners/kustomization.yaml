@@ -11,3 +11,5 @@ resources:
   - job-guard.yaml
   - helmrelease-controller.yaml
   - scale-set-zetra-agents.yaml
+  - job-guard-zetra.yaml
+  - scale-set-zetra.yaml

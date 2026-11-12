@@ -1,0 +1,46 @@
+# Runner-side job guard for kubani-zetra. zetra is public, and a pull_request
+# run uses the workflow file from the PR, so a fork PR can name
+# `runs-on: kubani-zetra`. Anything inside a workflow (an `if:`, a job check)
+# is attacker-controlled in that case. This hook is not: it is part of the
+# runner pod, and the runner executes it before any step, with only the
+# GITHUB_* values the runner derives from the job message (workflow `env:` is
+# not passed to hooks). A non-zero exit fails the job before checkout.
+#
+# It admits exactly one shape of job: a push to refs/heads/main in
+# X-McKay/zetra running .github/workflows/platform-release.yml from main. That
+# is the identity Fulcio will certify for platform images, so the runner
+# accepts nothing the signature policy would not later trust. A push to main
+# needs a merge, and the merge needs zetra's branch protection (README.md).
+#
+# This is a separate ConfigMap from runner-job-guard, which belongs to
+# kubani-zetra-agents and admits only release-tag pushes of zetra-agents. Each
+# scale set mounts its own, so neither rule can be read as the other's.
+#
+# Defence in depth with the GitHub-side settings in README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runner-job-guard-zetra
+  namespace: arc-runners
+data:
+  job-started.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="X-McKay/zetra"
+    ref="refs/heads/main"
+    workflow=".github/workflows/platform-release.yml"
+
+    refuse() {
+      echo "::error title=kubani runner guard::$1"
+      exit 1
+    }
+
+    [[ "${GITHUB_REPOSITORY:-}" == "$repo" ]] \
+      || refuse "repository '${GITHUB_REPOSITORY:-}' may not use this runner"
+    [[ "${GITHUB_EVENT_NAME:-}" == "push" ]] \
+      || refuse "event '${GITHUB_EVENT_NAME:-}' may not use this runner (push to main only)"
+    [[ "${GITHUB_REF:-}" == "$ref" ]] \
+      || refuse "ref '${GITHUB_REF:-}' may not use this runner (only $ref)"
+    [[ "${GITHUB_WORKFLOW_REF:-}" == "$repo/$workflow@$ref" ]] \
+      || refuse "workflow '${GITHUB_WORKFLOW_REF:-}' may not use this runner"
+    echo "kubani runner guard: $GITHUB_WORKFLOW_REF admitted"
