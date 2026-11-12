@@ -221,6 +221,13 @@ class ResumeEndings(Case):
         self.assert_ending(document, 124, "timeout", True)
         self.assertNotIn("next", document)
 
+    def test_a_status_call_that_returns_something_unreadable_is_unavailable_and_retryable(self):
+        for command, extra in (("status", ()), ("wait", ("--wait-timeout", "1")), ("cancel", ())):
+            with self.subTest(command=command):
+                self.out = self.tmp / command
+                document = self.resume(command, [b"<html>502</html>"], *extra)
+                self.assert_ending(document, 2, "unavailable", True)
+
     def test_cancel_the_runner_accepted(self):
         document = self.resume("cancel", [{"workflow_id": "w", "run_id": "r", "cancel_requested": True}])
         self.assertEqual((self.exit_code, document["ok"], document["cancel"]["cancel_requested"]), (0, True, True))

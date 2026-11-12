@@ -1165,6 +1165,27 @@ class ConsentOutcomeTests(Case):
         self.assertEqual((code, document["ok"], document["deposited"]), (2, False, False))
         self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("refused", False))
 
+    def test_sign_in_whose_token_endpoint_cannot_be_used_is_unavailable_and_nothing_was_sent(self):
+        """Before the submission is attempted a failure keeps its class: nothing left this machine, so repeating it is safe."""
+        kube = self.kube([ACCEPTED])
+        for answer in ((503, {"error": "temporarily_unavailable"}), (400, {"error": "invalid_grant"})):
+            with self.subTest(answer=answer):
+                self.idp.token = lambda fields, answer=answer: answer
+                out = self.tmp / f"unavailable-{answer[0]}"
+                code, text, _ = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(out)], kube, self.browser(), interactive=True)
+                document = json.loads(text)
+                self.assertEqual((code, document["status"], document["error"]["code"], document["error"]["retryable"]), (2, "NOT_SUBMITTED", "unavailable", True))
+                self.assertNotIn("next", document)
+        self.assertEqual(kube.exec_calls, [])
+
+    def test_fetch_failures_are_unavailable(self):
+        with self.assertRaises(delegation.ConsentError) as caught:
+            delegation._fetch(self.idp.issuer + "/no/such/endpoint", "token endpoint")
+        self.assertEqual((caught.exception.code, str(caught.exception)), ("unavailable", "the token endpoint answered HTTP 404 (not_found)"))
+        with patch.object(delegation, "HTTP_TIMEOUT", 1), self.assertRaises(delegation.ConsentError) as caught:
+            delegation._fetch("http://127.0.0.1:1/x", "token endpoint")
+        self.assertEqual(caught.exception.code, "unavailable")
+
     def test_deposit_that_succeeds_is_ok(self):
         kube = self.kube([DEPOSITED, ACCEPTED])
         finish = self.start_waiting(kube)
