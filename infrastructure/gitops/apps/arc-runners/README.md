@@ -123,18 +123,22 @@ runs as user `runner` with `HOME=/home/runner`. No `docker login` step is
 needed and the workflow handles no password. The login is for the account
 `platform-release` (a dedicated account, revocable alone).
 
-The Secret is not listed in `kustomization.yaml` until the operator creates it
-(below). The scale set can merge before the Secret exists: it keeps no idle
-runner, so no pod is scheduled, and nothing needs the Secret, until a job is
-queued. **The release workflow in zetra must not merge before the Secret
-exists**, because its first run would queue a runner pod that cannot start.
+The Secret is `registry-platform-push.enc.yaml` in this directory and is listed
+in `kustomization.yaml`. The scale set keeps no idle runner, so no pod is
+scheduled, and nothing reads the Secret, until a job is queued. **The release
+workflow in zetra must not merge before this directory's changes are merged and
+reconciled**, because its first run would queue a runner pod that cannot start
+without the Secret.
 
-### Operator steps
+### How it was set up
 
-1. Install the kubani-arc GitHub App on X-McKay/zetra and set the repository
-   settings above (repository owner).
-2. On rig0 (where `age.key` is), from a checkout of this repository, create the
-   login and its Secret:
+Done on 2026-11-12. The steps are kept because a rotation or a second scale set
+repeats them.
+
+1. The kubani-arc GitHub App was added to X-McKay/zetra and the repository
+   settings above were set (repository owner).
+2. On rig0 (where `age.key` is), from a checkout of this repository, the
+   operator created the login and its Secret:
 
    ```
    infrastructure/scripts/ops/add_registry_user.sh platform-release arc-runners/registry-platform-push infrastructure/gitops/apps/arc-runners/registry-platform-push.enc.yaml
@@ -146,15 +150,16 @@ exists**, because its first run would queue a runner pod that cannot start.
    `infrastructure/gitops/infrastructure/registry/credentials-secret.enc.yaml`,
    and writes the SOPS-encrypted dockerconfigjson Secret to the target file. It
    prints no value. It refuses if the user already exists.
-3. Add one line to `resources:` in this directory's `kustomization.yaml`:
+3. One line was added to `resources:` in this directory's `kustomization.yaml`:
 
    ```
      - registry-platform-push.enc.yaml
    ```
 
-4. Commit the three encrypted files, push, and let Flux reconcile. The registry
-   (Traefik basic-auth Secret) picks up the new user on its own.
-5. Only then merge `.github/workflows/platform-release.yml` in zetra.
+4. The three encrypted files were committed with the scale set. Once merged,
+   Flux reconciles them and the registry (Traefik basic-auth Secret) picks up
+   the new user on its own.
+5. Only then is `.github/workflows/platform-release.yml` merged in zetra.
 
 Every registry login can push and pull (one basicAuth middleware, see
 `docs/infrastructure/configuration/registry.md`); a separate account buys
