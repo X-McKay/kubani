@@ -539,14 +539,12 @@ done
 
 4. **Update Kubernetes secret**:
 ```bash
-# Create new secret manifest
+# Build the Secret and apply it from stdin. Never write the manifest to a
+# file: it would hold the private key in plain text.
 kubectl create secret generic sops-age \
   --from-file=age.agekey=age-new.key \
   --namespace=flux-system \
-  --dry-run=client -o yaml > sops-age-secret-new.yaml
-
-# Apply to cluster
-kubectl apply -f sops-age-secret-new.yaml
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 5. **Verify Flux can decrypt**:
@@ -622,11 +620,9 @@ kubectl create secret generic sops-age \
 kubectl get secret sops-age -n flux-system
 ```
 
-**Alternative: Apply from manifest**:
-```bash
-# Use the generated manifest from setup script
-kubectl apply -f sops-age-secret.yaml
-```
+Do not write this Secret to a manifest file, even a temporary one. A file named
+`sops-age-secret.yaml` holds the private key in plain text; the repository
+ignores that name and its hooks refuse to commit it.
 
 ### Verify Flux Decryption
 

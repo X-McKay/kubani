@@ -61,8 +61,12 @@ procedure.
 ### Apply Age Secret to Cluster
 
 ```bash
-# Apply the age secret so Flux can decrypt secrets
-kubectl apply -f sops-age-secret.yaml
+# Create the age secret from stdin so Flux can decrypt secrets. Never write
+# the manifest to a file: it would hold the private key in plain text.
+kubectl create secret generic sops-age \
+  --from-file=age.agekey=age.key \
+  --namespace=flux-system \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # Verify it was created
 kubectl get secret sops-age -n flux-system
@@ -388,9 +392,11 @@ sops -d infrastructure/gitops/apps/postgresql/secret.enc.yaml
 
 **Solution:**
 ```bash
-# Recreate age secret
-kubectl delete secret sops-age -n flux-system
-kubectl apply -f sops-age-secret.yaml
+# Replace the age secret, from stdin (never from a manifest file)
+kubectl create secret generic sops-age \
+  --from-file=age.agekey=age.key \
+  --namespace=flux-system \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # Force Flux reconciliation
 flux reconcile kustomization apps --with-source
