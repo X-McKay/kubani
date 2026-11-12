@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: registry-platform-push
+    namespace: arc-runners
+type: kubernetes.io/dockerconfigjson
+stringData:
+    .dockerconfigjson: ENC[AES256_GCM,data:nTft6BtjlS0lx4BTPGrnxPb+sseWP9A4QnqlYb4ofVDjsJASUOY+brjcEJwJHdqoGTKy3hbVpraXraAQ+561cAr7rasexcb1IVXu4IIuSTcXmPFsHxY0NHOl7geQ7pP+gLK/DwKXu5JyIOy9mt0dLkpvnipyJQsGN7MFZV9LT3/r+k6X3scM1EBA+wgdlMMZUE9ium5zyi5UiPu8WvEFP0MBzhsWsFhft1Sn+jSXpLWTBT/lMZ8z+abenXX/gWSqsyiNAK5V+QyrmdDxzLSXFGQAUXs=,iv:pemwbaCEXnAUCxiuH1X4Mvy4Ag1VbyjJ41vchfiMhsI=,tag:+LFdF6G3G2GNcHgFNv/U6g==,type:str]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSAzbFJsTE4zVzZ2NXpyc2lY
+            SVBya1VmK3pVS1ZhbER0OUFqcUVRcGFEQ0JJCmEyd2RFZlcvSTY0TkF2cHB4Vk0w
+            aWlOR2hlRGx0emV6NWwzNDNOcWQrbEEKLS0tIExqN3FrcG9telMxUmNQcE9UVm1j
+            c0Fvb0dHT2JqV2dQN0hYc3NUQktXSWcKVn8thPVEr8t2SmKfgMcJIami2ZoUpzgh
+            fz7zwTNGCJRhH4JhFz64tw7GAgsowiHtINe7S9O92pbHTR28Gqcm6w==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-12T15:58:58Z"
+    mac: ENC[AES256_GCM,data:6yYdFBx9ZnSZ+JpeuFncDqvy+vKrZE4ppTFACmD8Y/HTddodBGFctvExBWL2PoEusDzy6+s0/+j6PcY7OxzPNr8Urn9VBUCizgCtc4Q0jIJZYZQgeXd+eBkXiQYRO6V80XqSy7wjQ/+7LdNxtmY9vzsiidQV8gkpVLPvzNyZfnc=,iv:iUvLnbuVuYfNsM7xYgDb2HrSi+r/SAJVfmPQcqJ1Ims=,tag:D+I+42xA3dCjmhtNTIkR9Q==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.9.4

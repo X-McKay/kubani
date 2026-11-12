@@ -527,6 +527,22 @@ container can read the mounted files under its security context, and whether
 `buildx` push inside the nested daemon finds the login. Ephemeral runners
 (one job per pod) mean the credential exists only for the life of a job.
 
+*Note, 2026-11-12 (decided; written in Kubani, not yet run).* The shape
+implemented replaces the two files and the login step. The operator's script
+`add_registry_user.sh` already writes a SOPS-encrypted
+`kubernetes.io/dockerconfigjson` Secret for a login, so the runner receives
+`arc-runners/registry-platform-push` (created by the operator, file
+`registry-platform-push.enc.yaml`, listed in `kustomization.yaml` only after it
+exists) mounted read-only as the docker client's `config.json` in the runner
+container of `kubani-zetra` alone, over a writable `/home/runner/.docker`
+emptyDir. There is no `docker login` step, the workflow handles no password,
+and the action need not log out. Not yet tested, beyond the two points above:
+that the docker client and `buildx` use that file against the nested daemon
+(the file is mounted by `subPath`, so a command that rewrites `config.json`,
+such as `docker login`, would fail), and that the file mode `0444` is enough
+for the runner user. The scale set can merge before the Secret exists; the
+zetra workflow must not.
+
 **Why a merge to `main` and not a tag or a dispatch.** The report chose a tag
 for four reasons: the image name lands in the certificate subject; it matches
 the tag-push shape of the existing guard and of PR #246; one tag is one run;

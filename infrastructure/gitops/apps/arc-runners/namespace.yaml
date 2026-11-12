@@ -5,9 +5,11 @@
 #     privileged. Runner pods run under Kata, so that root is inside a VM.
 #     Any workflow in a repo the App is installed on can target the scale
 #     set, including a fork PR's copy of one in a public repo. So each runner
-#     pod carries a job-started hook (job-guard.yaml) that fails every job
-#     except a release-tag push of release.yml, and the GitHub-side settings
-#     in README.md back it up.
+#     pod carries its scale set's job-started hook, which fails every job
+#     except the one release shape that scale set is for (job-guard.yaml: a
+#     release-tag push of release.yml in zetra-agents; job-guard-zetra.yaml:
+#     a push to main running platform-release.yml in zetra), and the
+#     GitHub-side settings in README.md back it up.
 apiVersion: v1
 kind: Namespace
 metadata:

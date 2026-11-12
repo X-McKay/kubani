@@ -2,9 +2,18 @@
 
 Self-hosted GitHub Actions runners (Actions Runner Controller 0.15.0) for
 release jobs that need in-cluster reach to `registry.almckay.io` and the
-private Sigstore. One scale set: `kubani-zetra-agents`, for the public repo
-X-McKay/zetra-agents, authenticated by the `kubani-arc` GitHub App
-(`github-app.enc.yaml`).
+private Sigstore. Two scale sets, both authenticated by the `kubani-arc` GitHub
+App (`github-app.enc.yaml`):
+
+- `kubani-zetra-agents`, for the public repo X-McKay/zetra-agents
+  (`scale-set-zetra-agents.yaml`, guard in `job-guard.yaml`).
+- `kubani-zetra`, for the public repo X-McKay/zetra, which builds the platform
+  images (`scale-set-zetra.yaml`, guard in `job-guard-zetra.yaml`). The two
+  have the same sandbox, build sidecar and resources; `kubani-zetra` allows one
+  runner (the other allows two), has its own guard, and holds a registry login.
+
+The sections below describe `kubani-zetra-agents` unless they say otherwise;
+`kubani-zetra` has its own section at the end.
 
 ## Who can run a job here
 
@@ -64,3 +73,144 @@ The setting covers the default bridge; separately created Docker networks need
 their own matching MTU configuration. Existing runner isolation, job guards and
 network policies continue to apply. Only new ephemeral runners pick up this
 startup change; active jobs need not be restarted.
+
+## kubani-zetra (platform image builds)
+
+Runs the zetra release workflow that builds, pushes and (in a later phase)
+signs the images under `registry.almckay.io/platform/`. Plan:
+`docs/plans/ideas/2026-11-10-platform-image-ci-signing.md`, Phase 1. Workflows
+select it with `runs-on: kubani-zetra`, written in the workflow file. At most
+one runner, none idle.
+
+### Who can run a job here
+
+X-McKay/zetra is public, so the same reasoning as above applies. The guard in
+`job-guard-zetra.yaml` (a separate ConfigMap, mounted only by this scale set)
+fails the job unless all four are true:
+
+- the repository is X-McKay/zetra,
+- the event is `push`,
+- the ref is `refs/heads/main`, and
+- the workflow reference is exactly
+  `X-McKay/zetra/.github/workflows/platform-release.yml@refs/heads/main`.
+
+It reads only `GITHUB_*` values the runner sets. These settings on the zetra
+repository back it, and are set by the repository owner:
+
+- **`main` is protected with no bypass**: changes reach it only through a pull
+  request with required checks, and force pushes and deletion are blocked. A
+  push to `main` runs the workflow file that is on `main`, so the guard's
+  admission is only as strong as this protection. Whether administrators are
+  bound, and whether a second approval is required, is not yet decided.
+- Settings, Actions, General, Workflow permissions: **Read repository contents**
+  by default. The release workflow asks for `id-token: write` itself.
+- Settings, Actions, General, "Approval for running fork pull request
+  workflows from contributors": **Require approval for all external
+  contributors**.
+
+A job the guard admits can read the registry login below; the guard and the
+branch protection are what limit that.
+
+**What the protection of `main` rests on.** "No bypass" covers people and
+pushes. It does not cover these, which are therefore part of the protection:
+
+- **The kubani-arc App's private key** (Secret `arc-runners/arc-github-app`).
+  Actions Runner Controller needs the App to hold Administration read/write on
+  each repository it serves, and that permission can also change or delete
+  rulesets and add deploy keys. Whoever holds the key can remove the ruleset,
+  push to `main` and get a job the guard admits. In the cluster that is the ARC
+  controller's service account, whose Role reads Secrets in `arc-runners` (the
+  App key and the registry login both). Runner pods cannot: they run under a
+  service account with no permissions and `netpol.yaml` keeps them from the API
+  server.
+- **What is already on `main`.** Any code the release workflow runs (the
+  workflow, its action and script, and every action it uses, which zetra's
+  tests require to be pinned by commit hash) runs beside the login. A re-run of
+  an old push to `main` runs that commit's copy of the workflow.
+- **Automatic merging.** Anything allowed to merge a pull request without a
+  person (auto-merge, a dependency bot) is a way onto `main`.
+
+### The registry login
+
+The runner container (only that container, and only on this scale set) has the
+docker client configuration file `/home/runner/.docker/config.json`, mounted
+read-only from the Secret `arc-runners/registry-platform-push` (type
+`kubernetes.io/dockerconfigjson`, key `.dockerconfigjson`). The directory
+`/home/runner/.docker` is a writable emptyDir, because the docker client and
+buildx write there; only the one file comes from the Secret. The runner image
+runs as user `runner` with `HOME=/home/runner`. No `docker login` step is
+needed and the workflow handles no password. The login is for the account
+`platform-release` (a dedicated account, revocable alone).
+
+The Secret is `registry-platform-push.enc.yaml` in this directory and is listed
+in `kustomization.yaml`. The scale set keeps no idle runner, so no pod is
+scheduled, and nothing reads the Secret, until a job is queued. **The release
+workflow in zetra must not merge before this directory's changes are merged and
+reconciled**, because its first run would queue a runner pod that cannot start
+without the Secret.
+
+### How it was set up
+
+Done on 2026-11-12. The steps are kept because a rotation or a second scale set
+repeats them.
+
+1. The kubani-arc GitHub App was added to X-McKay/zetra and the repository
+   settings above were set (repository owner).
+2. On rig0 (where `age.key` is), from a checkout of this repository, the
+   operator created the login and its Secret:
+
+   ```
+   infrastructure/scripts/ops/add_registry_user.sh platform-release arc-runners/registry-platform-push infrastructure/gitops/apps/arc-runners/registry-platform-push.enc.yaml
+   ```
+
+   The script appends the user's htpasswd line to
+   `infrastructure/gitops/infrastructure/registry/basic-auth-secret.enc.yaml`,
+   adds `platform-release-username` and `platform-release-password` to
+   `infrastructure/gitops/infrastructure/registry/credentials-secret.enc.yaml`,
+   and writes the SOPS-encrypted dockerconfigjson Secret to the target file. It
+   prints no value. It refuses if the user already exists.
+3. One line was added to `resources:` in this directory's `kustomization.yaml`:
+
+   ```
+     - registry-platform-push.enc.yaml
+   ```
+
+4. The three encrypted files were committed with the scale set. Once merged,
+   Flux reconciles them and the registry (Traefik basic-auth Secret) picks up
+   the new user on its own.
+5. Only then is `.github/workflows/platform-release.yml` merged in zetra.
+
+Every registry login can push and pull (one basicAuth middleware, see
+`docs/infrastructure/configuration/registry.md`); a separate account buys
+separate revocation only. To rotate, follow "Rotating a Credential" in
+`.claude/rules/secrets.md`; a new runner pod picks up the new Secret, since
+runners are ephemeral.
+
+### After the Secret exists
+
+Before the first release, show that the guard refuses a job that is not a push
+to `main` running `platform-release.yml` (for example a `workflow_dispatch`
+test workflow that targets `kubani-zetra`): it must fail at "Set up runner"
+with `kubani runner guard: ... may not use this runner`. Then confirm the
+docker client in the runner finds the login (`docker pull` of a private image,
+or the first push), which has not been tested. Two things in particular are
+unproven: that the Kata runtime lays the one Secret file over the scratch
+directory, and that buildx keeps its state in that directory without trouble.
+
+### Memory on rig0
+
+A runner pod requests 1.5Gi of memory and may use 16Gi (dockerd's storage is
+tmpfs charged to the pod). The scheduler counts only the request, so this pod
+and both `kubani-zetra-agents` pods can run on rig0 at once: 48Gi of limits
+where all pods on rig0 together may use about 27Gi (measured 2026-11-12, with
+about 4Gi in use). One build at its limit fits; two do not, and the kernel
+would then kill processes in pods on rig0, most likely a build. Until the pods
+request what they may use, do not merge an image change to zetra `main` while
+an agent release is running, and push agent release tags one at a time.
+
+### NetworkPolicies
+
+None added. `netpol.yaml` selects every pod in `arc-runners` and `arc-systems`
+(`podSelector: {}`), so this scale set's runners and listener are covered, and
+they reach the same things as the other scale set: DNS, the internet on 80/443
+(GitHub), and Traefik for `registry.almckay.io`.
