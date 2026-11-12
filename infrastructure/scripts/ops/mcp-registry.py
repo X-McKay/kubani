@@ -16,12 +16,15 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import outcome  # noqa: E402
+from keycloak_admin import KeycloakHTTPError  # noqa: E402  (importing it contacts nothing)
 
+RETRY_STATUSES = frozenset({408, 429})
 OFFLINE_STAGES = frozenset({"add", "render", "check"})
 NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 # What a stage that can touch a credential says about a failure: one fixed sentence per code, never the exception's text.
 FIXED_MESSAGES = {
     "unavailable": "a service or tool this stage depends on could not be reached or did not answer; the exception text is withheld",
+    "refused": "the identity provider refused the request and repeating it will not change that; the response is withheld",
     "timeout": "a service or tool this stage depends on did not answer in time; the exception text is withheld",
     "not-found": "the named backend is not registered",
     "conflict": "existing state conflicts with the request; the exception text is withheld",
@@ -46,7 +49,7 @@ class Parser(argparse.ArgumentParser):
     """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
 
     def error(self, message):
-        emit(outcome.document({}, outcome.error("invalid-arguments", message)))
+        emit(outcome.document({}, outcome.error("invalid-arguments", outcome.usage_message(message))))
         super().error(message)
 
 
@@ -64,6 +67,10 @@ def classify(stage, error):
         if isinstance(error, ValueError):
             return "validation-failed"
         return "failed" if isinstance(error, OSError) else "internal"
+    if isinstance(error, KeycloakHTTPError):
+        # Keycloak answered. A 4xx is a decision about this request (a 403, a 409) and repeating it changes nothing; a 5xx did not
+        # decide anything. 408 and 429 are the 4xx that ask for the request to be sent again.
+        return "unavailable" if error.status >= 500 or error.status in RETRY_STATUSES else "refused"
     if isinstance(error, (OSError, RuntimeError, subprocess.SubprocessError, urllib.error.URLError)):
         return "unavailable"
     if isinstance(error, ValueError):
@@ -248,6 +255,8 @@ def main(argv=None):
             message = "an unexpected error ended the stage; only the exception type is shown" if code == "internal" else "the stage did not finish; only the exception type is shown"
         else:
             message = FIXED_MESSAGES.get(code, FIXED_MESSAGES["internal"])
+            if isinstance(error, KeycloakHTTPError):
+                message += f" (HTTP {error.status})"  # a number; the response and the exception text stay withheld
         # `error` was a string here for offline refusals; it is now the contract's object and its `message` is that string.
         emit(outcome.document(refusal, outcome.error(code, message)))
         return 1

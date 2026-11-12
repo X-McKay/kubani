@@ -34,7 +34,12 @@ The subprocess uses the interpreter of the checkout's own virtual environment,
 `uv.lock` (the zetra repository's `platform/agent-tools`). The preflight never
 installs or syncs anything. If `.venv` is missing, the `source_compatibility`
 check is `unavailable` and tells you to run `uv sync --locked` in the source
-checkout. A checkout from before the workspace move, which still has
+checkout; the command reports that case as `not-found` (not retryable, because
+repeating it cannot succeed until the environment exists) and leaves the check's
+own state `unavailable`. The source check therefore runs the interpreter and the
+installed packages of the source checkout's own environment, which is not under
+version control: the source receipt vouches for the files it hashes, and not for
+everything in that environment. A checkout from before the workspace move, which still has
 `tools/zetra_agents`, keeps working: that directory is put on `sys.path` of
 Kubani's interpreter, as before. If the environment exists but is stale or broken,
 the check reports a generic failure (the child's output is discarded); run

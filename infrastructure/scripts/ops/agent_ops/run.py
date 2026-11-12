@@ -83,6 +83,15 @@ class Document(dict):
     kind: str | None = None
 
 
+class Started(dict):
+    """What a `run` knows of itself once it has a directory (the session id and the directory, and the receipt and the
+    command that reads it, once there is one), for a caller that has to name the run after an exception `submit` does not
+    handle. `attempted` is true from the moment a submission is about to be sent: whatever ends the run after that, the
+    runner may have started a session, so the ending is `not-confirmed` and the caller follows up instead of repeating."""
+
+    attempted: bool = False
+
+
 def tag(envelope: dict, kind: str | None) -> Document:
     document = Document(envelope)
     document.kind = kind
@@ -231,6 +240,16 @@ def plan(root: Path, kube: live.Kube, agent: str, *, release: str | None, grant_
     return {"tenant": d.tenant, "agent": agent, "release": view.name, "releaseChoice": "explicit" if release else "default", "identity": mode, "delegated": grant_handle is not None or consent, "consent": consent, "task": task}
 
 
+def follow_up(out: Path, session: str, *, receipt: bool) -> dict:
+    """How a caller finds a run again: its session id and directory, and, once the receipt exists, the receipt and the
+    exact command that reads the session."""
+    found = {"sessionId": session, "dir": str(out)}
+    if receipt:
+        path = str(out / "receipt.json")
+        found.update(receiptPath=path, next=f"just agent status --receipt {shlex.quote(path)}")
+    return found
+
+
 def _not_submitted(out: Path, session: str, code: int, reason: str, *, status: str = "NOT_SUBMITTED", kind: str | None = None, **extra) -> tuple[int, dict]:
     """End a run that has a directory and no receipt: the envelope goes to `status.json` and to the caller."""
     envelope = {"status": status, "reason": reason, "sessionId": session, "dir": str(out), **extra}
@@ -359,7 +378,7 @@ def submit(
     out.mkdir(parents=True, exist_ok=False, mode=0o700)
     os.chmod(out, 0o700)  # whatever the umask: `consent` trusts a run directory only at exactly this mode
     if started is not None:
-        started.update(sessionId=session, dir=str(out))
+        started.update(follow_up(out, session, receipt=False))
     public = {"action": "submit", "tenant": p["tenant"], "agent": agent, "release": p["release"], "session_id": session, "task": task, "max_boundaries": max_boundaries}
     _private(out / "request.json", json.dumps(public, indent=2, sort_keys=True) + "\n")
     request = dict(public, grant_handle=grant_handle)
@@ -385,14 +404,18 @@ def submit(
         return _not_submitted(out, session, 2, f"{exc}; no token was sent to the cluster and no workflow was started", kind=outcome.code_of(exc, "refused"))
     # What is true of the grant when the submit call does not return a started workflow.
     held = f"; {GRANT_MAY_BE_HELD}" if p["consent"] else ""
+    if isinstance(started, Started):
+        started.attempted = True
     try:
         accepted = runner.remote(request)
     except KeyboardInterrupt:
-        return _not_submitted(out, session, INTERRUPTED, f"interrupted while the submit call was in flight; whether a workflow was started is not known{held}", status="SUBMIT_UNCONFIRMED", kind="interrupted", consent=consent)
+        return _not_submitted(out, session, INTERRUPTED, f"interrupted while the submit call was in flight; whether a workflow was started is not known{held}", status="SUBMIT_UNCONFIRMED", kind="not-confirmed", consent=consent)
     except RunError as exc:
+        # Whatever the cause (no answer, an unreadable answer, a refusal the pod worded): repeating this command would mint
+        # another session id and submit again, so no cause makes it safe to repeat.
         if "deposit" in request and any(answer in str(exc) for answer in NO_GRANT_ANSWERS):
             held = "; the policy service holds no grant from this run"
-        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", kind=outcome.code_of(exc, "failed"), consent=consent)
+        return _not_submitted(out, session, 2, f"{exc}{held}", status="SUBMIT_UNCONFIRMED", kind="not-confirmed", consent=consent)
     finally:
         request.pop("deposit", None)
     if accepted.get("granted") is False:
@@ -419,13 +442,18 @@ def submit(
         "dir": str(out),
     }
     _private(out / "receipt.json", json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    found = follow_up(out, session, receipt=True)
+    if started is not None:
+        started.update(found)
     if not wait:
         return 0, {"receipt": receipt, "status": "SUBMITTED", "cleanup": "NOT_CONFIRMED"}
+    # From here the session exists. Anything that ends this function but a confirmed finish is `not-confirmed`: an error
+    # raised while following leaves the receipt in `started`, and the command-line wrapper ends it the same way.
     try:
-        return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=cancel_on_timeout, sleep=sleep, clock=clock)
+        return follow(receipt, runner, wait_timeout=wait_timeout, poll_interval=poll_interval, cancel_on_timeout=cancel_on_timeout, sleep=sleep, clock=clock, unconfirmed=found)
     except KeyboardInterrupt:
-        reason = f"interrupted while following the run; the workflow was not cancelled, and `just agent status --receipt {out / 'receipt.json'}` reads it"
-        return INTERRUPTED, tag({"receipt": receipt, "status": "INTERRUPTED", "reason": reason, "cleanup": "NOT_CONFIRMED"}, "interrupted")
+        reason = f"interrupted while following the run; the workflow was not cancelled, and `{found['next']}` reads it"
+        return INTERRUPTED, tag({"receipt": receipt, "status": "INTERRUPTED", "reason": reason, "cleanup": "NOT_CONFIRMED", **found}, "not-confirmed")
 
 
 def _identity(receipt: dict, action: str) -> dict:
@@ -438,7 +466,11 @@ def _identity(receipt: dict, action: str) -> dict:
     }
 
 
-def follow(receipt: dict, runner: Runner, *, wait_timeout: float, poll_interval: float, cancel_on_timeout: bool, sleep=time.sleep, clock=time.monotonic) -> tuple[int, dict]:
+def follow(receipt: dict, runner: Runner, *, wait_timeout: float, poll_interval: float, cancel_on_timeout: bool, sleep=time.sleep, clock=time.monotonic, unconfirmed: dict | None = None) -> tuple[int, dict]:
+    """Poll until the session ends or `wait_timeout` passes. `unconfirmed`, given by the `run` that started the session,
+    is what that run adds to the document when its own wait passes first: the session is still going and a repeated `run`
+    would start another, so that ending is `not-confirmed` and says where to follow up. Without it (`wait`) the same
+    ending is a `timeout`, which is safe to repeat."""
     deadline = clock() + wait_timeout
     status = None
     while True:
@@ -450,8 +482,13 @@ def follow(receipt: dict, runner: Runner, *, wait_timeout: float, poll_interval:
             envelope = {"receipt": receipt, "status": status["status"], "query": status.get("query"), "cleanup": "NOT_CONFIRMED", "timedOut": True}
             if cancel_on_timeout:
                 envelope["cancel"] = runner.remote(_identity(receipt, "cancel"))
+            kind = "timeout"
+            if unconfirmed is not None:
+                kind = "not-confirmed"
+                asked = "; a cancel was requested" if cancel_on_timeout else "; it was not cancelled"
+                envelope.update(unconfirmed, reason=f"the wait ended before the session did (status {status['status']}); the session was started and its end is not confirmed{asked}")
             _private(runner.out / "status.json", json.dumps(envelope, indent=2, sort_keys=True) + "\n")
-            return 124, tag(envelope, "timeout")
+            return 124, tag(envelope, kind)
         sleep(min(poll_interval, remaining))
     return finish(receipt, runner, status)
 
@@ -644,17 +681,19 @@ def consent(
         try:
             answer = runner.remote({"action": "deposit", "tenant": tenant, "agent": agent, "session_id": session, "deposit": deposit})
         except KeyboardInterrupt:
-            return INTERRUPTED, tag(dict(base, deposited=None, interrupted=True, **who, reason=f"interrupted while the deposit was in flight; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "interrupted")
+            return INTERRUPTED, tag(dict(base, deposited=None, interrupted=True, **who, reason=f"interrupted while the deposit was in flight; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "not-confirmed")
         except RunError as exc:
             if any(refusal in str(exc) for refusal in NO_GRANT_ANSWERS):
                 if first:
                     attempt.unlink(missing_ok=True)  # an earlier attempt whose outcome is unknown keeps its mark
                 return 2, tag(dict(base, deposited=False, **who, reason=f"{exc}; this command deposited nothing"), outcome.code_of(exc, "refused"))
-            return 2, tag(dict(base, deposited=None, **who, reason=f"{exc}; {GRANT_MAY_BE_HELD}"), outcome.code_of(exc, "failed"))
+            # No answer, an unreadable answer or an error the pod did not word as a refusal: the deposit may have taken effect, and
+            # repeating it is refused (409, "this session already has a grant") with no consent record ever written.
+            return 2, tag(dict(base, deposited=None, **who, reason=f"{exc}; {GRANT_MAY_BE_HELD}"), "not-confirmed")
         finally:
             deposit.clear()
         if answer.get("deposited") is not True:
-            return 2, tag(dict(base, deposited=None, **who, reason=f"remote deposit did not confirm the deposit; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "failed")
+            return 2, tag(dict(base, deposited=None, **who, reason=f"remote deposit did not confirm the deposit; whether it took effect is not known, and {GRANT_MAY_BE_HELD}"), "not-confirmed")
         record["depositedAt"] = _utc(now())
         # Renamed into place: the waiting run acts on this file the moment it exists, so it must never be seen half written.
         _private(staged, json.dumps(record, indent=2, sort_keys=True) + "\n")

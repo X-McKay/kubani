@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from test_agent_ops import AGENT_BODY, RELEASE, kube_for_run, make_root
+from test_agent_ops import AGENT_BODY, RELEASE, BytesKube, kube_for_run, make_root
 from test_agent_ops_consent import SCOPE, Browser, FakeIdp, Stream, cli
 
 from agent_ops import delegation, live, run
@@ -1065,7 +1065,9 @@ class CommandLineTests(Case):
         answer = {k: v for k, v in ACCEPTED.items() if k != "workflow_id"}
         code, out, err = self.run_cli(["run", "sample", "--task", "go", "--no-wait", "--browser", "--out", str(self.tmp / "f")], self.kube([answer]), self.browser(), interactive=True)
         document = json.loads(out)
-        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "ERROR", {"status", "reason", "sessionId", "dir", "ok", "error"}, str(self.tmp / "f")))
+        self.assertEqual((code, document["status"], set(document), document["dir"]), (1, "SUBMIT_UNCONFIRMED", {"status", "reason", "sessionId", "dir", "ok", "error"}, str(self.tmp / "f")))
+        # The submission was attempted, so what the session did is not known: not to be repeated, whatever the exception was.
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
         self.assertRegex(document["reason"], r"^unexpected KeyError at run\.py:\d+$")
         self.assertEqual(json.loads((self.tmp / "f" / "request.json").read_text())["session_id"], document["sessionId"])
         for secret in self.secrets():
@@ -1099,6 +1101,77 @@ class CommandLineTests(Case):
         self.assertTrue(report["reason"].endswith("this command deposited nothing"))
         self.give_up()
         self.assertEqual(finish()[0], 3)
+
+
+class ConsentOutcomeTests(Case):
+    """Every ending of `consent --session` that follows a deposit call, through the command entry point.
+
+    A deposit that may have taken effect cannot be repeated: the policy service refuses a second deposit for the same
+    session ("this session already has a grant") while no consent record was written, so the run that waits would still
+    give up. Those endings are `not-confirmed`; a deposit the pod refused outright is not.
+    """
+
+    def kube(self, results=(), mode="on-behalf-of", required=True):
+        return kube_for_run(list(results), mode, required, kube_class=BytesKube)
+
+    run_cli = CommandLineTests.run_cli
+
+    def consent_through_main(self, deposit):
+        kube = self.kube([deposit, ACCEPTED])
+        finish = self.start_waiting(kube)
+        code, out, err = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, self.browser(), interactive=True)
+        self.give_up()
+        self.assertEqual(finish()[0], 3)  # the run that waited gave up; nothing was started
+        self.assertEqual([c["action"] for c in kube.exec_calls], ["deposit"])
+        return code, json.loads(out), err
+
+    def assert_not_confirmed(self, code, document, exit_code):
+        self.assertEqual(code, exit_code)
+        self.assertIs(document["ok"], False)
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
+        self.assertIsNone(document["deposited"])
+        self.assertEqual((document["sessionId"], document["runDir"]), (self.session, str(self.out)))
+        self.assertIn("do not repeat this command", document["error"]["message"])
+        self.assertFalse((self.out / run.CONSENT_RECORD).exists())
+
+    def test_deposit_call_that_does_not_answer(self):
+        def unanswered(request):
+            raise subprocess.TimeoutExpired("kubectl", run.EXEC_TIMEOUT)
+
+        code, document, _ = self.consent_through_main(unanswered)
+        self.assert_not_confirmed(code, document, 2)
+        self.assertIn("whether it took effect is not known", document["reason"])
+
+    def test_deposit_call_that_returns_something_unreadable(self):
+        code, document, _ = self.consent_through_main(b"<html>502</html>")
+        self.assert_not_confirmed(code, document, 2)
+
+    def test_deposit_call_the_pod_fails_without_calling_it_a_refusal(self):
+        code, document, _ = self.consent_through_main({"error": "grant deposit failed"})
+        self.assert_not_confirmed(code, document, 2)
+
+    def test_deposit_answer_that_does_not_confirm(self):
+        code, document, _ = self.consent_through_main({"session_id": OTHER_SESSION})
+        self.assert_not_confirmed(code, document, 2)
+        self.assertIn("did not confirm the deposit", document["reason"])
+
+    def test_interrupt_while_the_deposit_is_in_flight(self):
+        code, document, _ = self.consent_through_main(interrupted)
+        self.assert_not_confirmed(code, document, 130)
+        self.assertIs(document["interrupted"], True)
+
+    def test_deposit_the_pod_refused_is_a_refusal_and_nothing_was_deposited(self):
+        code, document, _ = self.consent_through_main({"error": "deposit refused: this session already has a grant"})
+        self.assertEqual((code, document["ok"], document["deposited"]), (2, False, False))
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("refused", False))
+
+    def test_deposit_that_succeeds_is_ok(self):
+        kube = self.kube([DEPOSITED, ACCEPTED])
+        finish = self.start_waiting(kube)
+        code, out, _ = self.run_cli(["consent", "sample", "--session", self.session, "--run-dir", str(self.out), "--browser"], kube, self.browser(), interactive=True)
+        document = json.loads(out)
+        self.assertEqual((code, document["ok"], document["deposited"]), (0, True, True))
+        self.assertEqual(finish()[0], 0)
 
 
 class TerminalTests(Case):

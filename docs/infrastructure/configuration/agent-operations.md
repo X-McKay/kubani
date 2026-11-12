@@ -133,15 +133,26 @@ the session. Whether a workflow exists depends on the reason (read from
   40-second limit included), a call that did not answer in 60 seconds, a
   `kubectl exec` that failed, and Ctrl-C while the call was in flight.
 
+Once a submission has been attempted, no ending of `run` that is not a
+confirmed finish of the session is safe to repeat: `run` mints a new session id
+and submits again. Those endings (every `SUBMIT_UNCONFIRMED`, whatever its
+reason, a Ctrl-C while the submit call was in flight or while following, an
+error raised while following, which prints `FOLLOW_FAILED` and not `REFUSED`
+or `ERROR` once the receipt exists, and the `--wait-timeout` ending with exit
+124) all have `error.code` `not-confirmed` (not retryable), keep their exit
+codes, and carry `sessionId` and `dir`; with a receipt they also carry
+`receiptPath` and `next`, the command `just agent status --receipt <path>`.
+See [the CLI contract](cli-contract.md#codes).
+
 Every `NOT_SUBMITTED`, `SUBMIT_UNCONFIRMED` and `INTERRUPTED` document
 carries a `reason`; for a release that requires delegation the reason says
 what is known about a grant (see
 [What can go wrong](#what-can-go-wrong)). A remote call that wrote to stderr
 also leaves an `exec-NN.stderr` file. Two endings fall outside the table: a
-remote `status` call that fails while the workflow is being followed ends as
-`REFUSED` with exit 2, and an operating-system error such as a file that
-cannot be written ends as `ERROR` with exit 1; both leave what was written by
-then and write no `status.json`. Ctrl-C at a moment `run`
+remote `status` call that fails while the workflow is being followed ends with
+exit 2 (`FOLLOW_FAILED`), and an operating-system error such as a file that
+cannot be written ends with exit 1 (`ERROR`, or `FOLLOW_FAILED` once the receipt
+exists); both leave what was written by then and write no `status.json`. Ctrl-C at a moment `run`
 does not handle itself (before the run directory exists, for example) ends as
 `INTERRUPTED` with exit 130 and a document that holds only `status` and
 `reason`. No ending prints a Python traceback; an unforeseen exception's

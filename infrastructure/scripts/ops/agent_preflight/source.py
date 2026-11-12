@@ -24,6 +24,9 @@ sys.stdout.write(json.dumps(result, allow_nan=False, sort_keys=True))
 """
 
 
+NO_ENVIRONMENT = "The source checkout has no environment (.venv); the preflight never installs one."
+
+
 class SourceEnvironmentError(RuntimeError):
     """The selected checkout cannot run its checker; the message is fixed and safe to show."""
 
@@ -41,9 +44,7 @@ def interpreter(source: Path):
         return sys.executable, str(legacy)
     python = source / ".venv" / "bin" / "python"
     if not python.is_file():
-        raise SourceEnvironmentError(
-            "The source checkout has no environment (.venv); the preflight never installs one."
-        )
+        raise SourceEnvironmentError(NO_ENVIRONMENT)
     return str(python), ""
 
 

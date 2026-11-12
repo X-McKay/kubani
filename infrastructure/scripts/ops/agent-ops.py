@@ -35,8 +35,30 @@ class Parser(argparse.ArgumentParser):
     """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
 
     def error(self, message):
-        emit(outcome.document({}, outcome.error("invalid-arguments", message)))
+        emit(outcome.document({}, outcome.error("invalid-arguments", outcome.usage_message(message))))
         super().error(message)
+
+
+def not_confirmed(reason: str, doc: dict) -> str:
+    """`reason` and what the caller does instead of repeating the command: the work was, or may have been, started."""
+    follow = doc.get("next")
+    if follow:
+        return f"{reason}; its result is not confirmed: do not repeat this command, follow up with `{follow}`"
+    return f"{reason}; its result is not confirmed: do not repeat this command" + (", the document's sessionId and dir name the run" if doc.get("sessionId") else "")
+
+
+def ended_on_exception(args, started, status: str, reason: str, code: str) -> tuple[dict, dict]:
+    """The document and `error` of a `run` or `consent` that ended on an exception its own code did not handle.
+
+    A `run` that had attempted its submission may have started a session whatever the exception was, so it ends
+    `not-confirmed` and carries the session id, the directory and, once there is one, the receipt and the command that reads
+    it; every other ending keeps the code its exception chose.
+    """
+    doc = {"status": status, "reason": reason, **started}
+    if args.command == "run" and getattr(started, "attempted", False):
+        doc["status"] = "FOLLOW_FAILED" if "receiptPath" in started else "SUBMIT_UNCONFIRMED"
+        return doc, outcome.error("not-confirmed", not_confirmed(reason, doc))
+    return doc, outcome.error(code, reason)
 
 
 def failure_for(command: str, args, code: int, doc: dict) -> dict:
@@ -76,7 +98,7 @@ def failure_for(command: str, args, code: int, doc: dict) -> dict:
             reason = f"the session ended {status}" + ("" if doc.get("confirmed") else " and its cleanup was not confirmed")
         else:
             reason = "the command ended unsuccessfully"
-    return outcome.error(kind, reason)
+    return outcome.error(kind, not_confirmed(reason, doc) if kind == "not-confirmed" else reason)
 
 
 def positive_float(text: str) -> float:
@@ -186,7 +208,7 @@ def main(argv=None) -> int:
 
     args = parser.parse_args(argv)
     root = args.root
-    started: dict = {}  # the session id and directory of a `run`, once it has them
+    started = run.Started()  # the session id, directory and receipt of a `run`, once it has them
     try:
         if args.command == "ls":
             rows = live.listing(root, live.Kube())
@@ -255,31 +277,40 @@ def main(argv=None) -> int:
             raise
         # `run` and `consent` end their own interrupts with what they know; this is one that arrived outside those places.
         print("interrupted", file=sys.stderr)
-        emit(outcome.document({"status": "INTERRUPTED", "reason": message, **started}, outcome.error("interrupted", message)))
+        doc, failure = ended_on_exception(args, started, "INTERRUPTED", message, "interrupted")
+        emit(outcome.document(doc, failure))
         return run.INTERRUPTED
     except ERRORS as exc:
         print(f"refused: {exc}", file=sys.stderr)
-        failure = outcome.error(outcome.code_of(exc, "refused"), str(exc) or type(exc).__name__)
-        emit(outcome.document({"status": "REFUSED", "reason": str(exc)} if args.command in ONE_DOCUMENT else {}, failure))
+        reason = str(exc) or type(exc).__name__
+        if args.command in ONE_DOCUMENT:
+            doc, failure = ended_on_exception(args, started, "REFUSED", reason, outcome.code_of(exc, "refused"))
+        else:
+            doc, failure = {}, outcome.error(outcome.code_of(exc, "refused"), reason)
+        emit(outcome.document(doc, failure))
         return 2
     except (OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         code = "not-found" if isinstance(exc, FileNotFoundError) else "validation-failed" if isinstance(exc, ValueError) else "failed"
-        failure = outcome.error(code, str(exc) or type(exc).__name__)
-        emit(outcome.document({"status": "ERROR", "reason": str(exc)} if args.command in ONE_DOCUMENT else {}, failure))
+        reason = str(exc) or type(exc).__name__
+        if args.command in ONE_DOCUMENT:
+            doc, failure = ended_on_exception(args, started, "ERROR", reason, code)
+        else:
+            doc, failure = {}, outcome.error(code, reason)
+        emit(outcome.document(doc, failure))
         return 1
     except Exception as exc:
         # Anything unforeseen still ends as one document. Only the exception's type and place are named: its message is not
         # known to be free of what a remote answer or a token carried. A run that had a directory by then is named, because
         # a workflow may have been started and `receipt.json`, when it was written, is the only way back to it.
         reason = outcome.unexpected(exc)
-        failure = outcome.error("internal", reason)
         if args.command not in ONE_DOCUMENT:
             traceback.print_exc()  # what the uncaught exception printed before this document existed
-            emit(outcome.document({}, failure))
+            emit(outcome.document({}, outcome.error("internal", reason)))
             return 1
         print(f"error: {reason}", file=sys.stderr)
-        emit(outcome.document({"status": "ERROR", "reason": reason, **started}, failure))
+        doc, failure = ended_on_exception(args, started, "ERROR", reason, "internal")
+        emit(outcome.document(doc, failure))
         return 1
     return 2
 

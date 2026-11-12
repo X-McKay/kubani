@@ -25,6 +25,14 @@ MAX_RESPONSE = 2 * 1024 * 1024
 METHODS = frozenset({"GET", "PUT", "POST"})
 
 
+class KeycloakHTTPError(RuntimeError):
+    """Keycloak answered with an HTTP error. Carries the status code and nothing of the response; the message is fixed."""
+
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -55,7 +63,7 @@ def request(client, url, fields=None, *, bearer=None, payload=None):
         response = client.open(req, timeout=30)
     except urllib.error.HTTPError as exc:
         if exc.code not in (302, 303):
-            raise RuntimeError(f"Keycloak HTTP {exc.code}; response omitted") from None
+            raise KeycloakHTTPError(f"Keycloak HTTP {exc.code}; response omitted", exc.code) from None
         response = exc
     with response:
         return response.code, response.headers, response.read(2 * 1024 * 1024)
@@ -111,7 +119,7 @@ class Admin:
             with self.client.open(req, timeout=self.timeout) as response:
                 raw = response.read(MAX_RESPONSE + 1)
         except urllib.error.HTTPError as exc:
-            raise RuntimeError(f"Keycloak admin HTTP {exc.code}; response omitted") from None
+            raise KeycloakHTTPError(f"Keycloak admin HTTP {exc.code}; response omitted", exc.code) from None
         if len(raw) > MAX_RESPONSE:
             raise ValueError("admin response size budget exhausted")
         return json.loads(raw) if raw else None

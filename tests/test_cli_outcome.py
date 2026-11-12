@@ -17,6 +17,8 @@ OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
 import outcome  # noqa: E402
 from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync  # noqa: E402
+from agent_preflight import source as preflight_source  # noqa: E402
+from keycloak_admin import KeycloakHTTPError  # noqa: E402
 
 
 def load(name, file):
@@ -54,7 +56,7 @@ class OutcomeModule(unittest.TestCase):
     def test_set_is_closed_and_each_code_has_a_class(self):
         self.assertEqual(
             set(outcome.CODES),
-            {"invalid-arguments", "validation-failed", "not-found", "refused", "conflict", "check-failed", "failed", "no-consent", "timeout", "interrupted", "unavailable", "internal"},
+            {"invalid-arguments", "validation-failed", "not-found", "refused", "conflict", "check-failed", "failed", "not-confirmed", "no-consent", "timeout", "interrupted", "unavailable", "internal"},
         )
         self.assertEqual({c for c, retryable in outcome.CODES.items() if retryable}, {"no-consent", "timeout", "interrupted", "unavailable"})
 
@@ -199,12 +201,12 @@ class AgentOps(unittest.TestCase):
             (1, run.tag({"status": "NOT_SUBMITTED", "reason": "r", "missing": ["m"]}, "refused"), "refused", False),
             (1, run.tag({"status": "NOT_SUBMITTED", "reason": "r"}, "conflict"), "conflict", False),
             (1, run.tag({"status": "NOT_SUBMITTED", "reason": "r"}, "validation-failed"), "validation-failed", False),
-            (2, run.tag({"status": "SUBMIT_UNCONFIRMED", "reason": "r"}, "timeout"), "timeout", True),
-            (2, run.tag({"status": "SUBMIT_UNCONFIRMED", "reason": "r"}, "unavailable"), "unavailable", True),
-            (130, run.tag({"status": "SUBMIT_UNCONFIRMED", "reason": "r"}, "interrupted"), "interrupted", True),
-            (124, run.tag({"status": "RUNNING", "timedOut": True}, "timeout"), "timeout", True),
+            (2, run.tag({"status": "SUBMIT_UNCONFIRMED", "reason": "r"}, "not-confirmed"), "not-confirmed", False),
+            (130, run.tag({"status": "SUBMIT_UNCONFIRMED", "reason": "r"}, "not-confirmed"), "not-confirmed", False),
+            (124, run.tag({"status": "RUNNING", "timedOut": True, "reason": "r", "next": "just agent status --receipt /r/receipt.json"}, "not-confirmed"), "not-confirmed", False),
             (1, run.tag({"status": "FAILED", "confirmed": True}, "failed"), "failed", False),
             (130, run.tag({"status": "INTERRUPTED", "reason": "r"}, "interrupted"), "interrupted", True),
+            (130, run.tag({"status": "INTERRUPTED", "reason": "r", "next": "just agent status --receipt /r/receipt.json"}, "not-confirmed"), "not-confirmed", False),
         ]
         for code_, envelope, code, retryable in cases:
             with self.subTest(status=envelope["status"], code=code), patch.object(run, "submit", return_value=(code_, envelope)), patch.object(live, "Kube"):
@@ -213,6 +215,8 @@ class AgentOps(unittest.TestCase):
                     self.assertEqual(document[key], value)
                 self.assertEqual((document["error"]["code"], document["error"]["retryable"]), (code, retryable))
                 self.assertEqual(set(document) - set(envelope), {"ok", "error"})
+                if code == "not-confirmed":
+                    self.assertIn("do not repeat this command", document["error"]["message"])
 
     def test_run_fallbacks_without_a_kind(self):
         for exit_code, code in ((124, "timeout"), (130, "interrupted"), (3, "no-consent"), (1, "failed")):
@@ -266,9 +270,9 @@ class AgentOps(unittest.TestCase):
         with patch.object(run, "consent", return_value=(0, {"deposited": True})):
             document, _ = self.doc(["consent", "sample", "--session", "6b1f2f0e-3c1c-4f65-9d0a-5b0e2c7a9d41"], 0)
         self.assertEqual(document, {"deposited": True, "ok": True})
-        with patch.object(run, "consent", return_value=(2, run.tag({"deposited": None, "reason": "r"}, "unavailable"))):
+        with patch.object(run, "consent", return_value=(2, run.tag({"deposited": None, "reason": "r"}, "not-confirmed"))):
             document, _ = self.doc(["consent", "sample", "--session", "6b1f2f0e-3c1c-4f65-9d0a-5b0e2c7a9d41"], 2)
-        self.assertEqual(document["error"]["code"], "unavailable")
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-confirmed", False))
 
     def test_consent_and_run_argument_errors_are_invalid_arguments(self):
         document, _ = self.doc(["consent", "sample"], 2)
@@ -292,6 +296,31 @@ class AgentOps(unittest.TestCase):
                 document = only_document(out)
                 self.assertEqual((document["ok"], document["error"]["code"], document["error"]["retryable"]), (False, "invalid-arguments", False))
                 self.assertEqual(set(document), {"ok", "error"})
+
+    def test_unrecognized_arguments_never_echo_their_values_into_the_document(self):
+        marker = "VALUE-MARKER-9f3a"
+        for argv, named in (
+            (["status", "--receipt", "r", "--grant-handle", marker], "--grant-handle"),
+            (["status", "--receipt", "r", f"--grant-handle={marker}"], "--grant-handle"),
+            (["ls", marker], None),
+            (["state", "--json", "--token", marker, "-x", marker, f"--other={marker}"], "--token, -x, --other"),
+        ):
+            with self.subTest(argv=argv):
+                code, out, err = call(agent_cli, argv)
+                self.assertEqual(code, 2)
+                self.assertNotIn(marker, out)
+                self.assertIn(marker, err, "what argparse writes to stderr is unchanged")
+                self.assertIn("usage:", err)
+                document = only_document(out)
+                self.assertEqual((document["ok"], document["error"]["code"], document["error"]["retryable"]), (False, "invalid-arguments", False))
+                message = document["error"]["message"]
+                self.assertTrue(message.endswith("; usage is on stderr"), message)
+                self.assertIn(f"unrecognized options: {named};" if named else "unrecognized arguments (values are not shown);", message)
+
+    def test_other_argument_errors_keep_argparses_message_in_the_document(self):
+        code, out, err = call(agent_cli, ["run"])
+        self.assertIn("the following arguments are required: agent", only_document(out)["error"]["message"])
+        self.assertEqual(outcome.usage_message("argument --x: invalid choice"), "argument --x: invalid choice")
 
     def test_help_is_untouched(self):
         code, out, _ = call(agent_cli, ["--help"])
@@ -329,6 +358,46 @@ class AgentPreflight(unittest.TestCase):
         self.assertEqual((code, error["code"], error["retryable"]), (1, "unavailable", True))
         self.assertNotIn("proofs", error)
 
+    def test_a_missing_source_environment_is_not_found_and_keeps_the_checks_state(self):
+        checks = [
+            {"code": "source_compatibility", "state": "unavailable", "required": True, "explanation": preflight_source.NO_ENVIRONMENT},
+            {"code": "live_agent_identity", "state": "not_checked", "required": False},
+        ]
+        code, out, _ = self.preflight({"schemaVersion": 1, "ok": False, "checks": checks})
+        document = only_document(out)
+        self.assertEqual(code, 1)
+        self.assertEqual(document["checks"][0]["state"], "unavailable")
+        self.assertEqual((document["error"]["code"], document["error"]["retryable"]), ("not-found", False))
+        self.assertIn("uv sync --locked", document["error"]["message"])
+        self.assertNotIn("proofs", document["error"])
+
+    def test_the_missing_environment_is_not_found_only_when_it_is_the_one_blocking_check(self):
+        missing = {"code": "source_compatibility", "state": "unavailable", "required": True, "explanation": preflight_source.NO_ENVIRONMENT}
+        cases = (
+            # another blocking check that is also unavailable: the unavailable class is what holds
+            ([missing, {"code": "mcp_dependencies", "state": "unavailable", "required": True}], "unavailable"),
+            # another blocking check that failed
+            ([missing, {"code": "agent_semantics", "state": "fail", "required": True}], "check-failed"),
+            # the source checker failed some other way: that one may succeed on a repeat
+            ([dict(missing, explanation="The source checker failed, timed out or returned an invalid bounded receipt")], "unavailable"),
+            # the same words on another check
+            ([dict(missing, code="mcp_dependencies")], "unavailable"),
+        )
+        for checks, expected in cases:
+            with self.subTest(checks=[c["code"] + ":" + c["state"] for c in checks]):
+                code, out, _ = self.preflight({"schemaVersion": 1, "ok": False, "checks": checks})
+                self.assertEqual((code, only_document(out)["error"]["code"]), (1, expected))
+
+    def test_the_receipt_core_writes_for_a_missing_environment_is_what_the_cli_recognises(self):
+        from agent_preflight import core
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(preflight_source, "interpreter", side_effect=preflight_source.SourceEnvironmentError(preflight_source.NO_ENVIRONMENT)):
+            result = core.run(Path(tmp), Path(tmp), "sample", "sample/v1")
+        (check,) = [c for c in result["checks"] if c["code"] == "source_compatibility"]
+        self.assertEqual((check["state"], check["required"], check["explanation"]), ("unavailable", True, preflight_source.NO_ENVIRONMENT))
+        # Alone, that check is what the CLI reports as not-found.
+        self.assertEqual(preflight_cli.failure_for({"checks": [check]})["code"], "not-found")
+
     def test_bare_failure_without_checks_is_check_failed(self):
         code, out, _ = self.preflight({"schemaVersion": 1, "ok": False})
         self.assertEqual((code, only_document(out)["error"]["code"]), (1, "check-failed"))
@@ -350,6 +419,17 @@ class AgentPreflight(unittest.TestCase):
                 self.assertIn("usage:", err)
                 document = only_document(out)
                 self.assertEqual((document["ok"], document["error"]["code"]), (False, "invalid-arguments"))
+
+
+class AgentPreflightArguments(unittest.TestCase):
+    def test_unrecognized_arguments_never_echo_their_values_into_the_document(self):
+        marker = "VALUE-MARKER-9f3a"
+        code, out, err = call(preflight_cli, ["sample", "--source", "/s", "--tag", "t", "--grant-handle", marker, f"--secret={marker}", marker])
+        self.assertEqual(code, 2)
+        self.assertNotIn(marker, out)
+        self.assertIn(marker, err)
+        message = only_document(out)["error"]["message"]
+        self.assertEqual(message, "unrecognized options: --grant-handle, --secret; usage is on stderr")
 
 
 class McpRegistry(unittest.TestCase):
@@ -466,6 +546,45 @@ class McpRegistry(unittest.TestCase):
                 self.assertNotIn("code=abc", text)
                 self.assertEqual(document["error"]["retryable"], outcome.CODES[code])
                 self.assertTrue(document["note"].startswith("No conflicting identity"))
+
+    def test_keycloak_client_errors_are_refused_and_server_errors_unavailable(self):
+        marker = "RESPONSE-BODY-MARKER"
+        cases = (
+            (400, "refused"), (401, "refused"), (403, "refused"), (404, "refused"), (409, "refused"),
+            (408, "unavailable"), (429, "unavailable"),
+            (500, "unavailable"), (502, "unavailable"), (503, "unavailable"),
+        )
+        stages = (
+            (("identity", "plan", "existing"), self.modules.identity.admin, "identity-authentication"),
+            (("identity", "apply", "existing"), self.modules.identity.configure, "identity"),
+            (("provision", "apply", "existing"), self.modules.provision.apply, "provision"),
+            (("status", "existing"), self.modules.status.inspect_registration, "status"),
+        )
+        for status_code, expected in cases:
+            for args, target, stage in stages:
+                with self.subTest(status=status_code, stage=stage):
+                    target.side_effect = KeycloakHTTPError(f"Keycloak admin HTTP {status_code}; response omitted {marker}", status_code)
+                    try:
+                        status, document = self.invoke(*args)
+                    finally:
+                        target.side_effect = None
+                    error = document["error"]
+                    self.assertEqual((status, error["code"], error["retryable"], document["error_type"], document["stage"]), (1, expected, expected == "unavailable", "KeycloakHTTPError", stage if stage != "identity-authentication" else "identity-authentication"))
+                    self.assertTrue(error["message"].endswith(f"(HTTP {status_code})"), error["message"])
+                    self.assertNotIn(marker, json.dumps(document), "the exception's text is never shown")
+                    self.assertEqual(error["retryable"], outcome.CODES[error["code"]])
+
+    def test_network_failures_in_the_credential_stages_stay_unavailable(self):
+        import urllib.error
+
+        for exc, code in ((urllib.error.URLError("refused"), "unavailable"), (ConnectionResetError("reset"), "unavailable"), (TimeoutError("slow"), "timeout"), (RuntimeError("plain runtime error"), "unavailable")):
+            with self.subTest(exc=type(exc).__name__):
+                self.modules.identity.admin.side_effect = exc
+                try:
+                    status, document = self.invoke("identity", "plan", "existing")
+                finally:
+                    self.modules.identity.admin.side_effect = None
+                self.assertEqual((status, document["error"]["code"], document["error"]["retryable"]), (1, code, True))
 
     def test_offline_stage_shows_the_message_and_classifies_by_type(self):
         cases = (

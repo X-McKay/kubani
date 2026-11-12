@@ -23,6 +23,7 @@ CODES: dict[str, bool] = {
     "conflict": False,
     "check-failed": False,
     "failed": False,
+    "not-confirmed": False,
     "no-consent": True,
     "timeout": True,
     "interrupted": True,
@@ -39,6 +40,25 @@ def _check_table() -> None:
 
 
 _check_table()
+
+
+def usage_message(message: str) -> str:
+    """The text of an argument error as it may go into a document: never a value the person typed.
+
+    argparse's "unrecognized arguments: ..." lists the arguments as given, values included, so that message is
+    replaced by one that names only the options (words starting with `-`, cut at any `=`). Other messages are kept.
+    """
+    prefix = "unrecognized arguments: "
+    if not message.startswith(prefix):
+        return message
+    names: list[str] = []
+    for word in message[len(prefix) :].split():
+        if word.startswith("-"):
+            name = word.split("=", 1)[0]
+            if name not in names:
+                names.append(name)
+    shown = f"unrecognized options: {', '.join(names[:10])}" if names else "unrecognized arguments (values are not shown)"
+    return f"{shown}; usage is on stderr"
 
 
 def error(code: str, message: str, *, retryable: bool | None = None, proofs: list | None = None) -> dict:

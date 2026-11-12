@@ -60,8 +60,9 @@ without `proofs`.
 | `conflict` | no | existing state prevents the request |
 | `check-failed` | no | a check ran and did not hold; `error.proofs` lists every check that ran |
 | `failed` | no | the work ran and ended unsuccessfully (a session that did not complete, a cancel the runner did not accept) |
+| `not-confirmed` | no | the work was started, or may have been, and its result is not confirmed; do not repeat the command, follow up with the receipt |
 | `no-consent` | yes | nobody consented in time |
-| `timeout` | yes | the wait ended before the work did |
+| `timeout` | yes | the wait ended before the work did, and repeating the command is safe (`wait`, a cancel call that did not answer) |
 | `interrupted` | yes | interrupted before the command finished |
 | `unavailable` | yes | the cluster, a tool the command shells out to, or a remote service could not be reached |
 | `internal` | no | an unexpected error in the tool itself |
@@ -71,18 +72,44 @@ Where one code stands for several causes, and the cause was not at hand:
 - `unavailable` covers `kubectl` failing for any reason (the wrapper reports
   the cause in the message, not in a type), `gh` exiting non-zero, and any
   exception in the `just mcp` credential stages that is an I/O, runtime or
-  network error. A refused Keycloak request there is `unavailable`, not
-  `refused`, because the message that would tell them apart is withheld.
+  network error, and a Keycloak answer of 5xx (or 408 or 429, which ask for the
+  request to be sent again). A Keycloak answer of any other 4xx (a 403, a 409)
+  there is `refused`: the status code is kept on the exception and shown in the
+  message as a number, while the response body and the exception text stay
+  withheld.
+- `not-confirmed` is the ending of a `just agent run` from the moment its
+  submission is attempted, unless the session is confirmed started and closed or
+  confirmed not started: repeating `run` mints a new session id and submits
+  again, so no such ending is safe to repeat. It covers a submit call that timed
+  out, returned something unreadable or was refused, an interrupt while the
+  submit call was in flight or while following the run, any error raised while
+  following (including one that escapes as `REFUSED` or `ERROR`), and `run`'s
+  own wait passing `--wait-timeout` (exit 124). The exit code is the one the
+  ending always had. The document carries `sessionId` and `dir`, and once the
+  receipt exists `receiptPath` and `next`, the exact command to run instead:
+  `just agent status --receipt <path>` (or `wait`, to keep following). A
+  `consent --session` whose deposit may have taken effect (the call did not
+  answer, answered unreadably, did not confirm, or was interrupted; `deposited`
+  is `null`) is `not-confirmed` too: a second deposit for the same session is
+  refused by the policy service (`this session already has a grant`) while no
+  consent record is written, so the run that waits would still give up. `wait
+  --receipt` passing its own deadline stays `timeout`, and so does a `cancel`
+  whose call did not answer: repeating either is safe.
 - `failed` is the code for a sign-in step that did not succeed (an `error=`
   callback, a `state` mismatch, a failed signature check) and for a remote call
   the runner answered with an error.
 - `just agent status` reads a session, and reading it is the success. A session
   that has not ended prints `ok: true` with its `status` (for example `RUNNING`)
   and exits 0; there is no `error`. A session that ended without confirmed
-  success or cleanup is `failed` with exit 1. Only `wait`, whose own deadline can
-  pass first, is `timeout` (exit 124).
+  success or cleanup is `failed` with exit 1. `wait`, whose own deadline can
+  pass first, is `timeout` (exit 124); `run` whose own wait passes first is
+  `not-confirmed` (exit 124), because the session is running and repeating `run`
+  would start another.
 - A preflight receipt whose only blocking checks are `unavailable` is
-  `unavailable` (its `checks` array is the detail); any other failed receipt is
+  `unavailable` (its `checks` array is the detail); one whose only blocking
+  check is the source checkout having no environment (`.venv`) is `not-found`,
+  because repeating the command cannot succeed until the environment exists (the
+  check keeps its `unavailable` state in `checks`); any other failed receipt is
   `check-failed`.
 - `just mcp status` is `unavailable` when every layer that is not current could
   not be read, else `check-failed` with the layers as proofs.
@@ -102,14 +129,17 @@ Unchanged by the contract; `ok` is true exactly when the exit code is 0.
 
 Malformed arguments keep argparse's behaviour: usage and the message on stderr,
 exit 2. The `invalid-arguments` document is added on stdout by a parser subclass
-that every subparser inherits.
+that every subparser inherits. For `unrecognized arguments`, whose argparse
+message lists the values that were typed, the document's message names only the
+options (words starting with `-`, cut at any `=`) and says that usage is on
+stderr; stderr itself is unchanged.
 
 ## Redaction
 
 `just mcp` stages that can touch a credential (`provision`, `identity`,
 `status`, and the authentication step before the last two) never put an
 exception's text in the document. `error.message` is one fixed sentence chosen by
-the code, and `error_type` still names the exception's type. Only the offline
+the code (a Keycloak HTTP status code, a number, may follow it), and `error_type` still names the exception's type. Only the offline
 stages (`add`, `render`, `check`) may show a message, and only for `ValueError`
 and `OSError`, which read committed files and touch no credential.
 

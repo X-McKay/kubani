@@ -11,6 +11,7 @@ from pathlib import Path
 
 import outcome
 from agent_preflight.core import run
+from agent_preflight.source import NO_ENVIRONMENT
 
 BLOCKING = ("fail", "not_checked", "unavailable")
 
@@ -19,7 +20,7 @@ class Parser(argparse.ArgumentParser):
     """argparse, which still prints usage and the message to stderr and exits 2, plus the `invalid-arguments` document on stdout."""
 
     def error(self, message):
-        emit(outcome.document({}, outcome.error("invalid-arguments", message)))
+        emit(outcome.document({}, outcome.error("invalid-arguments", outcome.usage_message(message))))
         super().error(message)
 
 
@@ -30,6 +31,10 @@ def emit(document):
 def failure_for(result):
     """Why a receipt with `ok` false failed: a check that did not hold, or only checks whose evidence could not be had."""
     blocking = [c for c in result.get("checks", []) if c.get("required") and c.get("state") in BLOCKING]
+    only = blocking[0] if len(blocking) == 1 else {}
+    if only.get("code") == "source_compatibility" and only.get("state") == "unavailable" and only.get("explanation") == NO_ENVIRONMENT:
+        # Repeating the command cannot succeed until the source checkout has an environment; the check keeps its own state.
+        return outcome.error("not-found", "the source checkout has no environment (.venv) and the preflight never installs one; run `uv sync --locked` in it, then rerun (see checks)")
     if blocking and all(c["state"] == "unavailable" for c in blocking):
         return outcome.error("unavailable", f"{len(blocking)} required checks could not be evaluated; their evidence was unavailable (see checks)")
     return outcome.error("check-failed", f"{len(blocking)} required checks did not hold; see proofs", proofs=list(result.get("checks", [])))

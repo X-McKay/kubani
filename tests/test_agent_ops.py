@@ -443,10 +443,22 @@ class LiveTests(unittest.TestCase):
         self.assertIn("none", text)
 
 
-def kube_for_run(exec_results, identity_mode="agent", delegation_required=False):
+class BytesKube(FakeKube):
+    """A FakeKube whose next exec answers with the given bytes as they are, for an answer that is not a JSON document."""
+
+    def exec(self, pod, namespace, container, argv, stdin, timeout):
+        if not (self.exec_results and isinstance(self.exec_results[0], bytes)):
+            return super().exec(pod, namespace, container, argv, stdin, timeout)
+        self.argvs.append(list(argv))
+        self.stdins.append(stdin)
+        self.exec_calls.append(json.loads(stdin[int(argv[-1]) :]))
+        return subprocess.CompletedProcess(argv, 0, stdout=self.exec_results.pop(0), stderr=b"")
+
+
+def kube_for_run(exec_results, identity_mode="agent", delegation_required=False, kube_class=FakeKube):
     pod = {"metadata": {"name": "runner-1", "uid": "uid-1"}, "status": {"phase": "Running", "containerStatuses": [{"name": "runner", "ready": True, "containerID": "c", "imageID": "i", "restartCount": 0}]}}
     release = {"metadata": {"name": RELEASE}, "spec": {"agent": "sample", "approval": {"approved": True}}, "status": {"ready": True, "signatureVerified": True, "policyDrift": False, "identityMode": identity_mode, "delegationRequired": delegation_required, "conditions": [{"type": "Ready", "status": "True", "reason": "Ready"}]}}
-    return FakeKube({("agentreleases", None, "tenant-test"): {"items": [release]}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
+    return kube_class({("agentreleases", None, "tenant-test"): {"items": [release]}, ("pods", None, "agent-platform"): {"items": [pod]}, ("agents", None, "tenant-test"): {"items": []}}, exec_results)
 
 
 class RunTests(unittest.TestCase):
@@ -554,8 +566,9 @@ class RunTests(unittest.TestCase):
             root = make_root(Path(tmp))
             clock = iter([0, 1000, 1000, 1000]).__next__
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "a", kube=kube_for_run([accepted, running]), wait_timeout=5, sleep=lambda s: None, clock=clock)
-            self.assertEqual((code, envelope.kind), (124, "timeout"))
+            self.assertEqual((code, envelope.kind), (124, "not-confirmed"))
             self.assertEqual(envelope["cleanup"], "NOT_CONFIRMED")
+            self.assertEqual(envelope["next"], f"just agent status --receipt {Path(tmp) / 'a' / 'receipt.json'}")
             failed = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "FAILED"}, "result": {"outcome": "FAILED"}, "confirmed": False}
             kube = kube_for_run([accepted, failed])
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=Path(tmp) / "b", kube=kube, sleep=lambda s: None)
@@ -570,7 +583,7 @@ class RunTests(unittest.TestCase):
             code, envelope = run.submit(root, "sample", {"request": "go"}, out=out, kube=kube_for_run([{"error": "session identity already exists"}]))
             # An own-identity run has no grant to speak of; the remote answer is passed on as it came.
             self.assertEqual((code, envelope["status"], envelope["reason"]), (2, "SUBMIT_UNCONFIRMED", "remote submit failed: session identity already exists"))
-            self.assertEqual(envelope.kind, "refused")
+            self.assertEqual(envelope.kind, "not-confirmed")
             self.assertEqual(sorted(p.name for p in out.iterdir()), ["request.json", "status.json"])
             self.assertEqual(json.loads((out / "status.json").read_text()), envelope)
 
