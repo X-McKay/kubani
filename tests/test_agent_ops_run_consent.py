@@ -115,7 +115,15 @@ class Case(unittest.TestCase):
 
         thread = threading.Thread(target=target, daemon=True)
         thread.start()
-        self.addCleanup(self.give_up)
+
+        def stop():
+            # Registered after the temporary directory's cleanup, so it runs first. The run
+            # must have ended before the directory goes: it writes its last files there
+            # once its clock has passed, and a write during the removal fails the test.
+            self.give_up()
+            thread.join(10)
+
+        self.addCleanup(stop)
         deadline = time.monotonic() + 10
         while not self.said and "error" not in box and time.monotonic() < deadline:
             time.sleep(0.005)
