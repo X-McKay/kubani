@@ -121,9 +121,9 @@ spec:
             resources:
               # The limit covers dockerd, the build's processes and the
               # tmpfs storage below (tmpfs pages are charged to this
-              # container). Sampled peaks are about 1.4Gi, for agent
-              # releases and for the first platform image build
-              # (2026-11-12). The memory request equals the limit so the
+              # container). Sampled peaks are about 1.4Gi for agent
+              # releases (scale-set-zetra.yaml gives this container more,
+              # for Go builds). The memory request equals the limit so the
               # scheduler counts what the pod may use: rig0 then holds two
               # runner pods at once and a third waits. See "Memory on rig0"
               # in README.md before changing either figure.
@@ -153,8 +153,7 @@ spec:
                 value: /home/runner/hooks/job-started.sh
             resources:
               # An agent release peaks at about 3.6Gi here while it signs
-              # and scans; a platform image build used 0.45Gi. Request
-              # equals limit, as for dind.
+              # and scans. Request equals limit, as for dind.
               requests: {cpu: 250m, memory: 4Gi}
               limits: {memory: 4Gi}
             volumeMounts:

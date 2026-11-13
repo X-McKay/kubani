@@ -201,18 +201,27 @@ On 2026-11-12, after the Secret and the scale set were reconciled:
   'refs/heads/test/guard-refusal' may not use this runner (only
   refs/heads/main)`; their one step never ran.
 
+- **All eight images were released** in one run on 2026-11-13 (zetra
+  `67c908a`, tag `67c908a` in each repository under
+  `registry.almckay.io/platform/`), one at a time, in about 40 minutes. Each
+  digest read back from the registry matched, and `capture` is `linux/arm64`.
+
 Not shown on the runner: a refusal for the workflow file alone (that needs a
-second workflow on `main`; the tests run the guard script for it), a Go image
-build, and the arm64 `capture` build.
+second workflow on `main`; the tests run the guard script for it).
 
 ### Memory on rig0
 
-A runner pod requests the memory it may use: 4Gi for the runner container and
-4Gi for the build sidecar, of which up to 3Gi is dockerd's tmpfs storage, plus
-160Mi of Kata overhead. Both scale sets use the same figures. The scheduler
-therefore counts a build at its limit. All pods on rig0 together may use about
-27Gi and other pods request about 6Gi (2026-11-12), so two runner pods fit and
-a third stays Pending until one ends; its job waits in the queue.
+A runner pod requests the memory it may use, 8Gi plus 160Mi of Kata overhead,
+so the scheduler counts a build at its limit. All pods on rig0 together may use
+about 27Gi and other pods request about 6Gi (2026-11-12), so two runner pods
+fit and a third stays Pending until one ends; its job waits in the queue.
+
+The 8Gi is divided by what each kind of job uses:
+
+| Scale set | Runner | Build sidecar | of which tmpfs storage |
+|---|---|---|---|
+| `kubani-zetra-agents` | 4Gi | 4Gi | up to 3Gi |
+| `kubani-zetra` | 1Gi | 7Gi | up to 5Gi |
 
 Where the figures come from (`kubectl top pod -n arc-runners --containers`,
 sampled every 10 seconds):
@@ -220,16 +229,26 @@ sampled every 10 seconds):
 | Job | Build sidecar peak | Runner peak |
 |---|---|---|
 | agent release, quiet network (2026-11-06) | about 1.4Gi | about 3.6Gi while signing and scanning |
-| platform image `registry-controller` (2026-11-12) | 1.39Gi | 0.45Gi |
+| platform image `agent-policy-service` (2026-11-13) | 3.61Gi, still rising at the last sample | 0.44Gi |
+| `capture`, `budget-backend`, `conformance-capture` (Go) | 1.54 to 1.63Gi | 0.44Gi |
+| `registry-controller`, `session-runner`, `netpol-attestor`, `egress-guard` (Python) | 0.27 to 1.39Gi | 0.44 to 0.45Gi |
+
+The Agent Policy Service build ran with a 4Gi sidecar and 3Gi of storage and
+passed, with too little to spare; that is why `kubani-zetra` now gives the
+sidecar 7Gi. Its runner container signs and scans nothing yet. When the
+release workflow starts to (an agent release peaks at about 3.6Gi doing so),
+the runner needs 4Gi and the pod no longer fits in 8Gi: decide then whether a
+platform build may run beside an agent release.
+
+To change a figure, change the limit and the request together, keep the
+storage at least 1Gi below the sidecar's limit, and check how many pods then
+fit on rig0; `tests/test_arc_scale_sets.py` pins the figures.
 
 Before 2026-11-12 the limits were 12Gi and 4Gi with requests of 1Gi and 512Mi,
 so three pods could be scheduled with 48Gi of limits. The sidecar hit 12Gi four
 times on 2026-11-06, when a process in it grew from 1 to 8Gi in 30 seconds
-while `apt` downloads stalled; those builds failed, and with a 4Gi limit the
-same event fails sooner. A build that is killed at 4Gi without a stalled
-network needs a higher figure here: raise the sidecar's limit and request
-together, in both files, and keep three pods from fitting on rig0 at once. No
-Go image has been built on the runner yet, so that is the first place to look.
+while `apt` downloads stalled; those builds failed, and with a lower limit the
+same event fails sooner.
 
 ### NetworkPolicies
 

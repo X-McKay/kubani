@@ -86,6 +86,16 @@ class ScaleSetParity(unittest.TestCase):
             runner = container(spec, "runner")
             # The job guard ConfigMap is each scale set's own.
             next(v for v in spec["volumes"] if v["name"] == "job-guard").pop("configMap")
+            # Memory is divided per scale set, from what its jobs were
+            # measured to use; test_memory_is_requested_in_full holds what
+            # must be common. CPU requests stay identical.
+            dind = next(c for c in spec["initContainers"] if c["name"] == "dind")
+            for part in (dind, runner):
+                part["resources"]["requests"].pop("memory")
+                part["resources"].pop("limits")
+            next(v for v in spec["volumes"] if v["name"] == "dind-storage")["emptyDir"].pop(
+                "sizeLimit"
+            )
             if doc is z:
                 # The registry login: a Secret volume, a scratch config
                 # directory, and their two mounts on the runner container.
@@ -99,9 +109,9 @@ class ScaleSetParity(unittest.TestCase):
                     for m in runner["volumeMounts"]
                     if m["name"] not in ("registry-push", "docker-config")
                 ]
-            # Comments are not data, so the images, MTU wrapper, resources,
-            # security context, runtime class, placement, env and listener
-            # must match exactly.
+            # Comments are not data, so the images, MTU wrapper, CPU
+            # requests, security context, runtime class, placement, env and
+            # listener must match exactly.
         self.assertEqual(a, z)
 
     def test_sandbox_and_placement_properties_hold_for_both(self):
@@ -114,16 +124,6 @@ class ScaleSetParity(unittest.TestCase):
                 dind = next(c for c in spec["initContainers"] if c["name"] == "dind")
                 self.assertTrue(dind["securityContext"]["privileged"])
                 runner = container(spec, "runner")
-                for part in (dind, runner):
-                    # The scheduler counts requests only, so the memory a
-                    # runner pod may use is the memory it asks for.
-                    resources = part["resources"]
-                    self.assertEqual(resources["limits"], {"memory": "4Gi"})
-                    self.assertEqual(resources["requests"]["memory"], "4Gi")
-                storage = next(v for v in spec["volumes"] if v["name"] == "dind-storage")
-                # tmpfs pages are charged to dind, so its storage must leave
-                # room under the limit for dockerd and the build itself.
-                self.assertEqual(storage["emptyDir"], {"medium": "Memory", "sizeLimit": "3Gi"})
                 for image in (runner["image"], dind["image"]):
                     self.assertIn("@sha256:", image)
                     self.assertTrue(image.startswith("registry.almckay.io/mirror/"))
@@ -133,6 +133,27 @@ class ScaleSetParity(unittest.TestCase):
                 self.assertFalse(lsc["allowPrivilegeEscalation"])
                 self.assertTrue(lsc["readOnlyRootFilesystem"])
                 self.assertEqual(lsc["capabilities"], {"drop": ["ALL"]})
+
+    def test_memory_is_requested_in_full(self):
+        # runner, dind and dind's tmpfs storage, in Gi. The scheduler counts
+        # requests only, so each container asks for what it may use, and
+        # every runner pod is 8Gi: rig0 then holds two and a third waits
+        # (README.md, "Memory on rig0"). Change a figure there and here.
+        for path, (runner_gi, dind_gi, storage_gi) in ((AGENTS, (4, 4, 3)), (ZETRA, (1, 7, 5))):
+            with self.subTest(scale_set=path.name):
+                spec = template(path)
+                dind = next(c for c in spec["initContainers"] if c["name"] == "dind")
+                for part, gi in ((container(spec, "runner"), runner_gi), (dind, dind_gi)):
+                    self.assertEqual(part["resources"]["limits"], {"memory": f"{gi}Gi"})
+                    self.assertEqual(part["resources"]["requests"]["memory"], f"{gi}Gi")
+                storage = next(v for v in spec["volumes"] if v["name"] == "dind-storage")
+                self.assertEqual(
+                    storage["emptyDir"], {"medium": "Memory", "sizeLimit": f"{storage_gi}Gi"}
+                )
+                # tmpfs pages are charged to dind, so its storage must leave
+                # room under the limit for dockerd and the build itself.
+                self.assertGreaterEqual(dind_gi - storage_gi, 1)
+                self.assertEqual(runner_gi + dind_gi, 8)
 
     def test_each_scale_set_mounts_its_own_guard(self):
         for path, configmap in ((AGENTS, "runner-job-guard"), (ZETRA, "runner-job-guard-zetra")):
