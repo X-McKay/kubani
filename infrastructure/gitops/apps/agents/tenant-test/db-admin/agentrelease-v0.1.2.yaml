@@ -1,0 +1,16 @@
+# yamllint disable rule:line-length
+# Exact signed db-admin/v0.1.2 assets; SHA256SUMS verified by `just agent stage`.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: db-admin-2026-11-13-33c8acb2
+  namespace: tenant-test
+spec:
+  agent: db-admin
+  image: registry.almckay.io/agents/db-admin@sha256:33c8acb2a381839f0c4ff322d56a7e4949bc34e36f5eb89cbcb140fcd83df67e  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: 722f4e0faa59568a0ab42b558d6d48caefed2d585a625fdeac096d0edaa8c6b1  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: 426a95900f02422d0b95013319e7b081282e83098372b5ce4eb926b392698fd8  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: 76b52911ab431bf148bbf003b4f5afff86b9179a6b464447d155b3c21ca6b985  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: ef9de7b5f8fd1da3dfd4928051fb5c9f8b137bb2  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: false
