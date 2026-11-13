@@ -12,6 +12,9 @@
 # Differs from it only in:
 #   - the repository and scale set name, and maxRunners: 1 (platform builds
 #     run one at a time);
+#   - how the pod's 8Gi is divided: 7Gi for the build sidecar and 1Gi for
+#     the runner (the other set has 4Gi each), from what each kind of job
+#     was measured to use;
 #   - the job guard: ConfigMap runner-job-guard-zetra (job-guard-zetra.yaml)
 #     admits only a push to refs/heads/main running platform-release.yml;
 #   - the runner container also mounts the registry push login, Secret
@@ -118,14 +121,15 @@ spec:
             resources:
               # The limit covers dockerd, the build's processes and the
               # tmpfs storage below (tmpfs pages are charged to this
-              # container). Sampled peaks are about 1.4Gi, for agent
-              # releases and for the first platform image build
-              # (2026-11-12). The memory request equals the limit so the
-              # scheduler counts what the pod may use: rig0 then holds two
-              # runner pods at once and a third waits. See "Memory on rig0"
-              # in README.md before changing either figure.
-              requests: {cpu: 500m, memory: 4Gi}
-              limits: {memory: 4Gi}
+              # container). The largest platform build, the Agent Policy
+              # Service, was sampled at 3.6Gi and still rising when it
+              # ended (2026-11-13); the other seven stayed under 1.7Gi.
+              # The memory request equals the limit so the scheduler
+              # counts what the pod may use: rig0 then holds two runner
+              # pods at once and a third waits. See "Memory on rig0" in
+              # README.md before changing either figure.
+              requests: {cpu: 500m, memory: 7Gi}
+              limits: {memory: 7Gi}
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
@@ -150,11 +154,13 @@ spec:
               - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
                 value: /home/runner/hooks/job-started.sh
             resources:
-              # An agent release peaks at about 3.6Gi here while it signs
-              # and scans; a platform image build used 0.45Gi. Request
-              # equals limit, as for dind.
-              requests: {cpu: 250m, memory: 4Gi}
-              limits: {memory: 4Gi}
+              # A platform image build used 0.44 to 0.45Gi here in each of
+              # nine builds: it signs and scans nothing. When it does (an
+              # agent release peaks at about 3.6Gi doing that), this needs
+              # the other scale set's 4Gi. Request equals limit, as for
+              # dind.
+              requests: {cpu: 250m, memory: 1Gi}
+              limits: {memory: 1Gi}
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
@@ -210,4 +216,4 @@ spec:
           - name: dind-storage
             emptyDir:
               medium: Memory
-              sizeLimit: 3Gi
+              sizeLimit: 5Gi
