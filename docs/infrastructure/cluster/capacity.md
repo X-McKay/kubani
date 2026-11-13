@@ -70,13 +70,13 @@ baseline.
 | T23 checkpoint worker (temporary one-shot Job, inactive template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | T24 lifecycle worker (temporary Deployment, zero-replica template; one exclusive run) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
 | netpol-attestor (Agent Runtime Platform AP6, DaemonSet) | agent-platform | 20m / 200m | 64Mi / 192Mi | every agent-sandbox node (rig0) |
-| ARC runner kubani-zetra-agents (agent releases; one ephemeral Kata pod per job, 0 idle, at most 2: runner 250m / 512Mi plus dind 500m / 1Gi requests, plus Kata overhead 600m / 160Mi; dind memory limit covers its 8Gi tmpfs) | arc-runners | 1350m / — each | 1696Mi / 16Gi each (runner 4Gi, dind 12Gi) | rig0 (platform role, Kata) |
-| ARC runner kubani-zetra (platform image builds; the same pod, at most 1) | arc-runners | 1350m / — | 1696Mi / 16Gi | rig0 (platform role, Kata) |
+| ARC runner kubani-zetra-agents (agent releases; one ephemeral Kata pod per job, 0 idle, at most 2: runner 250m / 4Gi plus dind 500m / 4Gi requests, plus Kata overhead 600m / 160Mi; dind memory limit covers its 3Gi tmpfs) | arc-runners | 1350m / — each | 8352Mi / 8Gi each (runner 4Gi, dind 4Gi; the request adds the overhead) | rig0 (platform role, Kata) |
+| ARC runner kubani-zetra (platform image builds; the same pod, at most 1) | arc-runners | 1350m / — | 8352Mi / 8Gi | rig0 (platform role, Kata) |
 | ARC listeners, one per scale set (2; no requests or limits set) | arc-systems | — / — | — / — | rig0 (platform role) |
 
-The three ARC runner pods request about 5Gi together and may use 48Gi, more
-than all pods on rig0 may use (about 27Gi). One build at its limit fits; see
-"Memory on rig0" in `infrastructure/gitops/apps/arc-runners/README.md`.
+An ARC runner pod requests the memory it may use, so the scheduler places two
+on rig0 and holds a third; see "Memory on rig0" in
+`infrastructure/gitops/apps/arc-runners/README.md` for the measurements.
 
 vLLM main and fast carry a memory request now (Phase 0.4); embeddings
 was at `replicas: 0` (optional tier) and runs since MCP M3 (2026-10-18,

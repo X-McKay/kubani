@@ -11,7 +11,7 @@
 #
 # Differs from it only in:
 #   - the repository and scale set name, and maxRunners: 1 (platform builds
-#     run one at a time; the build sidecar has been OOM-killed at 12Gi);
+#     run one at a time);
 #   - the job guard: ConfigMap runner-job-guard-zetra (job-guard-zetra.yaml)
 #     admits only a push to refs/heads/main running platform-release.yml;
 #   - the runner container also mounts the registry push login, Secret
@@ -116,10 +116,16 @@ spec:
               failureThreshold: 24
               periodSeconds: 5
             resources:
-              # The limit covers dockerd plus its tmpfs storage below
-              # (tmpfs pages are charged to this container).
-              requests: {cpu: 500m, memory: 1Gi}
-              limits: {memory: 12Gi}
+              # The limit covers dockerd, the build's processes and the
+              # tmpfs storage below (tmpfs pages are charged to this
+              # container). Sampled peaks are about 1.4Gi, for agent
+              # releases and for the first platform image build
+              # (2026-11-12). The memory request equals the limit so the
+              # scheduler counts what the pod may use: rig0 then holds two
+              # runner pods at once and a third waits. See "Memory on rig0"
+              # in README.md before changing either figure.
+              requests: {cpu: 500m, memory: 4Gi}
+              limits: {memory: 4Gi}
             volumeMounts:
               - name: work
                 mountPath: /home/runner/_work
@@ -144,7 +150,10 @@ spec:
               - name: ACTIONS_RUNNER_HOOK_JOB_STARTED
                 value: /home/runner/hooks/job-started.sh
             resources:
-              requests: {cpu: 250m, memory: 512Mi}
+              # An agent release peaks at about 3.6Gi here while it signs
+              # and scans; a platform image build used 0.45Gi. Request
+              # equals limit, as for dind.
+              requests: {cpu: 250m, memory: 4Gi}
               limits: {memory: 4Gi}
             volumeMounts:
               - name: work
@@ -201,4 +210,4 @@ spec:
           - name: dind-storage
             emptyDir:
               medium: Memory
-              sizeLimit: 8Gi
+              sizeLimit: 3Gi

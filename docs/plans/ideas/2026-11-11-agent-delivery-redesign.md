@@ -434,8 +434,9 @@ platform's short-lived agent token.
 
 ### Phase 0 progress, 2026-11-11
 
-Done, on the branch that carries this document and, for the SDK, on the zetra
-branch `delivery/model-free-agents`; none of it is merged or deployed:
+Done and merged on 2026-11-12 (kubani #423, zetra #82 and #83, zetra-template
+#11). The tools run from a checkout, so they are in use; nothing here changed
+what the cluster runs:
 
 - One test runner: every test module runs, and a run fails if a test file
   contributes no tests. The seven modules that nothing selected now run.
@@ -454,9 +455,11 @@ branch `delivery/model-free-agents`; none of it is merged or deployed:
 - The SDK runs an agent that declares no model, with the check, test kit,
   scaffold option and documentation to match.
 
-Not done in phase 0: platform images built by a pipeline and the move of the
-conformance harness out of the runner image, both waiting on the decisions in
-pull request 420; and the restructuring of the agent platform documentation.
+Not done in phase 0: the move of the conformance harness out of the runner
+image, and the restructuring of the agent platform documentation. Platform
+images are built and pushed by a pipeline since 2026-11-12 (Phase 1 of
+`2026-11-10-platform-image-ci-signing.md`); they are not yet signed, and the
+cluster does not yet run them.
 The outcome contract keeps each tool's existing exit codes; phase 2 revisits
 them when the session interface defines its own.
 

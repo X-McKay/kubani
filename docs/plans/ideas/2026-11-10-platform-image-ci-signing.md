@@ -1,9 +1,34 @@
 # Platform image build, signing and admission in CI — 2026-11-10
 
-**Status:** idea, decisions recorded. Phase 0 is merged in zetra. The six
-decisions in section 1 were made on 2026-11-11. Nothing in Phases 1 to 4 is
-built or tested, and Phase 1 now waits only on the operator's own steps, listed
-below.
+**Status:** Phases 0 and 1 are merged and Phase 1 has run once (2026-11-12, see
+the note below). The six decisions in section 1 were made on 2026-11-11.
+Nothing in Phases 2 to 4 is built or tested. The text below the note was
+written before Phase 1 and is kept as the record of the plan; where it says
+Phase 1 is waiting or untested, the note is what is true now.
+
+**Phase 1 as built, 2026-11-12.** The operator's three steps are done. Kubani
+PR #424 added the `kubani-zetra` scale set, its job guard and the
+`platform-release` registry login; zetra PR #84 added
+`.github/workflows/platform-release.yml`. The first run (zetra `4657884`)
+built and pushed
+`registry.almckay.io/platform/registry-controller:4657884@sha256:af5d886146112cb57d2fe17e82b9e2e59dc586b843b5dcbc362344ca52c1f243`
+in five and a half minutes; the guard admitted it, the mounted login worked
+and the digest read back equalled the one reported. The guard refused two
+throwaway workflows pushed to a zetra branch. Three things differ from what
+Phase 1 describes below:
+
+- The workflow requests no identity token and installs no signing tool. Phase
+  2 adds `id-token: write` to the `release` job alone, because the job that
+  decides what to release runs on a GitHub-hosted runner outside the guard.
+- The build sidecar's memory limit is 4Gi, not 12Gi, and every runner pod
+  requests what it may use, so rig0 holds two builds and a third waits. The
+  measurements are in `infrastructure/gitops/apps/arc-runners/README.md`.
+- An entry of `platform/images.json` is refused unless it holds paths inside
+  the repository, one of two platforms and plain build arguments, because
+  every field reaches a build command beside the registry login.
+
+Not yet seen on the runner: a Go image build and the arm64 `capture` build.
+Nothing was deployed; the cluster still runs the hand-built images.
 **Scope:** the eight image repositories under `registry.almckay.io/platform/`,
 a release workflow in zetra that would build and sign them on a merge to
 `main`, a second runner scale set and an admission policy in Kubani, and a
