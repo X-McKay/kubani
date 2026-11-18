@@ -234,6 +234,8 @@ The contract is zetra's `platform/registry/contract/delivery.md` (sections 3, 6,
 and 12) and `platform/session-api/contract/sessions.md`. This repository holds
 the manifests. Every image is pinned by digest to what zetra's release workflow
 built from `54d66d2` (run 44337682384).
+The registry, the provisioner and the session interface have since moved to the
+build from `d057abe` (run 44343931258), which milestone 3's feed needs.
 
 ### What was added
 

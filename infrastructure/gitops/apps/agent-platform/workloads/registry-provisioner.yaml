@@ -43,8 +43,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-provisioner
-          # built by zetra's release workflow, run 44337682384
-          image: registry.almckay.io/platform/registry-provisioner:54d66d2@sha256:24d43117ffdaca315aad047dec530a6909fc90aada66edf0fb98bb9c867062f2
+          # built by zetra's release workflow, run 44343931258
+          image: registry.almckay.io/platform/registry-provisioner:d057abe@sha256:3fc0585a32fb2c9183a48788805c79a1f7d6c63f66d3fcd9bea7db23fd0b48b8
           env:
             - name: PROVISIONER_CLUSTER
               value: kubani
