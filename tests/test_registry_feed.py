@@ -218,10 +218,6 @@ class SyntheticTree(unittest.TestCase):
         self.assertEqual(feed["aliases"], [{"cluster": "kubani", "alias": "main", "engine": "main", "backend": "llm-main"}])
         self.assertEqual(feed["tenants"], [])
 
-
-if __name__ == "__main__":
-    unittest.main()
-
     def test_no_revocations_directory_gives_an_empty_list(self):
         self.assertEqual(registry_feed.render(self.root)["revocations"], [])
 
@@ -253,3 +249,7 @@ if __name__ == "__main__":
         del doc["release"]
         write_docs(self.root, "infrastructure/registry/revocations/2026-11-20-a.yaml", doc)
         self.assertFailure("validation-failed")
+
+
+if __name__ == "__main__":
+    unittest.main()
