@@ -136,12 +136,14 @@
     },
     {
       "name": "agent-registry",
-      "description": "Optional on agent-cli, default on the registry clients; adds agent-registry to aud and carries the registry roles",
+      "description": "Optional on agent-cli, default on the registry clients; adds agent-registry to aud, carries the registry roles, and gives a client's own token the client_id claim the registry tells a service from a person by",
       "protocol": "openid-connect",
       "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "true", "consent.screen.text": "Use the agent registry"},
       "protocolMappers": [
         {"name": "audience agent-registry", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
-         "config": {"included.custom.audience": "agent-registry", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+         "config": {"included.custom.audience": "agent-registry", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}},
+        {"name": "client id", "protocol": "openid-connect", "protocolMapper": "oidc-usersessionmodel-note-mapper", "consentRequired": false,
+         "config": {"user.session.note": "client_id", "claim.name": "client_id", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true", "userinfo.token.claim": "false"}}
       ]
     },
     {

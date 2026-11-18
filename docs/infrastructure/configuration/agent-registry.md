@@ -56,6 +56,26 @@ registry-provisioner:
 - `PROVISIONER_HEARTBEAT_FILE`: `/tmp/heartbeat`; the liveness probe fails when it is older than 180 s.
 - `PROVISIONER_INTERVAL_SECONDS`: `30`.
 
+## Order of the roll-out
+
+Two changes to this repository, with zetra's merge between them.
+
+1. The first change lists what does nothing by itself: the service accounts and
+   RBAC, the network policies, the feed ConfigMap, the realm file and the
+   operator commands. Merging it restarts Keycloak once (step c).
+2. zetra's `main` gets the registry and the provisioner. Its release workflow
+   builds the two images.
+3. Al does steps a and b below.
+4. The second change lists `registry-db-init-job.yaml` and the two Secret files
+   in `apps/agent-platform/kustomization.yaml`, and `agent-registry.yaml` and
+   `registry-provisioner.yaml` in `workloads/kustomization.yaml`, with the
+   image digests of step 2 in place of the zero placeholders. It also adds the
+   baseline entry of `database/allow-agent-registry-db-init-egress` and the
+   capacity ledger lines.
+
+Until the second change the three workload files are in the tree and in no
+kustomization, so Flux applies none of them.
+
 ## Steps only Al runs
 
 Do them in this order. Run from the repository root with `KUBECONFIG=/home/al/.kube/config`.
@@ -64,7 +84,9 @@ Do them in this order. Run from the repository root with `KUBECONFIG=/home/al/.k
 
 One alphanumeric value, two Secrets (namespaces `database` and `agent-platform`),
 staged outside the repository. This follows "Rotating a Credential" in
-`.claude/rules/secrets.md`. The encrypt form is `(unverified form)` for these paths.
+`.claude/rules/secrets.md`. The encrypt form was tried on 2026-11-17 with a
+placeholder value and an output file outside the repository: the creation rule
+matches the staged file name and only `stringData` is encrypted.
 
 ```bash
 umask 077; STAGE=$(mktemp -d); PW=$(openssl rand -hex 24)
@@ -76,7 +98,7 @@ done
 D=infrastructure/gitops/apps/agent-platform
 SOPS_AGE_KEY_FILE=age.key sops --encrypt "$STAGE/db/secret.enc.yaml" > $D/agent-registry-db-database.enc.yaml
 SOPS_AGE_KEY_FILE=age.key sops --encrypt "$STAGE/ap/secret.enc.yaml" > $D/agent-registry-db.enc.yaml
-shred -u "$STAGE"/db/secret.enc.yaml "$STAGE"/ap/secret.enc.yaml; rm -r "$STAGE"; unset PW
+shred -u "$STAGE"/db/secret.enc.yaml "$STAGE"/ap/secret.enc.yaml; rmdir "$STAGE"/db "$STAGE"/ap "$STAGE"; unset PW
 grep -c '^sops:' $D/agent-registry-db-database.enc.yaml $D/agent-registry-db.enc.yaml
 ```
 
@@ -97,7 +119,13 @@ the registry a password PostgreSQL does not know.
 ### b. The live realm
 
 Keycloak never updates an existing realm from the file, so apply the same
-changes with kcadm. All commands `(unverified form)` except the sign-in.
+changes with kcadm. These commands were run on 2026-11-17 against a local
+Keycloak of the cluster's image, starting from the realm file on `main`. The
+result was compared with a fresh import of the changed file: the roles, the
+scope, both clients and `agent-cli` came out the same, apart from one attribute
+Keycloak adds to a client only at import (`post.logout.redirect.uris`). The
+federated sign-in of the provisioner client (6) could not be tried locally,
+because it needs the cluster's own identity provider `kubernetes-kubani`.
 
 The reader client's secret is in no file of this repository. Keycloak generates
 it when the client is created, and step 5 copies it to
@@ -105,43 +133,68 @@ it when the client is created, and step 5 copies it to
 (`just agent status`). The copy is never shown. To replace the secret, run
 `K create clients/$RID/client-secret -r agents >/dev/null` and the copy line again.
 
+Two things the commands depend on:
+
+- `K get client-scopes -q name=...` does not filter: it returns every scope. The
+  `scope` helper picks the id by name. Do not replace it with `-q` and `head -1`,
+  which attaches the mappers to whichever scope is listed first.
+- A client created without scope lists gets the realm's default scopes and its
+  service account gets `default-roles-agents`. Both clients are created with
+  the lists the file has, and the default role is taken off.
+
+Start a shell for it with `WHO=<your Keycloak username> bash -eu`, paste the
+block, then `exit`. A failed step ends that shell and leaves yours open.
+
 ```bash
+: "${WHO:?start this shell with WHO set to your Keycloak username}"
 KC=$(kubectl get pod -n auth -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}')
 K() { kubectl exec -n auth "$KC" -- /opt/keycloak/bin/kcadm.sh "$@"; }
+scope() { K get client-scopes -r agents --fields id,name --format csv --noquotes | awk -F, -v n="$1" '$2 == n {print $1}'; }
 kubectl exec -n auth "$KC" -- sh -c '/opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"' >/dev/null
 # 1. three roles
 K create roles -r agents -s name=registry-reader -s 'description=Agent registry: read agents and releases'
 K create roles -r agents -s name=registry-operator -s 'description=Agent registry: read, and record releases and approvals'
 K create roles -r agents -s name=registry-provisioner -s 'description=Agent registry: read the desired state and report what each cluster holds'
-# 2. client scope and its audience mapper
+# 2. client scope and its two mappers: the audience, and client_id for a client's own token
 K create client-scopes -r agents -s name=agent-registry -s protocol=openid-connect -s 'attributes."include.in.token.scope"=true' -s 'attributes."display.on.consent.screen"=true' -s 'attributes."consent.screen.text"=Use the agent registry'
-SID=$(K get client-scopes -r agents -q name=agent-registry --fields id --format csv --noquotes | head -1)
-K create client-scopes/$SID/protocol-mappers/models -r agents -b '{"name":"audience agent-registry","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","config":{"included.custom.audience":"agent-registry","access.token.claim":"true","id.token.claim":"false","introspection.token.claim":"true"}}'
+SID=$(scope agent-registry); [ ${#SID} = 36 ]
+K create client-scopes/$SID/protocol-mappers/models -r agents -b '{"name":"audience agent-registry","protocol":"openid-connect","protocolMapper":"oidc-audience-mapper","config":{"included.custom.audience":"agent-registry","access.token.claim":"true","id.token.claim":"false","introspection.token.claim":"true","userinfo.token.claim":"false"}}'
+K create client-scopes/$SID/protocol-mappers/models -r agents -b '{"name":"client id","protocol":"openid-connect","protocolMapper":"oidc-usersessionmodel-note-mapper","config":{"user.session.note":"client_id","claim.name":"client_id","jsonType.label":"String","access.token.claim":"true","id.token.claim":"false","introspection.token.claim":"true","userinfo.token.claim":"false"}}'
 # 3. map the three roles into the scope (the role objects need their ids)
 BODY=$(for r in registry-reader registry-operator registry-provisioner; do K get roles/$r -r agents; done | tr -d '\n' | sed 's/}{/},{/g; s/^/[/; s/$/]/')
 K create client-scopes/$SID/scope-mappings/realm -r agents -b "$BODY"
 # 4. optional scope on agent-cli
-CLI=$(K get clients -r agents -q clientId=agent-cli --fields id --format csv --noquotes | head -1)
+CLI=$(K get clients -r agents -q clientId=agent-cli --fields id --format csv --noquotes); [ ${#CLI} = 36 ]
 K update clients/$CLI/optional-client-scopes/$SID -r agents -b '{}'
 # 5. registry-reader: Keycloak generates the secret; it goes to a private file and is not shown
-K create clients -r agents -s clientId=registry-reader -s publicClient=false -s clientAuthenticatorType=client-secret -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false
-RID=$(K get clients -r agents -q clientId=registry-reader --fields id --format csv --noquotes | head -1)
-K update clients/$RID/default-client-scopes/$SID -r agents -b '{}'
+K create clients -r agents -s clientId=registry-reader -s publicClient=false -s clientAuthenticatorType=client-secret -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false -s 'defaultClientScopes=["basic","roles","agent-registry"]' -s 'optionalClientScopes=[]'
+RID=$(K get clients -r agents -q clientId=registry-reader --fields id --format csv --noquotes); [ ${#RID} = 36 ]
+K remove-roles -r agents --uusername service-account-registry-reader --rolename default-roles-agents
 K add-roles -r agents --uusername service-account-registry-reader --rolename registry-reader
 (umask 077; mkdir -p ~/.config/kubani; K get clients/$RID/client-secret -r agents --fields value --format csv --noquotes > ~/.config/kubani/registry-reader.secret)
 # 6. registry-provisioner-kubani (no secret; federated JWT)
-K create clients -r agents -s clientId=registry-provisioner-kubani -s publicClient=false -s clientAuthenticatorType=federated-jwt -s 'attributes."jwt.credential.issuer"=kubernetes-kubani' -s 'attributes."jwt.credential.sub"=system:serviceaccount:agent-platform:registry-provisioner' -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false
-PID=$(K get clients -r agents -q clientId=registry-provisioner-kubani --fields id --format csv --noquotes | head -1)
-K update clients/$PID/default-client-scopes/$SID -r agents -b '{}'
+K create clients -r agents -s clientId=registry-provisioner-kubani -s publicClient=false -s clientAuthenticatorType=federated-jwt -s 'attributes."jwt.credential.issuer"=kubernetes-kubani' -s 'attributes."jwt.credential.sub"=system:serviceaccount:agent-platform:registry-provisioner' -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false -s 'defaultClientScopes=["basic","roles","agent-registry"]' -s 'optionalClientScopes=[]'
+K remove-roles -r agents --uusername service-account-registry-provisioner-kubani --rolename default-roles-agents
 K add-roles -r agents --uusername service-account-registry-provisioner-kubani --rolename registry-provisioner
 # 7. registry-operator for Al's own user
-K add-roles -r agents --uusername <al's keycloak username> --rolename registry-operator
+K add-roles -r agents --uusername "$WHO" --rolename registry-operator
 ```
 
-A new client also gets the realm's default scopes (`profile`, `email`,
-`web-origins`, `acr`). The file lists only `basic`, `roles` and `agent-registry`
-for both new clients. Remove the others with `K delete clients/<id>/default-client-scopes/<scope id>
--r agents` `(unverified form)`, then compare with `K get clients/<id> -r agents`.
+Each `[ ${#...} = 36 ]` fails when a lookup did not return exactly one id. The
+steps create objects, so a second run stops at the first `create`: continue
+from the step that failed, with `SID` set again by its own line.
+
+What a token then carries, as seen locally:
+
+| Token | `aud` | Realm roles | Other |
+|---|---|---|---|
+| `registry-reader`, client credentials | `agent-registry` | `registry-reader` | `client_id`, no `preferred_username` |
+| A person through `agent-cli` with scope `agent-registry` | `agent-registry` | the person's registry roles | `preferred_username`, no `client_id` |
+| A person through `agent-cli` without the scope | none | none | refused by the registry |
+
+The registry tells a service from a person by `client_id`. A client token
+without that claim is taken for a person and is refused as a provisioner, which
+is why the scope has the second mapper.
 
 ### c. Merging the realm file restarts Keycloak once
 

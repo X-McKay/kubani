@@ -183,6 +183,16 @@ class RegistryManifestTests(unittest.TestCase):
         )
         self.assertEqual(mapping["roles"], three)
 
+        # The registry tells a service from a person by client_id. Its clients have no
+        # `profile` scope, so without this mapper a provisioner's token reads as a person's.
+        scope = next(s for s in realm["clientScopes"] if s["name"] == "agent-registry")
+        claims = {
+            m["config"].get("claim.name"): m["config"].get("user.session.note")
+            for m in scope["protocolMappers"]
+            if m["protocolMapper"] == "oidc-usersessionmodel-note-mapper"
+        }
+        self.assertEqual(claims, {"client_id": "client_id"})
+
         clients = {c["clientId"]: c for c in realm["clients"]}
         # Keycloak generates the reader's secret. A placeholder here would become
         # the secret itself whenever its variable is unset at import.
