@@ -13,7 +13,7 @@ import yaml
 
 import outcome
 
-from . import layout, live, sync
+from . import layout, live, registry_client, sync
 
 ASSETS = ("agent.yaml", "agentrelease.yaml", "policy-bundle.json", "predicate.json", "SHA256SUMS", "image")
 SUMMED = frozenset(ASSETS[:4])
@@ -63,7 +63,7 @@ def verify_sums(dest: Path) -> dict[str, str]:
     return listed
 
 
-def verify_assets(root: Path, d: layout.AgentDir, repo: str, tag: str, dest: Path, source: Path | None) -> dict:
+def verify_assets(root: Path, d: layout.AgentDir, repo: str, tag: str, dest: Path, source: Path | None, *, compare_agent: bool = True) -> dict:
     agent = layout.load_one(dest / "agent.yaml", "Agent")
     release = layout.load_one(dest / "agentrelease.yaml", "AgentRelease")
     predicate = json.loads((dest / "predicate.json").read_text(encoding="utf-8"))
@@ -99,8 +99,7 @@ def verify_assets(root: Path, d: layout.AgentDir, repo: str, tag: str, dest: Pat
         if bundle.get(key) != want:
             raise StageError(f"policy bundle {key} differs from the release")
 
-    committed = layout.committed_agent(d)
-    if agent != committed:
+    if compare_agent and agent != layout.committed_agent(d):
         raise StageError("published Agent differs from the committed Agent; sync the Agent first or cut a new release")
 
     subject = layout.expected_subject(repo, tag)
@@ -144,6 +143,8 @@ def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: 
         raise StageError("tag must be <agent>/v<version> for this agent", "invalid-arguments")
     d = layout.find_agent(root, agent)
     repo = repo or sync.source_repo(d)
+    if not layout.is_listed(root, d):
+        return stage_registry(root, d, tag, repo=repo, source=source)
     file_name = f"agentrelease-{m.group('version')}.yaml"
     target = d.path / file_name
     if target.exists():
@@ -177,4 +178,43 @@ def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: 
         "approval": False,
         **verified["evidence"],
         "next": "commit, merge, let Flux reconcile, then `just agent approve " + verified["name"] + "`",
+    }
+
+
+def stage_registry(root: Path, d: layout.AgentDir, tag: str, *, repo: str, source: Path | None = None) -> dict:
+    """Verify a published release as `stage` does, then record it with the registry that owns the agent. No file is written.
+
+    The published Agent is not compared with the committed one: the registry records the Agent that came with the release.
+    """
+    cfg = registry_client.settings()
+    with tempfile.TemporaryDirectory(prefix="agent-stage-") as tmp:
+        dest = Path(tmp)
+        download(repo, tag, dest)
+        sums = verify_sums(dest)
+        verified = verify_assets(root, d, repo, tag, dest, source, compare_agent=False)
+        published = layout.load_one(dest / "agent.yaml", "Agent")
+    registry = registry_client.Client(cfg, registry_client.person_token())
+    body = {"agent": published, "agentRelease": verified["release"], "lineage": {"repository": repo, "tag": tag, "checksums": sums}}
+    answer = registry.post(registry_client.deployment_path(cfg, d.tenant, d.agent) + "/releases", body)
+    revision = answer.get("revision")
+    number = revision.get("number") if isinstance(revision, dict) else None
+    if not isinstance(number, int) or isinstance(number, bool):
+        raise registry_client.RegistryError("the registry's answer did not name the revision it recorded")
+    spec = verified["release"]["spec"]
+    return {
+        "agent": d.agent,
+        "tenant": d.tenant,
+        "tag": tag,
+        "release": verified["name"],
+        "image": spec["image"],
+        "policySha256": spec["policySha256"],
+        "buildRevision": spec["buildRevision"],
+        "expectedSigner": verified["subject"],
+        "checksums": sums,
+        "approval": False,
+        **verified["evidence"],
+        "path": "registry",
+        "revision": number,
+        "created": answer.get("created") is True,
+        "next": f"`just agent approve {d.agent}`",
     }

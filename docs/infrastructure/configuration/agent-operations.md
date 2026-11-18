@@ -882,6 +882,38 @@ object, then rewrites exactly the `approval` block with `approved: true`,
 block, or the command refuses. Commit and merge in a separate PR; `ls` shows
 the release as runnable once Ready.
 
+## Agents owned by the registry
+
+An agent is owned either by the pull request path (its directory is listed in
+`apps/agents/kustomization.yaml`; everything above applies and the registry is
+never contacted) or by the agent registry (the directory exists but is not
+listed). Registry settings come from `KUBANI_REGISTRY_URL` (default
+`https://agents.almckay.io`), `KUBANI_REGISTRY_CLUSTER` (`kubani`) and
+`KUBANI_REGISTRY_READER_SECRET_FILE` (`~/.config/kubani/registry-reader.secret`,
+mode 0600, created by the operator). Reads use that client secret; every
+change needs a person at a terminal signing in with a `registry-operator` role.
+Registry refusals (`wrong-path`, `stale-approval`, `in-recovery`, ...) are
+passed on as the document's `error.code`.
+
+- `status --registry [--json]`: agents, tool servers and models with blockers
+  and next actions; `--receipt` still reads one run.
+- `stage <agent> <tag>`: the same download and verification (the published
+  Agent is not compared with the committed one), then the release is recorded
+  with the registry. No file changes. `approve <agent>` then shows what the
+  approval is bound to, asks for `yes` on the terminal and approves the newest
+  revision as the signed-in person (`--by` is refused). `approve <release>`
+  of a registry-owned agent, and `approve <agent>` of a listed one, are
+  `wrong-path`.
+- `authority take <agent>`: refuses until the agent's `kustomization.yaml`
+  carries `commonAnnotations` `kustomize.toolkit.fluxcd.io/prune: disabled` and,
+  while the directory is still listed, every live Agent and AgentRelease of the
+  agent carries it (otherwise Flux would delete them). It then asks the registry
+  and removes the one list line; commit that in a pull request.
+- `authority return <agent>`: writes back the releases the registry recorded or
+  approved meanwhile and lists the directory again. If the registry's Agent
+  differs from `agent.yaml` it writes no `agent.yaml` and leaves the directory
+  unlisted; run `sync`, then `authority return` again. Safe to repeat.
+
 ## Verification (2026-11-09)
 
 - All 13 Agents were synced from zetra-agents `202768da`; `kubectl kustomize`

@@ -166,3 +166,35 @@ def append_listed(path: Path, entry: str) -> None:
         raise LayoutError(f"{path}: {entry} is already listed")
     lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")
+
+
+AGENTS_LIST = AGENTS_DIR / "kustomization.yaml"
+
+
+def list_entry(d: AgentDir) -> str:
+    return f"{d.tenant}/{d.agent}"
+
+
+def _same_entry(text: str, d: AgentDir) -> bool:
+    return text.removeprefix("./").rstrip("/") == list_entry(d)
+
+
+def is_listed(root: Path, d: AgentDir) -> bool:
+    """Whether `apps/agents/kustomization.yaml` lists the agent's directory: the pull request path owns it. An unlisted directory belongs to the registry."""
+    return any(_same_entry(entry, d) for entry in load_one_plain(root / AGENTS_LIST).get("resources") or [] if isinstance(entry, str))
+
+
+def unlist(root: Path, d: AgentDir) -> None:
+    """Remove the agent's one line from `apps/agents/kustomization.yaml`; every other line stays as it is."""
+    path = root / AGENTS_LIST
+    lines = path.read_text(encoding="utf-8").split("\n")
+    hits = [i for i, line in enumerate(lines) if re.match(r"^  - \S+\s*$", line) and _same_entry(line[4:].strip(), d)]
+    if len(hits) != 1:
+        raise LayoutError(f"{path}: expected exactly one line listing {list_entry(d)}, found {len(hits)}")
+    del lines[hits[0]]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def relist(root: Path, d: AgentDir) -> None:
+    """List the agent's directory again, at the end of `apps/agents/kustomization.yaml`."""
+    append_listed(root / AGENTS_LIST, list_entry(d) + "/")
