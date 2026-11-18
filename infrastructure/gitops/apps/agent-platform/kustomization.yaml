@@ -64,3 +64,5 @@ resources:
   - agent-registry-db-database.enc.yaml
   - agent-registry-db.enc.yaml
   - registry-db-init-job.yaml
+  # Scratch object for the Flux hand-over rehearsal; removed when it is done.
+  - handover-rehearsal/
