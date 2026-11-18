@@ -1,0 +1,120 @@
+# The registry provisioner: every 30 s it asks the agent registry which Agent
+# and AgentRelease objects (agentplatform.io) this cluster should hold, applies
+# them with server-side apply and reports what it sees. It never deletes.
+#
+# Keycloak token: no client secret. The pod presents its projected
+# service-account token (audience = the realm issuer) as a client assertion for
+# the federated-jwt client registry-provisioner-kubani (apps/keycloak/
+# realm-agents.json).
+#
+# Single writer: replicas 1 and strategy Recreate, never two pods at once.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-provisioner
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: registry-provisioner
+    app.kubernetes.io/part-of: agent-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry-provisioner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry-provisioner
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: registry-provisioner
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry-provisioner
+          # set at integration, when the image is built
+          image: registry.almckay.io/platform/registry-provisioner:0000000@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          env:
+            - name: PROVISIONER_CLUSTER
+              value: kubani
+            - name: PROVISIONER_REGISTRY_URL
+              value: http://agent-registry.agent-platform.svc.cluster.local:8080
+            - name: PROVISIONER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Back-channel token endpoint; the realm's issuer stays idp.almckay.io.
+            - name: PROVISIONER_TOKEN_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/token
+            - name: PROVISIONER_TOKEN_PATH
+              value: /var/run/secrets/registry-provisioner/token
+            - name: PROVISIONER_HEARTBEAT_FILE
+              value: /tmp/heartbeat
+            - name: PROVISIONER_INTERVAL_SECONDS
+              value: "30"
+          # Fails when the loop has not touched the heartbeat file for 180 s.
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/heartbeat')<180 else 1)"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 25m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: idp-token
+              mountPath: /var/run/secrets/registry-provisioner
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: idp-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: https://idp.almckay.io/realms/agents
+                  expirationSeconds: 600
+                  path: token
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# The provisioner keeps one key here, lastGeneration. ssa: IfNotPresent makes
+# Flux create the ConfigMap once and never overwrite what the provisioner wrote
+# (same use as workloads/ratelimit.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-provisioner-state
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: registry-provisioner
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
