@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ import outcome
 
 AGENTS_DIR = Path("infrastructure/gitops/apps/agents")
 SIGNERS = Path("infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml")
+AGENT_CRD = Path("infrastructure/gitops/infrastructure/agent-platform-crds/agents.agentplatform.io.yaml")
 NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\Z")
 TAG = re.compile(r"^(?P<agent>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)/(?P<version>v[0-9][A-Za-z0-9.+-]*)\Z")
 SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
@@ -106,6 +108,38 @@ def committed_agent(d: AgentDir) -> dict:
     if doc["metadata"].get("name") != d.agent or doc["metadata"].get("namespace") != d.tenant:
         raise LayoutError(f"{d.agent_file}: metadata must name {d.agent} in {d.tenant}")
     return doc
+
+
+def _with_defaults(value, schema: dict):
+    """A value with the schema's defaults filled in, the way the API server fills them: a default applies to a property
+    that is missing from a mapping which is itself present."""
+    if isinstance(value, dict):
+        properties = schema.get("properties") or {}
+        result = {key: _with_defaults(item, properties.get(key) or {}) for key, item in value.items()}
+        for key, prop in properties.items():
+            if "default" in prop and result.get(key) is None:
+                result[key] = copy.deepcopy(prop["default"])
+        return result
+    if isinstance(value, list):
+        return [_with_defaults(item, schema.get("items") or {}) for item in value]
+    return copy.deepcopy(value)
+
+
+def applied_agent(root: Path, d: AgentDir) -> dict:
+    """The committed Agent as the cluster and the registry hold it: apiVersion, kind, name, namespace and the spec with
+    the defaults of the committed Agent definition filled in."""
+    doc = committed_agent(d)
+    version = doc["apiVersion"].partition("/")[2]
+    versions = (load_one_plain(root / AGENT_CRD).get("spec") or {}).get("versions") or []
+    schemas = [((v.get("schema") or {}).get("openAPIV3Schema") or {}).get("properties", {}).get("spec") for v in versions if isinstance(v, dict) and v.get("name") == version]
+    if len(schemas) != 1 or not isinstance(schemas[0], dict):
+        raise LayoutError(f"{AGENT_CRD}: expected one {version} schema with a spec")
+    return {
+        "apiVersion": doc["apiVersion"],
+        "kind": doc["kind"],
+        "metadata": {"name": d.agent, "namespace": d.tenant},
+        "spec": _with_defaults(doc["spec"], schemas[0]),
+    }
 
 
 def signer_pin(root: Path, tenant: str) -> dict:

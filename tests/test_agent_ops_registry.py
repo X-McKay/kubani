@@ -120,6 +120,7 @@ def make_tree(tmp: Path, *, listed: bool, annotated: bool = True, release_text: 
     resources = layout.kustomization_resources(d)
     head = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\n" + (f"commonAnnotations:\n  {PRUNE}: disabled\n" if annotated else "")
     d.kustomization.write_text(head + "resources:\n" + "".join(f"  - {r}\n" for r in resources), encoding="utf-8")
+    base.write(root / layout.AGENT_CRD, (base.ROOT / layout.AGENT_CRD).read_text(encoding="utf-8"))
     return root
 
 
@@ -395,7 +396,7 @@ class StatusTests(RegistryCase):
         self.registry.routes[("GET", "/v1/status")] = (200, STATUS)
 
     def test_text_view(self):
-        code, out, _ = self.run_cli(["status", "--registry"])
+        code, out, _ = self.run_cli(["status"])
         self.assertEqual(code, 0)
         request = self.registry.requests[0]
         self.assertEqual((request["query"], request["auth"]), ({"cluster": ["kubani"]}, "Bearer reader-token"))
@@ -404,7 +405,7 @@ class StatusTests(RegistryCase):
         self.assertEqual(self.signins, [])
 
     def test_json_view_is_the_status_with_ok(self):
-        code, doc, _ = self.document(["status", "--registry", "--json"])
+        code, doc, _ = self.document(["status", "--json"])
         self.assertEqual((code, doc), (0, {**STATUS, "ok": True}))
 
     def test_registry_down_is_registry_unreachable(self):
@@ -412,7 +413,7 @@ class StatusTests(RegistryCase):
             s.bind(("127.0.0.1", 0))
             port = s.getsockname()[1]
         with patch.dict(os.environ, {"KUBANI_REGISTRY_URL": f"http://127.0.0.1:{port}"}):
-            code, doc, _ = self.document(["status", "--registry", "--json"])
+            code, doc, _ = self.document(["status", "--json"])
         self.assertEqual((code, doc["ok"], doc["error"]["code"], doc["error"]["retryable"]), (2, False, "registry-unreachable", True))
 
     def test_receipt_still_takes_the_run_path(self):
@@ -422,8 +423,8 @@ class StatusTests(RegistryCase):
         resume.assert_called_once()
         self.assertEqual(self.registry.requests, [])
 
-    def test_neither_or_both_is_a_usage_error_and_wait_still_needs_a_receipt(self):
-        for argv in (["status"], ["status", "--registry", "--receipt", "r.json"], ["wait"], ["cancel"]):
+    def test_wait_and_cancel_still_need_a_receipt(self):
+        for argv in (["wait"], ["cancel"]):
             with self.subTest(argv=argv):
                 out = io.StringIO()
                 with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as caught:
@@ -469,7 +470,7 @@ class ReaderTokenTests(RegistryCase):
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
-            code = cli.main(["--root", str(self.root), "status", "--registry", "--json"])
+            code = cli.main(["--root", str(self.root), "status", "--json"])
         self.assertEqual(code, 0)
         form = urllib.parse.parse_qs(self.registry.requests[0]["raw"])
         self.assertEqual((form["grant_type"], form["client_id"], form["client_secret"]), (["client_credentials"], ["registry-reader"], ["reader-secret-value"]))
@@ -608,7 +609,10 @@ class AuthorityReturnTests(RegistryCase):
         super().setUp()
         self.root = make_tree(self.tmp, listed=False)
         self.d = layout.find_agent(self.root, "sample")
+        # What the cluster and the registry hold for agent.yaml: the same, with the Agent definition's defaults filled in.
         self.committed_agent = yaml.safe_load(base.AGENT_BODY)
+        self.committed_agent["spec"]["enabled"] = True
+        self.committed_agent["spec"]["runtime"] |= {"runtimeClass": "kata-qemu-runtime-rs", "maxBoundaries": 64}
         self.answer(releases=[base.RELEASE_DOC])
 
     def answer(self, *, releases, agent="same", changed=True):
@@ -660,9 +664,33 @@ class AuthorityReturnTests(RegistryCase):
         code, doc, _ = self.give_back()
         self.assertEqual(code, 0, doc)
         self.assertEqual((self.d.agent_file.read_bytes(), self.listed(), doc["agentInGit"], doc["listed"]), (agent_before, False, "differs", False))
+        self.assertEqual(doc["agentDiffers"], ["spec.description"])
         self.assertIn("just agent sync sample --source <checkout>", doc["next"])
         self.assertIn("just agent authority return sample", doc["next"])
         self.assertTrue((self.d.path / "agentrelease-2026-11-10-deadbeef.yaml").is_file())
+
+    def test_the_agent_without_the_defaults_the_cluster_fills_in_is_not_the_same(self):
+        self.answer(releases=[base.RELEASE_DOC], agent=yaml.safe_load(base.AGENT_BODY))
+        code, doc, _ = self.give_back()
+        self.assertEqual((code, doc["agentInGit"], doc["agentDiffers"], doc["listed"]), (0, "differs", ["spec.enabled", "spec.runtime"], False))
+
+    def test_an_agent_the_registry_holds_disabled_stays_unlisted_and_the_message_says_why(self):
+        disabled = copy.deepcopy(self.committed_agent)
+        disabled["spec"]["enabled"] = False
+        self.answer(releases=[base.RELEASE_DOC], agent=disabled)
+        before = snapshot(self.root)
+        code, doc, _ = self.give_back()
+        self.assertEqual((code, doc["agentInGit"], doc["agentDiffers"], doc["listed"], doc["files"]), (0, "differs", ["spec.enabled"], False, []))
+        self.assertIn("The registry holds `enabled: false`", doc["next"])
+        self.assertEqual(snapshot(self.root), before)
+
+    def test_the_committed_db_admin_agent_is_filled_from_the_committed_definition(self):
+        d = layout.find_agent(base.ROOT, "db-admin")
+        applied, raw = layout.applied_agent(base.ROOT, d), layout.committed_agent(d)["spec"]
+        self.assertEqual({k: v for k, v in applied.items() if k != "spec"}, {"apiVersion": "agentplatform.io/v1alpha1", "kind": "Agent", "metadata": {"name": "db-admin", "namespace": "tenant-test"}})
+        self.assertEqual(applied["spec"]["enabled"], raw.get("enabled", True))
+        self.assertEqual(applied["spec"]["runtime"], {"runtimeClass": "kata-qemu-runtime-rs", "maxBoundaries": 64, "cpu": "1", "memory": "2Gi", "ttlSeconds": 1800} | raw["runtime"])
+        self.assertEqual([m["delegation"] for m in applied["spec"]["capabilities"]["mcp"]], [m.get("delegation", "inherit") for m in raw["capabilities"]["mcp"]])
 
     def test_running_it_twice_changes_nothing_the_second_time(self):
         self.answer(releases=[base.RELEASE_DOC, release_variant(), release_variant("sample-2026-11-11-cafecafe", approved=True)])

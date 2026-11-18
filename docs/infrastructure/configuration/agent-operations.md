@@ -895,8 +895,8 @@ change needs a person at a terminal signing in with a `registry-operator` role.
 Registry refusals (`wrong-path`, `stale-approval`, `in-recovery`, ...) are
 passed on as the document's `error.code`.
 
-- `status --registry [--json]`: agents, tool servers and models with blockers
-  and next actions; `--receipt` still reads one run.
+- `status [--json]`: agents, tool servers and models with blockers and next
+  actions; `status --receipt` still reads one run.
 - `stage <agent> <tag>`: the same download and verification (the published
   Agent is not compared with the committed one), then the release is recorded
   with the registry. No file changes. `approve <agent>` then shows what the
@@ -910,9 +910,12 @@ passed on as the document's `error.code`.
   agent carries it (otherwise Flux would delete them). It then asks the registry
   and removes the one list line; commit that in a pull request.
 - `authority return <agent>`: writes back the releases the registry recorded or
-  approved meanwhile and lists the directory again. If the registry's Agent
-  differs from `agent.yaml` it writes no `agent.yaml` and leaves the directory
-  unlisted; run `sync`, then `authority return` again. Safe to repeat.
+  approved meanwhile and lists the directory again. The registry keeps the
+  Agent as the cluster holds it, so `agent.yaml` is compared after the Agent
+  definition's defaults are filled in. If they differ (a newer release changed
+  the Agent, or the registry holds it disabled) the command names the fields,
+  writes no `agent.yaml` and leaves the directory unlisted; run `sync`, then
+  `authority return` again. Safe to repeat.
 
 ## Verification (2026-11-09)
 

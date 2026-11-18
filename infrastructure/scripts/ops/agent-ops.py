@@ -168,12 +168,11 @@ def main(argv=None) -> int:
     p.add_argument("--cancel-on-timeout", action="store_true", help="when --wait-timeout passes, also ask the runner to cancel the session (default: leave it running)")
     p.add_argument("--out", type=Path, help="new private directory for receipt, status and report")
 
-    for name, text in (("status", "read the exact run named by a receipt"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
+    for name, text in (("status", "the registry's view of every agent, tool server and model; with --receipt, the exact run a receipt names"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
         p = sub.add_parser(name, help=text)
-        p.add_argument("--receipt", type=Path, required=name != "status", help="the receipt.json a `run` wrote" + ("; or pass --registry instead" if name == "status" else ""))
+        p.add_argument("--receipt", type=Path, required=name != "status", help="the receipt.json a `run` wrote" + ("; without it, the registry's view of every agent, tool server and model" if name == "status" else ""))
         if name == "status":
-            p.add_argument("--registry", action="store_true", help="instead of --receipt: the registry's view of every agent, tool server and model")
-            p.add_argument("--json", action="store_true", help="with --registry: print the view as JSON instead of text")
+            p.add_argument("--json", action="store_true", help="without --receipt: print the registry's view as JSON instead of text")
         if name == "wait":
             p.add_argument("--wait-timeout", type=positive_float, default=900, help="seconds to follow the session before giving up (exit 124); above 0")
             p.add_argument("--poll-interval", type=positive_float, default=10, help="seconds between status polls; above 0")
@@ -216,8 +215,6 @@ def main(argv=None) -> int:
     p.add_argument("agent", help="committed agent whose authority moves")
 
     args = parser.parse_args(argv)
-    if args.command == "status" and (args.receipt is None) == (not args.registry):
-        parser.error("the following arguments are required: exactly one of --receipt or --registry")
     root = args.root
     started = run.Started()  # the session id, directory and receipt of a `run`, once it has them
     try:
@@ -254,7 +251,7 @@ def main(argv=None) -> int:
                 started=started,
             )
             return conclude(args, code, envelope)
-        if args.command == "status" and args.registry:
+        if args.command == "status" and args.receipt is None:
             doc = registry_client.status()
             if args.json:
                 emit(outcome.document(doc))

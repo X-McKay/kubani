@@ -76,6 +76,15 @@ def render_release(doc: dict) -> str:
     return text
 
 
+def _differing(returned: dict, applied: dict) -> list[str]:
+    """Where the registry's Agent and the committed one differ: `spec.<key>` for the spec, the top-level key otherwise."""
+    found = [key for key in sorted(set(returned) | set(applied)) if key != "spec" and returned.get(key) != applied.get(key)]
+    ours, theirs = applied.get("spec") or {}, returned.get("spec")
+    if not isinstance(theirs, dict):
+        return [*found, "spec"]
+    return found + [f"spec.{key}" for key in sorted(set(ours) | set(theirs)) if ours.get(key) != theirs.get(key)]
+
+
 def give_back(root: Path, agent: str) -> dict:
     d = layout.find_agent(root, agent)
     cfg = registry_client.settings()
@@ -103,7 +112,12 @@ def give_back(root: Path, agent: str) -> dict:
         writes.append((target, render_release(doc)))
         added.append(file_name)
     returned = answer.get("agent")
-    same = isinstance(returned, dict) and returned == layout.committed_agent(d)
+    if not isinstance(returned, dict):
+        raise registry_client.RegistryError("the registry's answer did not carry the agent")
+    # The registry keeps the Agent as the cluster holds it, with the definition's defaults filled in; agent.yaml leaves them out.
+    applied = layout.applied_agent(root, d)
+    same = returned == applied
+    differing = _differing(returned, applied)
     if added:
         layout.listed_resources(d.kustomization)  # refuses a kustomization a new entry cannot be appended to, before any file is written
     files = []
@@ -120,7 +134,10 @@ def give_back(root: Path, agent: str) -> dict:
     if same:
         follow = "commit and open a pull request; Flux owns the agent again once it is merged" if files else "nothing to commit; the pull request path already owns this agent"
     else:
-        follow = f"the Agent changed while the registry owned it; run `just agent sync {agent} --source <checkout>` and then `just agent authority return {agent}` again; the directory stays unlisted until then"
+        follow = f"the registry's Agent differs from agent.yaml in {', '.join(differing)}, so the directory stays unlisted: listing it would put agent.yaml back on the cluster. "
+        if "spec.enabled" in differing:
+            follow += f"The registry holds `enabled: {str(returned['spec'].get('enabled')).lower()}`; set that in the source repository's deploy/agent.yaml first. "
+        follow += f"Bring agent.yaml to the released one with `just agent sync {agent} --source <checkout>`, then run `just agent authority return {agent}` again"
     return {
         "agent": agent,
         "deployment": registry_client.deployment_id(cfg, d.tenant, agent),
@@ -128,6 +145,7 @@ def give_back(root: Path, agent: str) -> dict:
         "changed": answer.get("changed") is True,
         "files": files,
         "agentInGit": "same" if same else "differs",
+        "agentDiffers": differing,
         "listed": layout.is_listed(root, d),
         "next": follow,
     }
