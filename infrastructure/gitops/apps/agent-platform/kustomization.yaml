@@ -54,10 +54,13 @@ resources:
   - budget-conformance.yaml
   - budget-backend-key.enc.yaml
 
-  # Agent Registry and its provisioner: identities, RBAC and network policy.
-  # Inert until the two workloads are listed in workloads/. Still unlisted,
-  # waiting for the database role's Secrets (two .enc.yaml files only Al
-  # creates): registry-db-init-job.yaml. Steps and order:
+  # Agent Registry and its provisioner: identities, RBAC, network policy, the
+  # database role's password (one Secret in each of the two namespaces that read
+  # it) and the Job that creates the role and the database. The workloads are in
+  # workloads/. Steps and order:
   # docs/infrastructure/configuration/agent-registry.md.
   - registry-rbac.yaml
   - netpol-registry.yaml
+  - agent-registry-db-database.enc.yaml
+  - agent-registry-db.enc.yaml
+  - registry-db-init-job.yaml

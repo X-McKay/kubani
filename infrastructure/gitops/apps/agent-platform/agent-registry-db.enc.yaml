@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: Secret
+metadata:
+    name: agent-registry-db
+    namespace: agent-platform
+type: Opaque
+stringData:
+    password: ENC[AES256_GCM,data:3RDC5wd5nB02cXlXPuTgG1gi+x/1mKsj4kf0U4jwXFHrmBJNjZhI++EWP62l9V3N,iv:SwRK9eDZLBcmbSXbL+ZaJM6/Ya4FJcER9l3GHaHNuFQ=,tag:fLEnnomX6yF8rHnUyaZw4g==,type:str]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1852q0tkqzvesyz9r77cpkj4707lt60elrrmydkysf78a63j8rdaqeel748
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBWSW1MNGJqN29TV3UyeWRW
+            SFF4K0IyTVArTFo5NHNhUk41MjRvUXRPS1hrCitham11UlVzS3VYR1VPUGgyWmhI
+            RTJNbndSTTFOSFA0VFhxT3Rqd1BUSkUKLS0tIE9qUXlIbXpKSWVxcWZDVXZIekR6
+            UzVzaERtb1M5QUZKUEVYVW9NM3M2L0EKk4LX0jryGM/yc0LNoYDVvEK+qHhGLQ1j
+            aY5cXLTVXm1p2YfOQw1Th4lo17c0m79cQw5OohNMKLpR8dxEYoYnEw==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-11-18T05:40:47Z"
+    mac: ENC[AES256_GCM,data:8LyqaACTI5MiLpeYRLAr1CdXDXIfGmnTpZwXGuxoPKXDOmvoW6veFFrtrLVJ7p2PviDRu8qHg9/ZmG5t0R/EViu6GwLk3jlIGjm/Iltv0z+QIp9pXuC98UHa8iELsvF/HxIeO6P8TvmfUTvByg1lqeKLcZ9qztMzKceMfUCq8jk=,iv:d6MQJrFO7hdCePUe7N5ABqZ4ci4PLHyc8bJS2OILNc0=,tag:i0pblXb4S0POkTjxjsuj1g==,type:str]
+    pgp: []
+    encrypted_regex: ^(data|stringData)$
+    version: 3.9.4

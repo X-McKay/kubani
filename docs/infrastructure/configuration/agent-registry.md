@@ -80,6 +80,12 @@ kustomization, so Flux applies none of them.
 
 Do them in this order. Run from the repository root with `KUBECONFIG=/home/al/.kube/config`.
 
+Done on 2026-11-18, by Claude on Al's explicit word for that one time: step a,
+and step b parts 1 to 6. The live realm then gave a `registry-reader` token
+with audience `agent-registry`, `client_id` and the one role. Part 7 is not
+done: the realm had no user of Al's, only `conformance-alice`. A person's user
+appears at their first sign-in, so run part 7 after it.
+
 ### a. The database role password
 
 One alphanumeric value, two Secrets (namespaces `database` and `agent-platform`),
@@ -202,6 +208,13 @@ Reloader restarts the Keycloak pod when the realm ConfigMap changes. Identity
 sign-in is interrupted for a short time. Merge when no agent session is starting.
 The restart does not change the live realm: Keycloak imports the file only into
 a database that has no realm `agents`.
+
+Seen on 2026-11-18, when the first change merged: the new Keycloak pod was
+created at 05:05:59Z and Ready at 05:06:55Z. From 05:06:13Z to 05:08:04Z
+`ratelimit-config` was rewritten many times by the Python Kubernetes client,
+while the Registry Controller logged its agent resync against Keycloak, and
+Reloader rolled the `ratelimit` Deployment on each write (39 pods created in
+those two minutes). It ended with both replicas Ready and needed nothing done.
 
 ## How to check it works
 
