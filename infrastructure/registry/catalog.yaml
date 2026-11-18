@@ -58,16 +58,22 @@ modelEngines:
     description: Main model engine
     source: vllm-project/vllm
     workload: vllm
+    manifest: infrastructure/gitops/apps/vllm/deployment.yaml
+    container: vllm
     servedNameFrom: {configMap: model-config, key: LLM_MODEL_NAME}
     backend: llm-main
+    release: Qwen3.6-35B-A3B-NVFP4
   - name: fast
     namespace: vllm
     owner: platform
     description: Fast model engine
     source: vllm-project/vllm
     workload: vllm-fast
+    manifest: infrastructure/gitops/apps/vllm/fast-model-deployment.yaml
+    container: vllm
     servedNameFrom: {configMap: model-config, key: FAST_MODEL_NAME}
     backend: llm-fast
+    release: Qwen-Qwen3.5-0.8B
   - name: embeddings
     namespace: vllm
     owner: platform

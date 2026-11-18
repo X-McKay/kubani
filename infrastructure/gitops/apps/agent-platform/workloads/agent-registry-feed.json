@@ -148,6 +148,68 @@
       "contract": null
     }
   ],
+  "modelReleases": [
+    {
+      "cluster": "kubani",
+      "schemaVersion": 1,
+      "engine": "fast",
+      "name": "Qwen-Qwen3.5-0.8B",
+      "servedName": "Qwen/Qwen3.5-0.8B",
+      "weights": {
+        "source": "hf://Qwen/Qwen3.5-0.8B",
+        "revision": null,
+        "files": null
+      },
+      "format": null,
+      "quantisation": null,
+      "engineImage": "vllm/vllm-openai:v0.30.0-aarch64",
+      "serving": {
+        "chatTemplate": null,
+        "toolCallParser": "qwen3_xml",
+        "contextLength": 32768
+      },
+      "offers": {
+        "contextLength": null,
+        "toolCalling": true,
+        "structuredOutput": null,
+        "embeddingSize": null
+      },
+      "evidence": {
+        "benchmark": "docs/infrastructure/inference/benchmarks/fast/20261001T0409Z_candidate-v0.30.0.json",
+        "changeRecord": "docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md"
+      }
+    },
+    {
+      "cluster": "kubani",
+      "schemaVersion": 1,
+      "engine": "main",
+      "name": "Qwen3.6-35B-A3B-NVFP4",
+      "servedName": "Qwen3.6-35B-A3B-NVFP4",
+      "weights": {
+        "source": "hf://nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "revision": null,
+        "files": null
+      },
+      "format": null,
+      "quantisation": null,
+      "engineImage": "vllm/vllm-openai:v0.30.0-aarch64",
+      "serving": {
+        "chatTemplate": null,
+        "toolCallParser": "qwen3_xml",
+        "contextLength": 131072
+      },
+      "offers": {
+        "contextLength": null,
+        "toolCalling": true,
+        "structuredOutput": null,
+        "embeddingSize": null
+      },
+      "evidence": {
+        "benchmark": "docs/infrastructure/inference/benchmarks/main/20261001T0553Z_candidate-mtp.json",
+        "changeRecord": "docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md"
+      }
+    }
+  ],
   "modelEngines": [
     {
       "name": "main",
@@ -167,7 +229,8 @@
         "name": "model-config",
         "key": "LLM_MODEL_NAME"
       },
-      "backend": "llm-main"
+      "backend": "llm-main",
+      "release": "Qwen3.6-35B-A3B-NVFP4"
     },
     {
       "name": "fast",
@@ -187,7 +250,8 @@
         "name": "model-config",
         "key": "FAST_MODEL_NAME"
       },
-      "backend": "llm-fast"
+      "backend": "llm-fast",
+      "release": "Qwen-Qwen3.5-0.8B"
     },
     {
       "name": "embeddings",
