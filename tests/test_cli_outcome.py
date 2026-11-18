@@ -56,9 +56,13 @@ class OutcomeModule(unittest.TestCase):
     def test_set_is_closed_and_each_code_has_a_class(self):
         self.assertEqual(
             set(outcome.CODES),
-            {"invalid-arguments", "validation-failed", "not-found", "refused", "conflict", "check-failed", "failed", "not-confirmed", "no-consent", "timeout", "interrupted", "unavailable", "internal"},
+            {"invalid-arguments", "validation-failed", "not-found", "refused", "conflict", "check-failed", "failed", "not-confirmed", "no-consent", "timeout", "interrupted", "unavailable", "internal"}
+            | {"wrong-path", "not-signed-in", "stale-approval", "replayed-approval", "in-recovery", "registry-unreachable"},
         )
-        self.assertEqual({c for c, retryable in outcome.CODES.items() if retryable}, {"no-consent", "timeout", "interrupted", "unavailable"})
+        self.assertEqual(
+            {c for c, retryable in outcome.CODES.items() if retryable},
+            {"no-consent", "timeout", "interrupted", "unavailable", "in-recovery", "registry-unreachable"},
+        )
 
     def test_constructor_refuses_a_code_outside_the_set(self):
         with self.assertRaisesRegex(ValueError, "unknown outcome code"):

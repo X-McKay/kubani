@@ -29,6 +29,13 @@ CODES: dict[str, bool] = {
     "interrupted": True,
     "unavailable": True,
     "internal": False,
+    # The agent registry's refusals, passed on unchanged by the commands that call it.
+    "wrong-path": False,
+    "not-signed-in": False,
+    "stale-approval": False,
+    "replayed-approval": False,
+    "in-recovery": True,
+    "registry-unreachable": True,
 }
 
 
