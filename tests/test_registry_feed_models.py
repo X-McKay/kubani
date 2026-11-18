@@ -118,7 +118,7 @@ class RepositoryModels(unittest.TestCase):
         self.assertEqual({n: e.get("release") for n, e in engines.items()}, {"main": "Qwen3.6-35B-A3B-NVFP4", "fast": "Qwen-Qwen3.5-0.8B", "embeddings": None})
         for m in feed["modelReleases"]:
             self.assertEqual(m["name"], registry_feed.release_slug(m["servedName"]))
-            self.assertEqual(m["cluster"], "kubani")
+            self.assertNotIn("cluster", m)
 
 
 class SyntheticModels(unittest.TestCase):
@@ -140,6 +140,16 @@ class SyntheticModels(unittest.TestCase):
         feed = registry_feed.render(self.root)
         self.assertEqual(feed["modelEngines"][0]["release"], "Qwen-Main")
         self.assertEqual([m["name"] for m in feed["modelReleases"]], ["Qwen-Main"])
+
+    def test_a_manifest_that_links_out_of_the_repository_is_refused_unread(self):
+        with tempfile.TemporaryDirectory() as outside:
+            target = Path(outside) / "other.yaml"
+            target.write_text("outsideKey: outside-value\n", encoding="utf-8")
+            (self.root / "infrastructure/registry/models/main/Linked.yaml").symlink_to(target)
+            with self.assertRaises(ValueError) as caught:
+                registry_feed.render(self.root)
+        self.assertIn("leaves the repository root", str(caught.exception))
+        self.assertNotIn("outside", str(caught.exception))
 
     def test_a_changed_engine_image_without_a_new_manifest_fails_naming_the_engine(self):
         write_docs(self.root, DEPLOYMENT, deployment("vllm/vllm-openai:v2.0.0-aarch64"))

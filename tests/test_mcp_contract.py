@@ -232,6 +232,13 @@ class ContractTests(unittest.TestCase):
         self.assertEqual((code, document["error"]["code"]), (1, "check-failed"))
         self.assertFalse(self.file("kubernetes-mcp").exists())
 
+    def test_a_tool_without_an_input_schema_object_is_refused_and_nothing_is_written(self):
+        with FakeMcp([{"name": "pods_list", "description": "lists pods"}]) as fake:
+            code, document = run_cli(self.root, "contract", "kubernetes-mcp", "--url", fake.base + "/mcp")
+        self.assertEqual((code, document["error"]["code"]), (1, "failed"))
+        self.assertIn("pods_list", document["error"]["message"])
+        self.assertFalse(self.file("kubernetes-mcp").exists())
+
     def test_image_not_pinned_is_refused_before_connecting(self):
         with FakeMcp([tool("a")]) as fake:
             code, document = run_cli(self.root, "contract", "github-mcp", "--url", fake.base + "/mcp")

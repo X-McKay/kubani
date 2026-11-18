@@ -150,7 +150,6 @@
   ],
   "modelReleases": [
     {
-      "cluster": "kubani",
       "schemaVersion": 1,
       "engine": "fast",
       "name": "Qwen-Qwen3.5-0.8B",
@@ -180,7 +179,6 @@
       }
     },
     {
-      "cluster": "kubani",
       "schemaVersion": 1,
       "engine": "main",
       "name": "Qwen3.6-35B-A3B-NVFP4",

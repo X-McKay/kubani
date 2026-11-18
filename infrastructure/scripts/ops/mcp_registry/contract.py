@@ -265,6 +265,8 @@ def build_document(server, backend, image, digest, tools, readable) -> dict:
         if not isinstance(name, str) or not name or name in seen:
             raise _failed("the server lists a tool without a name, or one name twice")
         seen.add(name)
+        if not isinstance(tool.get("inputSchema"), dict):
+            raise _failed(f"the server lists tool {name} without an input schema object; the registry does not accept such a contract")
         description = tool.get("description")
         entries.append(
             {

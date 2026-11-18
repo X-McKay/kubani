@@ -57,6 +57,15 @@ def _inside(root: Path, rel) -> Path:
     return path
 
 
+def _files(root: Path, base: Path, pattern: str) -> list[Path]:
+    """The files under base that match, sorted. A link that leads out of the repository is refused, not read."""
+    found = sorted(p for p in base.glob(pattern) if p.is_file()) if base.is_dir() else []
+    for path in found:
+        if not path.resolve().is_relative_to(root):
+            raise ValueError(f"{path.relative_to(root).as_posix()}: path leaves the repository root")
+    return found
+
+
 def _docs(root: Path, rel) -> list:
     path = _inside(root, rel)
     try:
@@ -253,12 +262,11 @@ def release_slug(served_name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", served_name).strip("-.")[:128] or "unnamed"
 
 
-def _model_releases(root: Path, cluster: str) -> list[dict]:
-    """One object per infrastructure/registry/models/<engine>/<name>.yaml, sorted by engine and name; [] when there are none."""
+def _model_releases(root: Path) -> list[dict]:
+    """One object per infrastructure/registry/models/<engine>/<name>.yaml, as the file states it, sorted by engine and name; [] when there are none."""
     base = _inside(root, MODELS)
-    files = sorted(p for p in base.rglob("*.yaml") if p.is_file()) if base.is_dir() else []
     out = []
-    for path in files:
+    for path in _files(root, base, "**/*.yaml"):
         rel = path.relative_to(root).as_posix()
         parts = path.relative_to(base).parts
         if len(parts) != 2:
@@ -291,7 +299,7 @@ def _model_releases(root: Path, cluster: str) -> list[dict]:
             raise ValueError(f"{rel}: weights.source is required")
         if not isinstance(doc["offers"], dict):
             raise ValueError(f"{rel}: offers must be a mapping")
-        out.append({"cluster": cluster, **doc})
+        out.append(doc)
     return sorted(out, key=lambda d: (d["engine"], d["name"]))
 
 
@@ -382,9 +390,8 @@ _TextLoader.yaml_implicit_resolvers = {
 def _revocations(root: Path) -> list[dict]:
     """One object per infrastructure/registry/revocations/*.yaml, in id order (delivery.md 8.1); [] when there are none."""
     base = _inside(root, REVOCATIONS)
-    files = sorted(p for p in base.glob("*.yaml") if p.is_file()) if base.is_dir() else []
     out = []
-    for path in files:
+    for path in _files(root, base, "*.yaml"):
         rel = path.relative_to(root).as_posix()
         try:
             doc = yaml.load(path.read_text(encoding="utf-8"), Loader=_TextLoader)  # noqa: S506 - SafeLoader subclass
@@ -455,7 +462,7 @@ def render(root: Path) -> dict:
     cat = _catalog(root)
     cluster = _cluster(cat)
     tools = _tool_servers(root, cluster["name"], cat)
-    releases = _model_releases(root, cluster["name"])
+    releases = _model_releases(root)
     engines = _model_engines(root, cluster["name"], cat, releases)
     aliases = _aliases(cluster["name"], cat, engines)
     tenants, trusted = _tenants_and_trust(root, cluster["name"])
