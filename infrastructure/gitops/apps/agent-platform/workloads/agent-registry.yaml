@@ -1,0 +1,168 @@
+# The agent registry: the record of agents and their releases, in PostgreSQL.
+# An HTTP API on 8080; every request carries a Keycloak bearer token of realm
+# `agents` with audience agent-registry. The service applies its own database
+# migrations at start, so there is no init container. The database and its role
+# come from registry-db-init-job.yaml; the role's password is the Secret
+# agent-registry-db (key password), which an operator creates (runbook:
+# docs/infrastructure/configuration/agent-registry.md).
+#
+# The feed ConfigMap agent-registry-feed is mounted as a whole directory, with
+# no subPath, so a changed feed reaches the file without a restart. Reloader
+# watches only the database credential: a changed feed must not restart the pod.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-registry
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-registry
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    secret.reloader.stakater.com/reload: "agent-registry-db"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-registry
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-registry
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: agent-registry
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent-registry
+          # set at integration, when the image is built
+          image: registry.almckay.io/platform/agent-registry:0000000@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          args: ["serve"]
+          env:
+            # No password in the DSN: libpq reads PGPASSWORD.
+            - name: REGISTRY_DSN
+              value: postgresql://agent_registry@postgresql.database.svc.cluster.local:5432/agent_registry
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agent-registry-db
+                  key: password
+            - name: REGISTRY_ISSUER
+              value: https://idp.almckay.io/realms/agents
+            - name: REGISTRY_AUDIENCE
+              value: agent-registry
+            # Back-channel JWKS; the realm's issuer stays idp.almckay.io.
+            - name: REGISTRY_JWKS_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
+            - name: REGISTRY_FEED_PATH
+              value: /etc/agent-registry/feed/agent-registry-feed.json
+            - name: REGISTRY_PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: feed
+              mountPath: /etc/agent-registry/feed
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: feed
+          configMap:
+            name: agent-registry-feed
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-registry
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-registry
+    app.kubernetes.io/part-of: agent-platform
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: agent-registry
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+# agents.almckay.io, same annotation pattern as apps/keycloak/ingress.yaml.
+# No Authentik forward-auth: the API's own auth is the Keycloak bearer token.
+# Auth inventory row: docs/infrastructure/configuration/authentik-app-access.md.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-registry
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-registry
+    app.kubernetes.io/part-of: agent-platform
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: agents.almckay.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-registry
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - agents.almckay.io
+      secretName: agents-tls  # pragma: allowlist secret

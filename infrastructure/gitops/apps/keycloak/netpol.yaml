@@ -49,7 +49,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [agent-policy-service, registry-controller, conformance-harness]
+                values: [agent-policy-service, registry-controller, conformance-harness, agent-registry, registry-provisioner]
       ports:
         - port: 8080
           protocol: TCP

@@ -23,7 +23,10 @@
       {"name": "agent-role-kubernetes-read", "description": "MCP backend kubernetes, read tools (spec 3.3, 8.8)"},
       {"name": "agent-role-graphiti-read", "description": "MCP backend graphiti, read tools"},
       {"name": "agent-role-postgres-read", "description": "MCP backend postgres, read tools"},
-      {"name": "agent-role-github-read", "description": "MCP backend github, read tools"}
+      {"name": "agent-role-github-read", "description": "MCP backend github, read tools"},
+      {"name": "registry-reader", "description": "Agent registry: read agents and releases"},
+      {"name": "registry-operator", "description": "Agent registry: read, and record releases and approvals"},
+      {"name": "registry-provisioner", "description": "Agent registry: read the desired state and report what each cluster holds"}
     ]
   },
   "clientScopes": [
@@ -129,6 +132,16 @@
       "protocolMappers": [
         {"name": "audience agent-policy-service", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
          "config": {"included.custom.audience": "agent-policy-service", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
+      ]
+    },
+    {
+      "name": "agent-registry",
+      "description": "Optional on agent-cli, default on the registry clients; adds agent-registry to aud and carries the registry roles",
+      "protocol": "openid-connect",
+      "attributes": {"include.in.token.scope": "true", "display.on.consent.screen": "true", "consent.screen.text": "Use the agent registry"},
+      "protocolMappers": [
+        {"name": "audience agent-registry", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper", "consentRequired": false,
+         "config": {"included.custom.audience": "agent-registry", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true"}}
       ]
     },
     {
@@ -250,6 +263,10 @@
     {
       "client": "agent-tenant-test-conformance",
       "roles": ["agent-role-kubernetes-read"]
+    },
+    {
+      "clientScope": "agent-registry",
+      "roles": ["registry-reader", "registry-operator", "registry-provisioner"]
     }
   ],
   "clients": [
@@ -334,7 +351,7 @@
       "redirectUris": ["http://127.0.0.1/*", "http://localhost/*"],
       "webOrigins": ["+"],
       "defaultClientScopes": ["basic", "profile", "email", "roles", "acr"],
-      "optionalClientScopes": ["offline_access", "agent-policy-service", "delegation"],
+      "optionalClientScopes": ["offline_access", "agent-policy-service", "agent-registry", "delegation"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://127.0.0.1/*##http://localhost/*",
@@ -362,6 +379,45 @@
         "jwt.credential.sub": "system:serviceaccount:tenant-test:agent-conformance",
         "standard.token.exchange.enabled": "true",
         "x-confirmed-2026-11-05": "Keycloak 26.8.1 FederatedJWTClientAuthenticator reads jwt.credential.issuer (identity provider alias) and jwt.credential.sub (federated subject); the spec 7.3 keys federated.jwt.identity.provider / federated.jwt.expected.subject are ignored and failed T4 with invalid_client_credentials. The expected assertion audience is the realm issuer (https://idp.almckay.io/realms/agents) and needs no attribute."
+      }
+    },
+    {
+      "clientId": "registry-reader",
+      "name": "Registry reader",
+      "description": "Read-only client for the agent registry (CI, release checks). Secret from Secret keycloak-client-secrets, key registry-reader.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KC_CLIENT_SECRET_REGISTRY_READER}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "roles", "agent-registry"],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "registry-provisioner-kubani",
+      "name": "Registry provisioner (cluster kubani)",
+      "description": "The provisioner in agent-platform on this cluster. No secret: federated JWT with its projected service-account token.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "federated-jwt",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "consentRequired": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "roles", "agent-registry"],
+      "optionalClientScopes": [],
+      "attributes": {
+        "jwt.credential.issuer": "kubernetes-kubani",
+        "jwt.credential.sub": "system:serviceaccount:agent-platform:registry-provisioner"
       }
     },
     {
@@ -427,6 +483,18 @@
       "enabled": true,
       "serviceAccountClientId": "agent-tenant-test-conformance",
       "realmRoles": ["agent-role-kubernetes-read"]
+    },
+    {
+      "username": "service-account-registry-reader",
+      "enabled": true,
+      "serviceAccountClientId": "registry-reader",
+      "realmRoles": ["registry-reader"]
+    },
+    {
+      "username": "service-account-registry-provisioner-kubani",
+      "enabled": true,
+      "serviceAccountClientId": "registry-provisioner-kubani",
+      "realmRoles": ["registry-provisioner"]
     }
   ]
 }
