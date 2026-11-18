@@ -936,8 +936,10 @@ runs as above even while the registry is down.
   release that is not the current one (only the evaluator may name one). A
   refusal from the interface is shown with its own message and code (an agent
   that acts for a person is `refused`); an answer that does not arrive is
-  `not-confirmed`. The token is held in memory; a token that expires mid-run
-  asks the person to sign in once more.
+  `not-confirmed`. An access token lasts five minutes and a session can last
+  longer: the command renews it with the refresh token of the same sign-in, and
+  sends the person to sign in once more only when Keycloak no longer honours
+  that. Both tokens are held in memory and are never written or printed.
 - `status --receipt`, `wait --receipt` and `cancel --receipt` read the receipt
   and use the session interface for a delivery receipt (each signs in), the
   runner for any other.

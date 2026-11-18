@@ -12,13 +12,15 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.parse
 import uuid
 from pathlib import Path
+from unittest.mock import patch
 
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
 import registry_feed  # noqa: E402
-from agent_ops import delivery, layout  # noqa: E402
+from agent_ops import delivery, layout, registry_client  # noqa: E402
 
 import test_agent_ops as base  # noqa: E402
 from test_agent_ops_outcomes import ACCEPTED, DONE, RUNNING  # noqa: E402
@@ -165,6 +167,64 @@ class RunOnTheSessionInterface(DeliveryCase):
         self.registry.routes[("POST", SESSIONS)] = first_read_is_refused
         code, doc, _ = self.run_new()
         self.assertEqual((code, self.signins), (0, ["person", "person"]), doc)
+
+    def expiring_run(self, renewed):
+        """A run whose first read answers 401. The sign-in handed out a refresh token; `renewed` is Keycloak's answer to it."""
+        self.refresh_token = "refresh-1"
+        self.serve_session(FINISHED)
+        start = self.registry.routes[("POST", SESSIONS)]
+        expired, asked = [True, False], []
+
+        def first_read_is_refused(request):
+            status, doc = start(request)
+            key = ("GET", f"{SESSIONS}/sample/{request['body']['sessionId']}")
+            read = self.registry.routes[key]
+            self.registry.routes[key] = lambda r: (401, b"") if expired.pop(0) else read(r)
+            return status, doc
+
+        def renew(refresh, **kwargs):
+            asked.append(refresh)
+            return renewed
+
+        self.registry.routes[("POST", SESSIONS)] = first_read_is_refused
+        with patch.object(registry_client, "renewed", renew):
+            code, doc, err = self.run_new()
+        return code, doc, err, asked
+
+    def test_an_expired_token_is_renewed_in_memory_and_nobody_signs_in_again(self):
+        code, doc, err, asked = self.expiring_run({"access": "renewed-token", "refresh": "refresh-2"})
+        self.assertEqual((code, self.signins, asked), (0, ["person"], ["refresh-1"]), doc)
+        self.assertEqual([r["auth"] for r in self.registry.requests], [BEARER, BEARER, "Bearer renewed-token"])
+        written = "".join(p.read_text() for p in self.out.iterdir())
+        for secret in ("person-token", "renewed-token", "refresh-1", "refresh-2"):
+            self.assertNotIn(secret, written + json.dumps(doc) + err)
+
+    def test_a_refresh_token_keycloak_no_longer_honours_sends_the_person_to_sign_in(self):
+        code, doc, _, asked = self.expiring_run(None)
+        self.assertEqual((code, self.signins, asked), (0, ["person", "person"], ["refresh-1"]), doc)
+
+
+class Renewal(DeliveryCase):
+    """`registry_client.renewed` against a token endpoint on loopback."""
+
+    TOKEN = "/realms/agents/protocol/openid-connect/token"
+
+    def renewed(self):
+        return registry_client.renewed("refresh-1", issuer=self.registry.url + "/realms/agents")
+
+    def test_the_refresh_token_is_sent_for_the_public_client_and_a_rotated_one_is_kept(self):
+        self.registry.routes[("POST", self.TOKEN)] = (200, {"access_token": "access-2", "refresh_token": "refresh-2"})
+        self.assertEqual(self.renewed(), {"access": "access-2", "refresh": "refresh-2"})
+        form = urllib.parse.parse_qs(self.registry.requests[0]["raw"])
+        self.assertEqual(form, {"grant_type": ["refresh_token"], "client_id": ["agent-cli"], "refresh_token": ["refresh-1"]})
+        self.registry.routes[("POST", self.TOKEN)] = (200, {"access_token": "access-3"})
+        self.assertEqual(self.renewed(), {"access": "access-3", "refresh": "refresh-1"})
+
+    def test_a_refusal_or_an_answer_without_a_token_is_none(self):
+        for answer in ((400, {"error": "invalid_grant"}), (200, {"token_type": "Bearer"}), (502, b"<html>bad gateway</html>")):
+            with self.subTest(answer[0]):
+                self.registry.routes[("POST", self.TOKEN)] = answer
+                self.assertIsNone(self.renewed())
 
     def test_a_registry_that_does_not_answer_is_not_confirmed(self):
         self.registry.routes[("POST", SESSIONS)] = (502, b"<html>bad gateway</html>")

@@ -5,7 +5,7 @@ object `run` already reads and asks the registry nothing, so an agent on the old
 registry is down. On this path a session is started, read and cancelled through the tenant's session interface at
 `<registry URL>/v1/tenants/<tenant>/sessions` with the person's own token (zetra platform/session-api/contract/sessions.md),
 and nothing goes through `kubectl exec`. Release changes are one registry route each (zetra platform/registry/contract/
-delivery.md sections 6 to 8). A person's token is held in memory only and is never written or printed.
+delivery.md sections 6 to 8). A person's tokens are held in memory only and are never written or printed.
 """
 
 from __future__ import annotations
@@ -80,16 +80,24 @@ def sessions_path(tenant: str, agent: str | None = None, session: str | None = N
 
 
 class Api:
-    """The registry client with the person's token. When the registry no longer accepts the token (they last for minutes)
-    the person signs in again once, at the same terminal, and the call is repeated."""
+    """The registry client with the person's token. An access token lasts for minutes and a session can last longer, so
+    when the registry stops accepting the token it is renewed with the refresh token of the same sign-in; when there is
+    none, or Keycloak no longer honours it, the person signs in again once, at the same terminal. Then the call is repeated."""
 
-    def __init__(self, cfg: registry_client.Settings, sign_in, *, timeout: float, browser: bool):
+    def __init__(self, cfg: registry_client.Settings, sign_in, *, timeout: float, browser: bool, renew=None):
         self.cfg, self._sign_in, self._timeout, self._browser = cfg, sign_in, timeout, browser
-        self._client = None
+        self._renew = renew or registry_client.renewed
+        self._client, self._refresh = None, None
+
+    def _use(self, tokens) -> registry_client.Client:
+        """`tokens` is what a sign-in returned: the access token alone, or `access` with `refresh`."""
+        tokens = tokens if isinstance(tokens, dict) else {"access": tokens}
+        self._refresh = tokens.get("refresh")
+        self._client = registry_client.Client(self.cfg, tokens["access"])
+        return self._client
 
     def _fresh(self) -> registry_client.Client:
-        self._client = registry_client.Client(self.cfg, self._sign_in(timeout=self._timeout, browser=self._browser))
-        return self._client
+        return self._use(self._sign_in(timeout=self._timeout, browser=self._browser))
 
     def call(self, method: str, path: str, body: dict | None = None) -> dict:
         client = self._client or self._fresh()
@@ -98,11 +106,12 @@ class Api:
         except registry_client.RegistryError as exc:
             if exc.code != "not-signed-in":
                 raise
-        return self._fresh()._call(method, path, body)
+        tokens = self._renew(self._refresh) if self._refresh else None
+        return (self._use(tokens) if tokens else self._fresh())._call(method, path, body)
 
 
 def _api(sign_in, timeout: float, browser: bool) -> Api:
-    return Api(registry_client.settings(), sign_in or registry_client.person_token, timeout=timeout, browser=browser)
+    return Api(registry_client.settings(), sign_in or registry_client.person_tokens, timeout=timeout, browser=browser)
 
 
 def _session_url(cfg: registry_client.Settings, tenant: str) -> str:
