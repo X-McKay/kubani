@@ -347,3 +347,67 @@ ConfigMap that carried `kustomize.toolkit.fluxcd.io/prune: disabled`:
 | R2 (#433) | Removed from the kustomization | The object stayed; inventory 353 |
 | R3 (#434) | Added back | The same object was adopted (same creation time); inventory 354 |
 | R4 (#435) | Removed again | The object was kept and was absent from the inventory (353); then deleted by name |
+
+## Milestone 4: skills with scripts
+
+The contract is zetra's `platform/registry/contract/skills.md`. A skill is a
+directory of instructions an agent's image carries; a skill may hold scripts,
+and a script runs inside the agent's container only when the release requests
+the effect `sandbox_execute` and its tenant grants it.
+
+### What was added
+
+| | What | Where |
+|---|---|---|
+| A | Both resource definitions, copied from zetra `589ec5c`: `spec.capabilities.effects` on the Agent and in a release's declaration, and `spec.skills` on a release | `infrastructure/agent-platform-crds/` |
+| B | The Registry Controller, the registry, the session interface and the session runner (all nine places the runner's image is named) built from zetra `589ec5c`, run 44369420437. The provisioner and the evaluator did not change | `apps/agent-platform/workloads/` |
+| C | `just agent approve <release>` compares `spec.skills` between the committed file and the live object, prints one line for each effect the release requests and returns the lines as `covers` | `infrastructure/scripts/ops/agent_ops/approve.py` |
+
+One change carried A and B. Flux applies the `infrastructure` root, which holds
+the definitions, before the workloads root, and no release lists a skill or
+requests an effect yet. The order to keep once one does: the definitions, then
+the controller, the registry and the runner, then the tenant's grant, then the
+release.
+
+None of this changes an existing release. A policy bundle gains `effects` only
+when the list is not empty, so no `policySha256` moves, and a sandbox Pod gains
+`AGENT_EFFECTS` only when its bundle has effects. The sandbox admission policy
+does not constrain the agent container's environment, so it needs no change.
+
+### The grant is a person's change
+
+No tenant grants the effect. A release that requests it is not Ready, with
+reason `EffectNotGranted`, which comes before `NotApproved`; `just agent
+approve` refuses it because the release is not waiting solely on approval, and
+no session starts for it.
+
+To grant it, add one annotation to the tenant's Namespace in
+`infrastructure/namespace-policy/agent-platform-namespaces.yaml`, in its own
+pull request:
+
+```yaml
+metadata:
+  annotations:
+    agentplatform.io/granted-effects: sandbox_execute
+```
+
+What the grant allows, in the words every approval of the effect shows:
+`effect sandbox_execute: skill scripts run inside the agent's container and can
+read the session's identity token`. It applies to every agent of the tenant
+whose approved release requests the effect. Removing the annotation makes those
+releases not Ready at the controller's next reconcile.
+
+`just agent register` rewrites only the signer line of that Namespace, so the
+annotation stays.
+
+### How to check it works
+
+```bash
+KUBECONFIG=/home/al/.kube/config kubectl get crd agentreleases.agentplatform.io \
+  -o jsonpath='{.spec.versions[0].schema.openAPIV3Schema.properties.spec.properties.skills.maxItems}'
+KUBECONFIG=/home/al/.kube/config kubectl -n tenant-test get agentreleases \
+  -o custom-columns=NAME:.metadata.name,READY:.status.ready,DIGEST:.status.policyDigest
+```
+
+The first prints `16`. The second shows the same releases Ready, with the same
+digests, as before the roll.

@@ -16,11 +16,27 @@ from . import layout, live, registry_client, sync
 
 APPROVAL_RE = re.compile(r"^  approval:\n    approved: false\n", re.MULTILINE)
 
+# What an approval that covers an effect states, after `effect <name>: `. The text is the platform's
+# (zetra platform/registry/contract/effects.json at 589ec5c, skills contract section 7.4); a test holds it.
+EFFECT_STATEMENTS = {"sandbox_execute": "skill scripts run inside the agent's container and can read the session's identity token"}
+
 
 class ApproveError(outcome.Coded):
     """A gate refused the approval."""
 
     default_code = "refused"
+
+
+def covers(release_spec: dict, agent_spec: dict) -> list[str]:
+    """One sentence for each effect the release requests: its declaration's or, for a release without one, its Agent's."""
+    declaration = release_spec.get("declaration")
+    capabilities = (declaration if isinstance(declaration, dict) else agent_spec).get("capabilities")
+    effects = capabilities.get("effects") if isinstance(capabilities, dict) else None
+    names = sorted({e for e in effects if isinstance(e, str)}) if isinstance(effects, list) else []
+    unknown = [e for e in names if e not in EFFECT_STATEMENTS]
+    if unknown:
+        raise ApproveError("the release requests an effect this command cannot describe: " + ", ".join(unknown))
+    return [f"effect {e}: {EFFECT_STATEMENTS[e]}" for e in names]
 
 
 def gates(committed: dict, observed: dict, pin: dict, repo: str) -> dict:
@@ -30,7 +46,7 @@ def gates(committed: dict, observed: dict, pin: dict, repo: str) -> dict:
     name = committed["metadata"]["name"]
     if observed.get("metadata", {}).get("name") != name:
         raise ApproveError("live object is not the committed release")
-    for key in ("agent", "image", "manifestSha256", "policySha256", "lockSha256", "buildRevision"):
+    for key in ("agent", "image", "manifestSha256", "policySha256", "lockSha256", "buildRevision", "skills"):
         if spec.get(key) != cspec.get(key):
             raise ApproveError(f"live spec.{key} differs from the committed file")
     if spec.get("approval", {}).get("approved") is not False:
@@ -90,7 +106,9 @@ def approve(
         raise ApproveError(f"{file.relative_to(root)} is not an unapproved staged release", "conflict")
     observed = kube.get("agentrelease", name, d.tenant)
     evidence = gates(committed, observed, layout.signer_pin(root, d.tenant), repo or sync.source_repo(d))
-    approver = by or layout.committed_agent(d)["spec"].get("owner")
+    agent_spec = layout.committed_agent(d)["spec"]
+    statements = covers(committed["spec"], agent_spec)
+    approver = by or agent_spec.get("owner")
     if not isinstance(approver, str) or not approver:
         raise ApproveError("no approver: pass --by or set the Agent owner", "invalid-arguments")
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -110,6 +128,8 @@ def approve(
     if parsed != want:
         raise ApproveError("approval edit changed more than the approval block", "validation-failed")
     file.write_text(updated, encoding="utf-8")
+    for statement in statements:
+        print(f"This approval covers {statement}", file=sys.stderr, flush=True)
     return {
         "release": name,
         "agent": d.agent,
@@ -118,6 +138,7 @@ def approve(
         "approvedBy": approver,
         "approvedAt": stamp,
         "ticket": ticket,
+        "covers": statements,
         "evidence": evidence,
         "next": "commit, merge, then confirm status.ready with `just agent ls`",
     }

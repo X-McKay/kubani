@@ -52,11 +52,11 @@ spec:
       containers:
         - name: registry-controller
           # Built and pushed by zetra's release workflow from X-McKay/zetra
-          # 54d66d2 (.github/workflows/platform-release.yml, run 44337682384),
+          # 589ec5c (.github/workflows/platform-release.yml, run 44369420437),
           # not by hand. The workflow builds with --no-cache, because the
           # Dockerfile's uv cache mount can reuse a stale build of the package.
-          # Prior: 67c908a, run 43336260715.
-          image: registry.almckay.io/platform/registry-controller:54d66d2@sha256:9a83897f8b0c7d2a2790b8128203242a08bee16dd507e0c32105daa571767a9f
+          # Prior: 54d66d2, run 44337682384.
+          image: registry.almckay.io/platform/registry-controller:589ec5c@sha256:3fddb1ce9fb91c0b46b23757e6d37901fc262a30e0e67e98d39e1094cf85369d
           env:
             - name: AGENT_PLATFORM_ISSUER_URL
               value: https://idp.almckay.io/realms/agents
