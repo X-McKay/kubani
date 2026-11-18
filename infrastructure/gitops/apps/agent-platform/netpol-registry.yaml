@@ -19,7 +19,8 @@
 #                           public addresses on 443 (same as github-mcp)
 # The provisioner and the evaluator listen on nothing, so they have no
 # ingress policy. The session interface is called by the evaluator and the
-# provisioner inside the cluster and by release workflows through Traefik.
+# provisioner inside the cluster and by a signed-in operator's `just agent`
+# commands through Traefik.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

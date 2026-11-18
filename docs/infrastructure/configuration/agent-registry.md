@@ -286,25 +286,48 @@ Automation does none of these.
    it restarts Keycloak; mirror the role and the client into it in a separate
    change if a fresh import must produce them.
 
-2. For each agent repository: a deploy key, held as the Actions secret
-   `RELEASE_TAG_KEY`, and two Actions variables:
-   `AGENT_REGISTRY_URL=https://agents.almckay.io` and
-   `AGENT_REGISTRY_AUDIENCE=https://agents.almckay.io`. The public half of the
-   deploy key is added to the repository with write access.
+2. For each agent repository whose merges to `main` should become releases
+   (delivery.md section 3.4):
+   - a deploy key with write access, its private half held as the Actions secret
+     `RELEASE_TAG_KEY`. A tag pushed with the workflow's own token starts no
+     workflow, which is why a key is needed;
+   - the deploy key allowed past the repository's tag ruleset, so it may create
+     `<agent>/v<version>` tags;
+   - two Actions variables: `AGENT_REGISTRY_URL=https://agents.almckay.io` and
+     `AGENT_REGISTRY_AUDIENCE=https://agents.almckay.io`.
+
+   Until the secret exists the tag workflow prints the tags it would have
+   created and succeeds, and a release is still made by pushing the tag by hand.
+   Without the two variables the release workflow publishes as before and
+   reports nothing to the registry.
 
 ### Order of the roll-out
 
-1. The CRD first (`infrastructure/agent-platform-crds/`): the controller and the
-   provisioner write `spec.declaration`, and the API server drops a field its
-   schema lacks. Check `kubectl get crd agentreleases.agentplatform.io -o yaml`
-   shows `declaration` before the next step.
-2. The registry (`agent-registry.yaml` with the three GitHub settings, and the new
-   feed), once its image is built.
-3. The provisioner, with `PROVISIONER_SESSION_API_URL`.
+Each image below is built by zetra's release workflow when the zetra change
+merges. Replace every `:PENDING`, and the commit in
+`infrastructure/agent-platform-crds/kustomization.yaml`, with what that run
+built before any of this is merged here.
+
+1. The CRD first (`infrastructure/agent-platform-crds/`): the provisioner writes
+   `spec.declaration`, and the API server drops a field its schema lacks. Check
+   `kubectl get crd agentreleases.agentplatform.io -o yaml` shows `declaration`
+   before the next step.
+2. The Registry Controller's new image (`workloads/registry-controller.yaml`). It
+   compiles a release from the declaration the release carries and takes the rate
+   limit from the release the Agent names as current. It must run before the
+   provisioner writes a carried declaration, or the old controller would compile
+   that release from the live Agent.
+3. The registry and the provisioner, in one change: `agent-registry.yaml` with
+   the three GitHub settings, the new feed, and `registry-provisioner.yaml` with
+   `PROVISIONER_SESSION_API_URL`, both on the new images.
 4. The session interface (`session-api-tenant-test.yaml`, its RBAC, its Temporal
    certificate and the endpoint's new identity, the network policies).
 5. The evaluator, last, after the operator's Keycloak steps above; it needs the
    session interface up.
+
+The session runner's image needs no new pin for this milestone: the only change
+to its library is an optional argument the session interface passes when it
+starts a session.
 
 ### Hand-over rehearsal of 2026-11-18
 

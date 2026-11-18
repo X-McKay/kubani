@@ -1,8 +1,9 @@
 # The session interface for tenant tenant-test (zetra platform/session-api,
 # contract sessions.md): starts, reads, cancels and lists that tenant's agent
 # sessions over HTTP on 8080. Callers are the registry evaluator and the
-# provisioner inside the cluster, and release workflows through agents.almckay.io
-# path /v1/tenants/tenant-test/sessions. Every request carries a Keycloak bearer
+# provisioner inside the cluster, and a signed-in operator's `just agent`
+# commands through agents.almckay.io, path
+# /v1/tenants/tenant-test/sessions. Every request carries a Keycloak bearer
 # token of realm agents with audience agent-registry, the registry's own.
 #
 # It talks to Temporal as the tenant's runner does (same mTLS endpoint, same

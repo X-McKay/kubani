@@ -11,7 +11,9 @@
 # docs/infrastructure/configuration/agent-registry.md). The same access token
 # goes to the registry and to the session interface.
 #
-# Single worker: replicas 1 and strategy Recreate.
+# Single worker: replicas 1 and strategy Recreate. No liveness probe: one pass
+# lasts as long as a suite does. An evaluator that has stopped shows in
+# `just agent status` as an evaluation pending for more than ten minutes.
 ---
 apiVersion: apps/v1
 kind: Deployment
