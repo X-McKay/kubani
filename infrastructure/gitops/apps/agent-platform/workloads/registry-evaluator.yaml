@@ -49,7 +49,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-evaluator
-          image: registry.almckay.io/platform/registry-evaluator:PENDING
+          # built by zetra's release workflow, run 44337682384
+          image: registry.almckay.io/platform/registry-evaluator:54d66d2@sha256:5342b8c2566d4390c826b4ea64e64e4d45c9bfdf237078f20e85184eed6c0928
           env:
             - name: EVALUATOR_CLUSTER
               value: kubani

@@ -65,7 +65,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: session-api
-          image: registry.almckay.io/platform/session-api:PENDING
+          # built by zetra's release workflow, run 44337682384
+          image: registry.almckay.io/platform/session-api:54d66d2@sha256:2664a3b4ac59b690bd9e7cea801de4577db0a5a92d9ddc9ee717f2cf769b486b
           env:
             - name: SESSION_API_TENANT
               value: tenant-test
