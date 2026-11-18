@@ -95,8 +95,9 @@ spec:
         matchExpressions:
           - 'jwt.client_type == "agent" && "agent-gateway" in jwt.aud'
 ---
-# Required model and single-completion bounds for llm-main, evaluated by the gateway's own AI parser. Must equal the
-# served model name in ../models.yaml and apps/vllm/model-config.yaml.
+# Required model and single-completion bounds for llm-main, evaluated by the gateway's own AI parser. The model is the
+# served name in ../models.yaml and apps/vllm/model-config.yaml, or the catalog alias `main` agents send
+# (infrastructure/registry/catalog.yaml); the backend's openai.model pins what the engine receives.
 # Require is cumulative: another Allow (agents-only) cannot bypass it.
 # request.body buffers the complete body; parse/size errors fail closed.
 # One completion keeps usage within the server context bound reserved by APS.
@@ -116,13 +117,14 @@ spec:
       action: Require
       policy:
         matchExpressions:
-          - 'llm.requestModel == "Qwen3.6-35B-A3B-NVFP4"'
+          - 'llm.requestModel == "Qwen3.6-35B-A3B-NVFP4" || llm.requestModel == "main"'
           - '!("n" in json(request.body)) || json(request.body).n == 1'
           - '!("best_of" in json(request.body))'
           - '!("use_beam_search" in json(request.body)) || json(request.body).use_beam_search == false'
 ---
-# Required model and single-completion bounds for llm-fast, evaluated by the gateway's own AI parser. Must equal the
-# served model name in ../models.yaml and apps/vllm/model-config.yaml.
+# Required model and single-completion bounds for llm-fast, evaluated by the gateway's own AI parser. The model is the
+# served name in ../models.yaml and apps/vllm/model-config.yaml, or the catalog alias `fast` agents send
+# (infrastructure/registry/catalog.yaml); the backend's openai.model pins what the engine receives.
 # Require is cumulative: another Allow (agents-only) cannot bypass it.
 # request.body buffers the complete body; parse/size errors fail closed.
 # One completion keeps usage within the server context bound reserved by APS.
@@ -142,7 +144,7 @@ spec:
       action: Require
       policy:
         matchExpressions:
-          - 'llm.requestModel == "Qwen/Qwen3.5-0.8B"'
+          - 'llm.requestModel == "Qwen/Qwen3.5-0.8B" || llm.requestModel == "fast"'
           - '!("n" in json(request.body)) || json(request.body).n == 1'
           - '!("best_of" in json(request.body))'
           - '!("use_beam_search" in json(request.body)) || json(request.body).use_beam_search == false'

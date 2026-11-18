@@ -917,6 +917,50 @@ passed on as the document's `error.code`.
   writes no `agent.yaml` and leaves the directory unlisted; run `sync`, then
   `authority return` again. Safe to repeat.
 
+### Delivery commands (milestone 2)
+
+An agent is on the delivery path when its live Agent carries the annotation
+`registry.agentplatform.io/deployment`. `run` decides this from the Agent it
+already reads; it asks the registry nothing, so an agent without the annotation
+runs as above even while the registry is down.
+
+- `run <agent> --task ..` on the delivery path signs a person in (the same
+  sign-in and role as the commands above), starts the session at
+  `<registry URL>/v1/tenants/<tenant>/sessions` with `{"request": TEXT}` and
+  follows it by reading it. Nothing goes through `kubectl exec`. The run
+  directory is as before; `receipt.json` has `schemaVersion` 2 and
+  `path: session-interface`, with the interface's address and the session id.
+  `--no-wait`, `--wait-timeout`, `--poll-interval` and `--cancel-on-timeout`
+  mean what they meant. `--grant-handle` and a `--max-boundaries` other than
+  the default are refused before anything is sent, and so is `--release` of a
+  release that is not the current one (only the evaluator may name one). A
+  refusal from the interface is shown with its own message and code (an agent
+  that acts for a person is `refused`); an answer that does not arrive is
+  `not-confirmed`. An access token lasts five minutes and a session can last
+  longer: the command renews it with the refresh token of the same sign-in, and
+  sends the person to sign in once more only when Keycloak no longer honours
+  that. Both tokens are held in memory and are never written or printed.
+- `status --receipt`, `wait --receipt` and `cancel --receipt` read the receipt
+  and use the session interface for a delivery receipt (each signs in), the
+  runner for any other.
+- `status` shows, for each agent the registry owns, `in use`, `candidate` (phase,
+  reason and evaluation), `last refused` (reason and verdict), `pinned`,
+  `revoked` and whether the cluster has taken the last change.
+- `rollback <agent> [--to RELEASE] [--reason TEXT]`, `pin <agent> [--release
+  RELEASE]`, `unpin <agent>`, `disable|enable <agent> [--reason TEXT]` and
+  `evaluate <agent> [--reason TEXT]` are one registry route each, signed in as
+  the person, and pass the registry's refusal on with its code. `rollback`
+  without `--to` takes the registry's choice; `pin` without `--release` pins the
+  current release; `evaluate` asks again for the newest revision after a
+  refusal.
+- `revoke <agent> <release> --reason security|quality --summary TEXT --by WHO
+  [--sessions cancel|finish]` writes
+  `infrastructure/registry/revocations/<id>.yaml` (the id is
+  `<date>-<agent>-<suffix>` of the release name; an existing id is refused) and
+  regenerates the committed feed. It commits, pushes and contacts nothing:
+  open a pull request with the two files; the revocation takes effect when it
+  merges.
+
 ## Verification (2026-11-09)
 
 - All 13 Agents were synced from zetra-agents `202768da`; `kubectl kustomize`

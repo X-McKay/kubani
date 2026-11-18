@@ -43,13 +43,17 @@ spec:
           type: RuntimeDefault
       containers:
         - name: registry-provisioner
-          # built by zetra's release workflow, run 44241363409
-          image: registry.almckay.io/platform/registry-provisioner:a28c108@sha256:a0ef8e59f486028275b65b87953342e1e471d9a94dc96b261599dae03f78e745
+          # built by zetra's release workflow, run 44337682384
+          image: registry.almckay.io/platform/registry-provisioner:54d66d2@sha256:24d43117ffdaca315aad047dec530a6909fc90aada66edf0fb98bb9c867062f2
           env:
             - name: PROVISIONER_CLUSTER
               value: kubani
             - name: PROVISIONER_REGISTRY_URL
               value: http://agent-registry.agent-platform.svc.cluster.local:8080
+            # Cancels a revoked release's sessions (delivery.md 8.3); {tenant} is the
+            # tenant name, so Service session-api-tenant-test.
+            - name: PROVISIONER_SESSION_API_URL
+              value: http://session-api-{tenant}.agent-platform.svc:8080
             - name: PROVISIONER_NAMESPACE
               valueFrom:
                 fieldRef:

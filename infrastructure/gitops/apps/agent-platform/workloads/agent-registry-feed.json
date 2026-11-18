@@ -213,5 +213,6 @@
       "engine": "fast",
       "backend": "llm-fast"
     }
-  ]
+  ],
+  "revocations": []
 }

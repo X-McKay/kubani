@@ -323,7 +323,7 @@ test-agent-preflight:
     just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT
+# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 

@@ -9,7 +9,18 @@
 #                           (allow-keycloak-from-agent-platform)
 #   Traefik -> registry: kube-system has no egress policy, so the ingress rule
 #                           below is the only side
-# The provisioner listens on nothing, so it has no ingress policy.
+#   session interface -> Temporal: infrastructure/agent-platform-netpol/
+#                           upstreams.yaml (allow-agent-platform-ingress)
+#   session interface -> Keycloak: apps/keycloak/netpol.yaml
+#                           (allow-keycloak-from-agent-platform)
+#   evaluator -> Keycloak: the same policy
+#   registry -> GitHub (token.actions.githubusercontent.com): the internet; a
+#                           NetworkPolicy cannot name a host, so the rule is
+#                           public addresses on 443 (same as github-mcp)
+# The provisioner and the evaluator listen on nothing, so they have no
+# ingress policy. The session interface is called by the evaluator and the
+# provisioner inside the cluster and by a signed-in operator's `just agent`
+# commands through Traefik.
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -107,4 +118,145 @@ spec:
             cidr: 100.64.0.0/10
       ports:
         - port: 6443
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: session-api
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Registry -> GitHub's signing keys (release reports, delivery.md 3.2). Public
+# addresses on 443 only; every private and tailnet range is excluded so the
+# pod gains no in-cluster or LAN path.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-registry-github-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agent-registry
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: registry-evaluator-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: registry-evaluator
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: agent-registry
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - port: 8080
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: session-api
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: session-api-ingress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: session-api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: registry-evaluator
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: registry-provisioner
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: session-api-egress
+  namespace: agent-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: session-api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: temporal
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: temporal-mtls
+      ports:
+        - port: 7233
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 10.43.0.1/32
+      ports:
+        - port: 443
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 100.64.0.0/10
+      ports:
+        - port: 6443
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: auth
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - port: 8080
           protocol: TCP

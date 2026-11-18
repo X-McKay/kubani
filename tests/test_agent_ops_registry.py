@@ -140,16 +140,17 @@ class RegistryCase(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
         self.signins: list[str] = []
+        self.refresh_token: str | None = None  # what the fake sign-in hands out beside the access token
         self.kube = FakeKube()
 
         def person(*args, **kwargs):
             self.signins.append("person")
-            return "person-token"
+            return {"access": "person-token", "refresh": self.refresh_token}
 
         env = {"KUBANI_REGISTRY_URL": self.registry.url, "KUBANI_REGISTRY_CLUSTER": "kubani", "KUBANI_REGISTRY_READER_SECRET_FILE": str(self.tmp / "no-such-secret")}
         for patcher in (
             patch.dict(os.environ, env),
-            patch.object(registry_client, "person_token", person),
+            patch.object(registry_client, "person_tokens", person),
             patch.object(registry_client, "reader_token", lambda *a, **k: "reader-token"),
             patch.object(live, "Kube", lambda *a, **k: self.kube),
         ):

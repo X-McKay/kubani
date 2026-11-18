@@ -197,8 +197,9 @@ def check_claims(claims: dict) -> None:
         raise RegistryError("the signed-in token cannot be used for registry changes: " + " and ".join(problems) + "; the operator (Al) grants access in Keycloak", "refused")
 
 
-def person_token(*, timeout: float = delegation.DEFAULT_TIMEOUT, browser: bool = False, issuer: str | None = None, say=None, open_url=None, clock=time.monotonic) -> str:
-    """Take the person at this terminal through a browser sign-in and return their access token, held in memory only."""
+def person_tokens(*, timeout: float = delegation.DEFAULT_TIMEOUT, browser: bool = False, issuer: str | None = None, say=None, open_url=None, clock=time.monotonic) -> dict:
+    """Take the person at this terminal through a browser sign-in. Returns `access`, their access token, and `refresh`,
+    the refresh token Keycloak issued with it or None. Both are held in memory only."""
     if not delegation.interactive():
         raise RegistryError("this command needs a person signed in at a terminal: stdin and stderr must both be a TTY", "not-signed-in")
     delegation.require_pyjwt()
@@ -228,7 +229,27 @@ def person_token(*, timeout: float = delegation.DEFAULT_TIMEOUT, browser: bool =
     tokens = delegation.exchange(issuer, code, verifier, redirect_uri)
     claims = delegation.verified_claims(issuer, tokens, nonce)
     check_claims(claims)
-    return tokens["access"]
+    return {"access": tokens["access"], "refresh": tokens["refresh"]}
+
+
+def person_token(**kwargs) -> str:
+    """The access token of `person_tokens`, for a command that makes its calls at once."""
+    return person_tokens(**kwargs)["access"]
+
+
+def renewed(refresh: str, *, issuer: str | None = None) -> dict | None:
+    """Tokens for the refresh token of this command's own sign-in, so that a command that follows a session for longer
+    than an access token lasts does not send the person to the browser again. None when Keycloak gives none (the
+    person's session ended, or the token was used up): the caller then asks the person to sign in."""
+    fields = {"grant_type": "refresh_token", "client_id": delegation.CLIENT, "refresh_token": refresh}
+    try:
+        doc = delegation._json(delegation._fetch((issuer or delegation.ISSUER) + delegation.TOKEN_PATH, "token endpoint", fields), "token endpoint")
+    except delegation.ConsentError:
+        return None
+    access, newer = doc.get("access_token"), doc.get("refresh_token")
+    if not isinstance(access, str) or not access:
+        return None
+    return {"access": access, "refresh": newer if isinstance(newer, str) and newer else refresh}
 
 
 def read_client(cfg: Settings | None = None) -> Client:
@@ -267,11 +288,31 @@ def _unknown(row: dict) -> str:
     return f"  unknown (last seen {_age(observation.get('ageSeconds'))})"
 
 
+def _delivery_lines(a: dict) -> list[str]:
+    """What the registry says of a release it delivers: in use, waiting, refused, pinned, revoked and whether the cluster has the last change."""
+    current, candidate, refused = a.get("current"), a.get("candidate"), a.get("lastRefused")
+    lines = [f"      in use: {current['release']} (revision {current.get('revision')}){' admitted by ' + current['admittedBy'] if current.get('admittedBy') else ''}" if current else "      in use: no current release"]
+    if candidate:
+        evaluation = candidate.get("evaluation")
+        lines.append(f"      candidate: {candidate.get('release')} (revision {candidate.get('revision')}) {candidate.get('phase')}: {candidate.get('reason') or 'no reason given'}" + (f"; evaluation attempt {evaluation.get('attempt')} {evaluation.get('state')}" if evaluation else ""))
+    if refused:
+        verdict = refused.get("evaluation")
+        lines.append(f"      last refused: {refused.get('release')} (revision {refused.get('revision')}): {refused.get('reason')}" + (f"; evaluation {verdict.get('verdict')}: {verdict.get('summary')}" if verdict else ""))
+    if a.get("pinned") is not None:
+        lines.append(f"      pinned: revision {a['pinned']}")
+    lines += [f"      revoked: {r.get('release')} ({r.get('reason')}, {r.get('id')})" for r in a.get("revoked") or []]
+    acknowledged = a.get("acknowledged")
+    lines.append("      cluster: " + {True: "has taken the last change", False: "has not taken the last change yet"}.get(acknowledged, "not known"))
+    return lines
+
+
 def format_status(doc: dict) -> str:
     lines = [f"cluster {doc.get('cluster')}  mode {doc.get('mode')}  generation {doc.get('generation')}", "", "Agents"]
     for a in doc.get("agents") or []:
         ready = {True: "ready", False: "not ready"}.get(a.get("ready"), "ready unknown")
         lines.append(f"  {a.get('agent')} ({a.get('tenant')})  {a.get('authority')}  current {a.get('currentRelease') or '-'}  newest {a.get('newestRelease') or '-'}  phase {a.get('phase') or '-'}  {ready}{_unknown(a)}")
+        if a.get("authority") == "registry":
+            lines += _delivery_lines(a)
         lines += [f"      blocker: {b}" for b in a.get("blockers") or []]
         lines += [f"      next: {n}" for n in a.get("nextActions") or []]
     if not doc.get("agents"):

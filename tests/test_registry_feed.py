@@ -106,6 +106,23 @@ def build_tree(root: Path) -> None:
     )
 
 
+def revocation(rid: str, **changes) -> dict:
+    doc = {
+        "schemaVersion": 1,
+        "id": rid,
+        "kind": "agent",
+        "item": "db-admin",
+        "release": "db-admin-2026-11-20-1a2b3c4d",
+        "reason": "security",
+        "sessions": "cancel",
+        "summary": "A test revocation.",
+        "revokedBy": "al",
+        "revokedAt": "2026-11-20T10:00:00Z",
+    }
+    doc.update(changes)
+    return doc
+
+
 class RepositoryFeed(unittest.TestCase):
     def setUp(self):
         self.feed = registry_feed.render(ROOT)
@@ -133,6 +150,9 @@ class RepositoryFeed(unittest.TestCase):
         self.assertEqual(repo["subjectRegExp"], tenant["policy"]["signer"]["subjectRegExp"])
         agents_dir = ROOT / "infrastructure/gitops/apps/agents/tenant-test"
         self.assertEqual(repo["agents"], sorted(p.name for p in agents_dir.iterdir() if p.is_dir()))
+
+    def test_revocations_are_a_list(self):
+        self.assertIsInstance(self.feed["revocations"], list)
 
     def test_render_is_deterministic_and_committed_file_is_current(self):
         self.assertEqual(registry_feed.feed_bytes(registry_feed.render(ROOT)), registry_feed.feed_bytes(self.feed))
@@ -197,6 +217,26 @@ class SyntheticTree(unittest.TestCase):
         self.assertEqual([t["name"] for t in feed["toolServers"]], ["kubernetes-mcp"])
         self.assertEqual(feed["aliases"], [{"cluster": "kubani", "alias": "main", "engine": "main", "backend": "llm-main"}])
         self.assertEqual(feed["tenants"], [])
+
+    def test_no_revocations_directory_gives_an_empty_list(self):
+        self.assertEqual(registry_feed.render(self.root)["revocations"], [])
+
+    def test_revocations_come_in_id_order_with_the_text_written(self):
+        for rid in ("2026-11-21-b", "2026-11-20-a"):
+            write_docs(self.root, f"infrastructure/registry/revocations/{rid}.yaml", revocation(rid))
+        found = registry_feed.render(self.root)["revocations"]
+        self.assertEqual([r["id"] for r in found], ["2026-11-20-a", "2026-11-21-b"])
+        self.assertEqual(found[0]["revokedAt"], "2026-11-20T10:00:00Z")
+
+    def test_revocation_id_must_equal_the_file_name(self):
+        write_docs(self.root, "infrastructure/registry/revocations/2026-11-20-a.yaml", revocation("other"))
+        self.assertFailure("validation-failed")
+
+    def test_revocation_with_a_missing_key_is_refused(self):
+        doc = revocation("2026-11-20-a")
+        del doc["release"]
+        write_docs(self.root, "infrastructure/registry/revocations/2026-11-20-a.yaml", doc)
+        self.assertFailure("validation-failed")
 
 
 if __name__ == "__main__":

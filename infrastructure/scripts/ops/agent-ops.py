@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority, rollback, pin, unpin, disable, enable, evaluate, revoke."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 import outcome
-from agent_ops import approve, authority, delegation, layout, live, register, registry_client, run, stage, state, sync
+from agent_ops import approve, authority, delegation, delivery, layout, live, register, registry_client, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
@@ -22,6 +22,7 @@ ERRORS = (
     stage.StageError,
     approve.ApproveError,
     authority.AuthorityError,
+    delivery.DeliveryError,
     registry_client.RegistryError,
 )
 
@@ -214,6 +215,24 @@ def main(argv=None) -> int:
     p.add_argument("action", choices=("take", "return"), help="take: the registry owns the agent; return: git owns it again")
     p.add_argument("agent", help="committed agent whose authority moves")
 
+    for name, text in (("rollback", "return a registry-owned agent to an earlier activated release (default: the one before the current)"), ("pin", "keep a registry-owned agent on one release while newer ones activate (default: the current one)"), ("unpin", "let a registry-owned agent follow the newest activated release again"), ("disable", "stop a registry-owned agent from starting sessions"), ("enable", "let a registry-owned agent start sessions again"), ("evaluate", "ask for another evaluation of the newest revision after a refusal")):
+        p = sub.add_parser(name, help=text)
+        p.add_argument("agent", help="agent the registry owns")
+        if name == "rollback":
+            p.add_argument("--to", metavar="RELEASE", help="the release to return to (default: the newest activated release below the current one)")
+        if name == "pin":
+            p.add_argument("--release", help="the release to pin (default: the current release)")
+        if name in ("rollback", "disable", "enable", "evaluate"):
+            p.add_argument("--reason", help="why, recorded with the change")
+
+    p = sub.add_parser("revoke", help="prepare the reviewed revocation file for a release and regenerate the feed; commits and sends nothing")
+    p.add_argument("agent", help="agent name")
+    p.add_argument("release", help="the release to revoke")
+    p.add_argument("--reason", choices=("security", "quality"), required=True, help="security cancels the release's running sessions unless --sessions finish; quality lets them finish")
+    p.add_argument("--summary", required=True, help="one sentence for the record")
+    p.add_argument("--sessions", choices=("cancel", "finish"), help="what happens to running sessions (default: cancel for security, finish for quality)")
+    p.add_argument("--by", required=True, help="who decided")
+
     args = parser.parse_args(argv)
     root = args.root
     started = run.Started()  # the session id, directory and receipt of a `run`, once it has them
@@ -234,6 +253,25 @@ def main(argv=None) -> int:
             return 0
         if args.command == "run":
             task = parse_task(args)
+            kube = live.Kube()
+            owned = delivery.new_path(root, kube, args.agent)
+            if owned is not None:
+                code, envelope = delivery.submit(
+                    *owned,
+                    task,
+                    release=args.release,
+                    grant_handle=args.grant_handle,
+                    max_boundaries=args.max_boundaries,
+                    wait=not args.no_wait,
+                    wait_timeout=args.wait_timeout,
+                    poll_interval=args.poll_interval,
+                    cancel_on_timeout=args.cancel_on_timeout,
+                    out=args.out,
+                    consent_timeout=args.consent_timeout,
+                    browser=args.browser,
+                    started=started,
+                )
+                return conclude(args, code, envelope)
             code, envelope = run.submit(
                 root,
                 args.agent,
@@ -249,6 +287,7 @@ def main(argv=None) -> int:
                 consent_timeout=args.consent_timeout,
                 browser=args.browser,
                 started=started,
+                kube=kube,
             )
             return conclude(args, code, envelope)
         if args.command == "status" and args.receipt is None:
@@ -258,6 +297,9 @@ def main(argv=None) -> int:
             else:
                 print(registry_client.format_status(doc))
             return 0
+        if args.command in ("status", "wait", "cancel") and delivery.is_session_receipt(args.receipt):
+            code, envelope = delivery.resume(args.receipt, args.command, wait_timeout=getattr(args, "wait_timeout", 900), poll_interval=getattr(args, "poll_interval", 10))
+            return conclude(args, code, envelope)
         if args.command in ("status", "wait", "cancel"):
             code, envelope = run.resume(args.receipt, args.command, wait_timeout=getattr(args, "wait_timeout", 900), poll_interval=getattr(args, "poll_interval", 10))
             return conclude(args, code, envelope)
@@ -287,6 +329,18 @@ def main(argv=None) -> int:
             return conclude(args, 0, approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
         if args.command == "authority":
             return conclude(args, 0, authority.take(root, args.agent) if args.action == "take" else authority.give_back(root, args.agent))
+        if args.command == "rollback":
+            return conclude(args, 0, delivery.rollback(root, args.agent, to=args.to, reason=args.reason))
+        if args.command == "pin":
+            return conclude(args, 0, delivery.pin(root, args.agent, release=args.release))
+        if args.command == "unpin":
+            return conclude(args, 0, delivery.unpin(root, args.agent))
+        if args.command in ("disable", "enable"):
+            return conclude(args, 0, delivery.set_enabled(root, args.agent, args.command == "enable", reason=args.reason))
+        if args.command == "evaluate":
+            return conclude(args, 0, delivery.evaluate(root, args.agent, reason=args.reason))
+        if args.command == "revoke":
+            return conclude(args, 0, delivery.revoke(root, args.agent, args.release, reason=args.reason, summary=args.summary, by=args.by, sessions=args.sessions))
     except KeyboardInterrupt:
         message = "interrupted before the command finished; a run directory, when one was created, holds what was written by then"
         if args.command not in ONE_DOCUMENT:
