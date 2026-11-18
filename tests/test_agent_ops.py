@@ -716,13 +716,13 @@ class RegisterTests(unittest.TestCase):
         self.assertFalse(layout.subject_matches({"subjectRegExp": pin}, layout.expected_subject(REPO, "sample/v1").replace("refs/tags", "refs/heads")))
 
     def test_committed_tenant_test_pin_is_derived_from_the_sync_headers(self):
-        """The real repository: both pin copies equal the pin derived from the 13 headers."""
+        """The real repository: both pin copies equal the pin derived from the 14 headers."""
         result = register.check(ROOT)
         self.assertTrue(result["ok"], result)
         row = result["tenants"][0]
         self.assertEqual(row["tenant"], "tenant-test")
         self.assertEqual(list(row["sources"]), ["X-McKay/zetra-agents"])
-        self.assertEqual(len(row["sources"]["X-McKay/zetra-agents"]), 13)
+        self.assertEqual(len(row["sources"]["X-McKay/zetra-agents"]), 14)
         self.assertEqual(register.derived_pin(ROOT, "tenant-test"), register.committed_pins(ROOT, "tenant-test")["configmap"])
 
     def test_check_reports_drift_in_either_copy(self):
