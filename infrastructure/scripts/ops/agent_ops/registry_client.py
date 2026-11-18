@@ -313,6 +313,9 @@ def format_status(doc: dict) -> str:
         lines.append(f"  {a.get('agent')} ({a.get('tenant')})  {a.get('authority')}  current {a.get('currentRelease') or '-'}  newest {a.get('newestRelease') or '-'}  phase {a.get('phase') or '-'}  {ready}{_unknown(a)}")
         if a.get("authority") == "registry":
             lines += _delivery_lines(a)
+        held = a.get("held")
+        if isinstance(held, dict):
+            lines.append(f"      held: alias move {held.get('move')} {held.get('state')}" + (f": {held['reason']}" if held.get("reason") else ""))
         lines += [f"      blocker: {b}" for b in a.get("blockers") or []]
         lines += [f"      next: {n}" for n in a.get("nextActions") or []]
     if not doc.get("agents"):
@@ -327,4 +330,8 @@ def format_status(doc: dict) -> str:
         lines.append(f"  {m.get('name')}  {', '.join(m.get('aliases') or []) or '-'}  serves {m.get('observedServedName') or m.get('declaredServedName')}{_unknown(m)}")
     if not doc.get("models"):
         lines.append("  none")
+    if doc.get("aliasMoves"):
+        lines += ["", "Alias moves"]
+        for m in doc["aliasMoves"]:
+            lines.append(f"  {m.get('id')}  alias {m.get('alias')}  {m.get('state')}  next: {m.get('next') or '-'}")
     return "\n".join(lines)
