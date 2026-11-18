@@ -65,5 +65,5 @@ resources:
   - agent-registry-db.enc.yaml
   - registry-db-init-job.yaml
   # Scratch object for the Flux hand-over rehearsal; removed when it is done.
-  # Rehearsal step 2: not listed, files kept. Flux must leave the object alone.
-  # - handover-rehearsal/
+  # Rehearsal step 3: listed again. Flux must adopt the object it left alone.
+  - handover-rehearsal/
