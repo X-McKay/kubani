@@ -255,6 +255,11 @@ inference-promote profile result:
 inference-preflight image *ARGS:
     ./infrastructure/scripts/inference_bench/image_preflight.sh {{image}} {{ARGS}}
 
+# Write the manifest of a new model release of an engine (infrastructure/registry/models/README.md).
+# e.g. just inference-manifest --engine fast --name <name> [--weights-revision R] [--benchmark F] [--change-record F] [--tool-calling true|false]
+inference-manifest *ARGS:
+    uv run --locked python infrastructure/scripts/ops/model_release.py new {{ARGS}}
+
 # Operations (docs/infrastructure/README.md#operations)
 
 # engine: main | fast. Pass --no-capture to skip the incident-capture reminder

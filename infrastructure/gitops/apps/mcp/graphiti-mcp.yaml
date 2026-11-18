@@ -100,7 +100,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: graphiti-mcp
-          image: zepai/knowledge-graph-mcp:1.1.1-standalone
+          image: docker.io/zepai/knowledge-graph-mcp@sha256:befb285c706da9853f3f9d741e49eabd6994b62521c822fba2dee99f2a161749 # 1.1.1-standalone
           # The image's CMD is `uv run`, and uv lives under /root, which a
           # non-root user cannot enter. Run the synced venv directly.
           command: ["/app/mcp/.venv/bin/python", "main.py"]

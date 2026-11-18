@@ -36,6 +36,7 @@ CODES: dict[str, bool] = {
     "replayed-approval": False,
     "in-recovery": True,
     "registry-unreachable": True,
+    "stale-assessment": False,
 }
 
 

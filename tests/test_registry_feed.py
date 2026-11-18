@@ -228,6 +228,18 @@ class SyntheticTree(unittest.TestCase):
         self.assertEqual([r["id"] for r in found], ["2026-11-20-a", "2026-11-21-b"])
         self.assertEqual(found[0]["revokedAt"], "2026-11-20T10:00:00Z")
 
+    def test_a_revocation_that_links_out_of_the_repository_is_refused_unread(self):
+        with tempfile.TemporaryDirectory() as outside:
+            target = Path(outside) / "other.yaml"
+            target.write_text("outsideKey: outside-value\n", encoding="utf-8")
+            directory = self.root / "infrastructure/registry/revocations"
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "2026-11-20-a.yaml").symlink_to(target)
+            with self.assertRaises(ValueError) as caught:
+                registry_feed.render(self.root)
+        self.assertIn("leaves the repository root", str(caught.exception))
+        self.assertNotIn("outside", str(caught.exception))
+
     def test_revocation_id_must_equal_the_file_name(self):
         write_docs(self.root, "infrastructure/registry/revocations/2026-11-20-a.yaml", revocation("other"))
         self.assertFailure("validation-failed")

@@ -167,6 +167,28 @@ just inference-compare <profile> docs/infrastructure/inference/benchmarks/<profi
 Paste the `compare` output and the verdict into the change record, and commit
 the result JSON files along with it.
 
+### 5a. Write the model release manifest
+
+The agent registry knows each model release by a reviewed manifest,
+`infrastructure/registry/models/<engine>/<name>.yaml`. The step sits after
+promotion of a benchmark result (the manifest names the promoted result as its
+evidence) and before the change that moves the engine:
+
+```bash
+just inference-manifest --engine <main|fast> --name <name>
+```
+
+It reads the engine's image, served name and stated serving arguments from the
+committed manifests and prints the path and the next steps. Review the file
+(every `null` is a value the repository does not state), then, in the change
+that moves the engine, set `release: <name>` on the engine's entry in
+`infrastructure/registry/catalog.yaml`. For an engine behind an alias, run
+`just agent alias plan` first. A manifest is never edited after it is merged.
+
+A change to an engine's image or served name does not render without a new
+manifest: `registry_feed.py render` fails naming the engine. See
+`infrastructure/registry/models/README.md`.
+
 ### 6. Watch for degradation after release
 
 Re-run the benchmark and compare against the current baseline:

@@ -961,6 +961,112 @@ runs as above even while the registry is down.
   open a pull request with the two files; the revocation takes effect when it
   merges.
 
+### Moving a model alias (milestone 3)
+
+An alias such as `fast` names an engine and a release. Agents whose model
+resolves through it keep working when it moves, but they would be evaluated on
+one model and run on another. A move is how the registry holds those agents
+while the alias changes and then evaluates them on the new model. It is five
+steps:
+
+1. **Plan.** `just agent alias plan <alias> --engine E --release R` asks the
+   registry for an assessment (the release's manifest must be merged first). It
+   prints the pair behind the alias now and the candidate, one line per
+   dependant (agent, tenant, authority, enabled, release, whether it will be
+   held, whether it will be evaluated, each need and whether the candidate meets
+   it, `not recorded` when the manifest does not say), then, apart, the
+   dependants that will **not** be held: agents on the pull request path, whose
+   sessions use the new model with no hold and no evaluation. Decide whether
+   that is acceptable. A blocked assessment (an enabled dependant needs
+   something the candidate does not offer) is printed too, and the command ends
+   `refused`.
+2. **Move.** `just agent alias move <assessment> [--sessions finish|cancel]
+   [--evaluation-seconds N]` starts the move: each held agent stops taking new
+   sessions, and running ones finish (default) or are cancelled. An assessment
+   gone stale since the plan ends `stale-assessment`: plan again. An alias with
+   an open move ends `conflict`. `just agent alias status [<move>] [--alias A]`
+   shows the move, each hold (agent, state, running sessions, reason) and
+   `next`, one sentence saying what it waits for; without a move it lists the
+   open moves. `just agent status` shows them too, and which agents are held.
+3. **Merge the change that moves the alias**, when the move is `held`. This is
+   an ordinary pull request.
+4. **Say the engine is serving.** When the engine runs the candidate, `just
+   agent alias evaluate <move>` starts the evaluation. The registry refuses,
+   and says what is missing, unless it has a fresh observation of the engine
+   with a ready replica serving the candidate's name.
+5. **Read the result.** `status` shows the move until it is `completed`. A move
+   that has not moved yet can be ended with `just agent alias cancel <move>
+   --reason TEXT`.
+
+**Backing out.** Once the alias change is merged the move is `moving` and
+`cancel` is refused. If the engine never serves the candidate, the way back is
+a pull request that moves the alias to the pair it came from: the dependency
+gate allows it, the registry ends the move as `cancelled` and releases the
+holds, and each held agent takes sessions again on the revision it had. The
+registry then records one more revision per agent for the restored pair and
+evaluates it, as after any alias change.
+
+`suspended` is a hold that stays in force after the move: the agent takes no
+new sessions because its only evaluated revision was evaluated on the model
+that is gone. It ends when a later revision of the agent passes evaluation (a
+new release, or `just agent evaluate <agent>` once the cause is fixed) or the
+alias moves back and the agent passes there.
+
+`--json` prints the registry's document with `ok` added. Restarting an engine is
+not something these commands do: it is announced to the operator of the cluster
+first and done by hand.
+
+### The dependency gate on pull requests (milestone 3)
+
+`.github/workflows/dependency-gate.yml` asks the registry about every pull
+request to `main` that changes a tool server's recorded contract or the pair
+behind an alias. A contract change that removes or changes a tool a running
+agent uses fails the check and names the agent; an alias change passes only
+when the registry has a move for that candidate that is `held` (or the change
+backs a `moving` move out). The check to require on `main` is the job named
+`Dependency gate`.
+
+It runs in three jobs, because this repository is public and the registry is
+reachable only inside the tailnet:
+
+| Job | Runner | What it does |
+|---|---|---|
+| `compare` | GitHub-hosted | Checks out `main` and the pull request side by side, renders both feeds with `main`'s code, and stops there when no contract or alias changed |
+| `registry` | `sparky` | Receives the two rendered feeds as JSON and asks the registry. It never checks out the pull request, and it does not run for a fork |
+| `verdict` | GitHub-hosted | Passes only when `compare` succeeded and either nothing had to be asked or `registry` succeeded |
+
+The same script runs by hand, from a checkout of `main`:
+
+```bash
+uv run --locked python infrastructure/scripts/ops/dependency_gate.py \
+  --base-root <checkout of main> --head-root <checkout of the change>
+```
+
+`--offline` asks nothing and exits 3 when there is a question for the registry.
+
+What the operator sets up once:
+
+- The repository variable `DEPENDENCY_GATE` set to `enabled`. Until then every
+  job is skipped.
+- A `registry-reader` credential file for the runner's user on `sparky`, at
+  `~/.config/kubani/registry-reader.secret` (or the path in
+  `KUBANI_REGISTRY_READER_SECRET_FILE`). It is not a repository secret.
+- `Dependency gate` as a required status check on `main`.
+
+Limits:
+
+- A pull request from a fork that changes a contract or an alias fails the
+  check. A maintainer pushes the change to a branch of this repository.
+- While the runner on `sparky` is offline the check stays pending.
+- The workflow is `pull_request_target`, so a change to the workflow or to the
+  gate script takes effect only after it is merged; its own pull request runs
+  the copy on `main`.
+- The gate does not check a removed alias or a removed tool server.
+- The job log is public. It names the agents and tenants the registry reports
+  as affected.
+- `tests/test_dependency_gate_workflow.py` holds the workflow file to the rules
+  in its header. A failure there is a stop, not a test to relax.
+
 ## Verification (2026-11-09)
 
 - All 13 Agents were synced from zetra-agents `202768da`; `kubectl kustomize`

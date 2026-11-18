@@ -39,7 +39,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: github-mcp
-          image: ghcr.io/github/github-mcp-server:v2.0.2
+          image: ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796 # v2.0.2
           args:
             - http
             - --port=8082

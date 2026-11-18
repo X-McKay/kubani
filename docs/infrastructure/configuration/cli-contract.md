@@ -72,9 +72,10 @@ without `proofs`.
 | `replayed-approval` | no | this approval was used before |
 | `in-recovery` | yes | the agent registry is in recovery and writes nothing until a person ends it |
 | `registry-unreachable` | yes | the agent registry did not answer; nothing was changed |
+| `stale-assessment` | no | the assessment an alias move names no longer describes the cluster (the pair behind the alias, a dependant or its release changed); plan again |
 
-The last six belong to the commands that call the agent registry. The first
-five are the registry's own codes and are passed on unchanged, with its
+The last seven belong to the commands that call the agent registry. The first
+five and `stale-assessment` are the registry's own codes and are passed on unchanged, with its
 message. A registry answer of `unavailable` (its database is down) stays
 `unavailable`; `registry-unreachable` is this side's word for no answer at all.
 

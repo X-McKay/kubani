@@ -19,12 +19,14 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import outcome  # noqa: E402
 from agent_ops import layout, register  # noqa: E402
+from mcp_registry import contract as mcp_contract  # noqa: E402
 
 CATALOG = Path("infrastructure/registry/catalog.yaml")
 FEED = Path("infrastructure/gitops/apps/agent-platform/workloads/agent-registry-feed.json")
 BACKENDS = Path("infrastructure/mcp/backends")
 REVOCATIONS = Path("infrastructure/registry/revocations")
 MODEL_CONFIG = Path("infrastructure/gitops/apps/vllm/model-config.yaml")
+MODELS = Path("infrastructure/registry/models")
 GATEWAY = Path("infrastructure/gitops/apps/ai-gateway/agents/backends.yaml")
 BACKEND_NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
 
@@ -35,6 +37,8 @@ TOOL_KEYS = frozenset({"name", "namespace", "owner", "description", "source", "m
 ENGINE_KEYS = frozenset({"name", "namespace", "owner", "description", "source", "workload", "servedNameFrom", "backend"})
 SERVED_KEYS = frozenset({"configMap", "key"})
 ALIAS_KEYS = frozenset({"alias", "engine"})
+MODEL_KEYS = frozenset({"schemaVersion", "engine", "name", "servedName", "weights", "format", "quantisation", "engineImage", "serving", "offers", "evidence"})
+MODEL_REQUIRED = frozenset({"schemaVersion", "engine", "name", "servedName", "weights", "engineImage", "offers"})
 REVOCATION_KEYS = frozenset({"schemaVersion", "id", "kind", "item", "release", "reason", "sessions", "summary", "revokedBy", "revokedAt"})
 REVOCATION_REQUIRED = REVOCATION_KEYS - {"sessions"}
 REVOCATION_REASONS = frozenset({"security", "quality"})
@@ -51,6 +55,15 @@ def _inside(root: Path, rel) -> Path:
     if not path.is_relative_to(root):
         raise ValueError(f"{rel}: path leaves the repository root")
     return path
+
+
+def _files(root: Path, base: Path, pattern: str) -> list[Path]:
+    """The files under base that match, sorted. A link that leads out of the repository is refused, not read."""
+    found = sorted(p for p in base.glob(pattern) if p.is_file()) if base.is_dir() else []
+    for path in found:
+        if not path.resolve().is_relative_to(root):
+            raise ValueError(f"{path.relative_to(root).as_posix()}: path leaves the repository root")
+    return found
 
 
 def _docs(root: Path, rel) -> list:
@@ -138,6 +151,38 @@ def _container_image(deployment: dict, container: str, where: str, manifest) -> 
     raise ValueError(f"{where}: no container {container} in Deployment in {manifest}")
 
 
+def _container(deployment: dict, container: str, where: str, manifest) -> dict:
+    spec = ((deployment.get("spec") or {}).get("template") or {}).get("spec") or {}
+    for item in spec.get("containers") or []:
+        if isinstance(item, dict) and item.get("name") == container:
+            return item
+    raise ValueError(f"{where}: no container {container} in Deployment in {manifest}")
+
+
+def _contract(root: Path, name: str, backend, image: str, digest: str, where: str):
+    """The tool server's contract file as an object, or None when there is none; ValueError when it does not belong to the entry as committed."""
+    rel = mcp_contract.contract_path(name)
+    path = _inside(root, rel)
+    if not path.is_file():
+        return None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        raise ValueError(f"{rel}: not valid JSON") from None
+    if not isinstance(doc, dict) or doc.get("schemaVersion") != mcp_contract.SCHEMA_VERSION or not isinstance(doc.get("tools"), list):
+        raise ValueError(f"{rel}: not a tool contract (schemaVersion 1 with a tools list)")
+    if doc.get("server") != name:
+        raise ValueError(f"{where}: {rel} is the contract of server {doc.get('server')!r}")
+    if doc.get("backend") != backend:
+        raise ValueError(f"{where}: {rel} names backend {doc.get('backend')!r} but the catalog names {backend!r}")
+    if doc.get("configDigest") != digest:
+        raise ValueError(f"{where}: {rel} was captured with configDigest {doc.get('configDigest')!r} but the manifest's container has {digest!r}; capture it again (just mcp contract {name})")
+    pinned = mcp_contract.image_digest(image)
+    if pinned is not None and mcp_contract.image_digest(str(doc.get("image"))) != pinned:
+        raise ValueError(f"{where}: {rel} was captured from image {doc.get('image')!r} but the manifest pins {pinned}; capture it again (just mcp contract {name})")
+    return doc
+
+
 def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
     tools = []
     for entry in _entries(cat, "toolServers", TOOL_KEYS, identity="name"):
@@ -148,6 +193,7 @@ def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
         backend = entry["backend"]
         if backend is not None and (not isinstance(backend, str) or not BACKEND_NAME.fullmatch(backend)):
             raise ValueError(f"{where}: backend must be null or a backend name")
+        digest = mcp_contract.config_digest(_container(deployment, entry["container"], where, entry["manifest"]))
         tools.append(
             {
                 "name": name,
@@ -161,6 +207,8 @@ def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
                 "pinnedByDigest": "@sha256:" in image,
                 "registered": backend is not None,
                 "backend": backend,
+                "configDigest": digest,
+                "contract": _contract(root, name, backend, image, digest, where),
             }
         )
     _check_backends(root, tools)
@@ -209,7 +257,74 @@ def _gateway_model(root: Path, backend: str, where: str) -> str | None:
     raise ValueError(f"{where}: no AgentgatewayBackend agents-{backend} in {GATEWAY}")
 
 
-def _model_engines(root: Path, cluster: str, cat: dict) -> list[dict]:
+def release_slug(served_name: str) -> str:
+    """The name a model release keeps its served name under (contract 4.1); also the name of the manifest file."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", served_name).strip("-.")[:128] or "unnamed"
+
+
+def _model_releases(root: Path) -> list[dict]:
+    """One object per infrastructure/registry/models/<engine>/<name>.yaml, as the file states it, sorted by engine and name; [] when there are none."""
+    base = _inside(root, MODELS)
+    out = []
+    for path in _files(root, base, "**/*.yaml"):
+        rel = path.relative_to(root).as_posix()
+        parts = path.relative_to(base).parts
+        if len(parts) != 2:
+            raise ValueError(f"{rel}: a manifest lives at {MODELS}/<engine>/<name>.yaml")
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:
+            raise ValueError(f"{rel}: not valid YAML") from None
+        if not isinstance(doc, dict):
+            raise ValueError(f"{rel}: must be one mapping")
+        missing = sorted(MODEL_REQUIRED - set(doc))
+        if missing:
+            raise ValueError(f"{rel}: missing key {', '.join(missing)}")
+        extra = sorted(set(doc) - MODEL_KEYS)
+        if extra:
+            raise ValueError(f"{rel}: unknown key {', '.join(map(str, extra))}")
+        if type(doc["schemaVersion"]) is not int or doc["schemaVersion"] != 1:
+            raise ValueError(f"{rel}: schemaVersion must be 1")
+        if doc["engine"] != parts[0]:
+            raise ValueError(f"{rel}: engine {doc['engine']!r} must equal its directory {parts[0]!r}")
+        if doc["name"] != path.stem:
+            raise ValueError(f"{rel}: name {doc['name']!r} must equal the file name without .yaml")
+        if release_slug(doc["name"]) != doc["name"]:
+            raise ValueError(f"{rel}: name {doc['name']!r} is not a release slug")
+        for key in ("servedName", "engineImage"):
+            if not isinstance(doc[key], str) or not doc[key]:
+                raise ValueError(f"{rel}: {key} must be a non-empty string")
+        weights = doc["weights"]
+        if not isinstance(weights, dict) or not isinstance(weights.get("source"), str) or not weights["source"]:
+            raise ValueError(f"{rel}: weights.source is required")
+        if not isinstance(doc["offers"], dict):
+            raise ValueError(f"{rel}: offers must be a mapping")
+        out.append(doc)
+    return sorted(out, key=lambda d: (d["engine"], d["name"]))
+
+
+def _check_release(root: Path, entry: dict, served: str, releases: list[dict], where: str) -> None:
+    """The engine's `release` names a manifest of this engine with its served name and its container's image."""
+    name = entry["release"]
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"{where}: release must be a manifest name")
+    found = [r for r in releases if r["name"] == name]
+    if not found:
+        raise ValueError(f"{where}: release {name!r} names no manifest in {MODELS}")
+    manifest = next((r for r in found if r["engine"] == entry["name"]), None)
+    if manifest is None:
+        raise ValueError(f"{where}: release {name!r} is a manifest of engine {found[0]['engine']!r}, not of {entry['name']!r}")
+    if manifest["servedName"] != served:
+        raise ValueError(f"{where}: release {name!r} serves {manifest['servedName']!r} but the engine serves {served!r}; a changed served name needs a new manifest")
+    if not entry.get("manifest") or not entry.get("container"):
+        raise ValueError(f"{where}: release needs manifest and container, to compare the manifest's engineImage with the container's")
+    deployment = _deployment(root, entry["manifest"], entry["workload"], entry["namespace"], where)
+    image = _container_image(deployment, entry["container"], where, entry["manifest"])
+    if manifest["engineImage"] != image:
+        raise ValueError(f"{where}: release {name!r} has engineImage {manifest['engineImage']!r} but the container runs {image!r}; a changed engine image needs a new manifest")
+
+
+def _model_engines(root: Path, cluster: str, cat: dict, releases: list[dict]) -> list[dict]:
     engines = []
     for entry in _entries(cat, "modelEngines", ENGINE_KEYS, identity="name"):
         where = f"{CATALOG}: modelEngines {entry['name']!r}"
@@ -221,20 +336,25 @@ def _model_engines(root: Path, cluster: str, cat: dict) -> list[dict]:
             model = _gateway_model(root, backend, where)
             if model != served:
                 raise ValueError(f"{where}: gateway agents-{backend} routes model {model!r} but the engine serves {served!r} ({MODEL_CONFIG})")
-        engines.append(
-            {
-                "name": entry["name"],
-                "cluster": cluster,
-                "namespace": entry["namespace"],
-                "owner": entry["owner"],
-                "description": entry["description"],
-                "source": entry["source"],
-                "workload": {"apiVersion": "apps/v1", "kind": "Deployment", "name": entry["workload"]},
-                "servedName": served,
-                "servedNameFrom": {"kind": "ConfigMap", "name": entry["servedNameFrom"]["configMap"], "key": entry["servedNameFrom"]["key"]},
-                "backend": backend,
-            }
-        )
+        out = {
+            "name": entry["name"],
+            "cluster": cluster,
+            "namespace": entry["namespace"],
+            "owner": entry["owner"],
+            "description": entry["description"],
+            "source": entry["source"],
+            "workload": {"apiVersion": "apps/v1", "kind": "Deployment", "name": entry["workload"]},
+            "servedName": served,
+            "servedNameFrom": {"kind": "ConfigMap", "name": entry["servedNameFrom"]["configMap"], "key": entry["servedNameFrom"]["key"]},
+            "backend": backend,
+        }
+        if entry.get("release") is not None:
+            _check_release(root, entry, served, releases, where)
+            out["release"] = entry["release"]
+        engines.append(out)
+    for release in releases:
+        if release["engine"] not in {e["name"] for e in engines}:
+            raise ValueError(f"{MODELS}/{release['engine']}/{release['name']}.yaml: no model engine {release['engine']!r} in {CATALOG}")
     return engines
 
 
@@ -248,7 +368,12 @@ def _aliases(cluster: str, cat: dict, engines: list[dict]) -> list[dict]:
             raise ValueError(f"{where}: unknown model engine {entry['engine']!r}")
         if engine["backend"] is None:
             raise ValueError(f"{where}: model engine {entry['engine']!r} has no backend")
-        out.append({"cluster": cluster, "alias": entry["alias"], "engine": engine["name"], "backend": engine["backend"]})
+        alias = {"cluster": cluster, "alias": entry["alias"], "engine": engine["name"], "backend": engine["backend"]}
+        if entry.get("move") is not None:
+            if not isinstance(entry["move"], str) or not entry["move"]:
+                raise ValueError(f"{where}: move must be an alias move id")
+            alias["move"] = entry["move"]
+        out.append(alias)
     return out
 
 
@@ -265,9 +390,8 @@ _TextLoader.yaml_implicit_resolvers = {
 def _revocations(root: Path) -> list[dict]:
     """One object per infrastructure/registry/revocations/*.yaml, in id order (delivery.md 8.1); [] when there are none."""
     base = _inside(root, REVOCATIONS)
-    files = sorted(p for p in base.glob("*.yaml") if p.is_file()) if base.is_dir() else []
     out = []
-    for path in files:
+    for path in _files(root, base, "*.yaml"):
         rel = path.relative_to(root).as_posix()
         try:
             doc = yaml.load(path.read_text(encoding="utf-8"), Loader=_TextLoader)  # noqa: S506 - SafeLoader subclass
@@ -338,7 +462,8 @@ def render(root: Path) -> dict:
     cat = _catalog(root)
     cluster = _cluster(cat)
     tools = _tool_servers(root, cluster["name"], cat)
-    engines = _model_engines(root, cluster["name"], cat)
+    releases = _model_releases(root)
+    engines = _model_engines(root, cluster["name"], cat, releases)
     aliases = _aliases(cluster["name"], cat, engines)
     tenants, trusted = _tenants_and_trust(root, cluster["name"])
     return {
@@ -347,6 +472,7 @@ def render(root: Path) -> dict:
         "tenants": tenants,
         "trustedRepositories": trusted,
         "toolServers": tools,
+        "modelReleases": releases,
         "modelEngines": engines,
         "aliases": aliases,
         "revocations": _revocations(root),

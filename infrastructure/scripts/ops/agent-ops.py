@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority, rollback, pin, unpin, disable, enable, evaluate, revoke."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority, alias, rollback, pin, unpin, disable, enable, evaluate, revoke."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 import outcome
-from agent_ops import approve, authority, delegation, delivery, layout, live, register, registry_client, run, stage, state, sync
+from agent_ops import alias, approve, authority, delegation, delivery, layout, live, register, registry_client, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
@@ -124,6 +124,13 @@ def positive_int(text: str) -> int:
     return value
 
 
+def alias_seconds(text: str) -> int:
+    value = positive_int(text)
+    if not alias.MIN_SECONDS <= value <= alias.MAX_SECONDS:
+        raise argparse.ArgumentTypeError(f"must be between {alias.MIN_SECONDS} and {alias.MAX_SECONDS}, not {text}")
+    return value
+
+
 def parse_task(args) -> object:
     given = [x for x in (args.task, args.task_json, args.task_file) if x is not None]
     if len(given) != 1:
@@ -224,6 +231,27 @@ def main(argv=None) -> int:
             p.add_argument("--release", help="the release to pin (default: the current release)")
         if name in ("rollback", "disable", "enable", "evaluate"):
             p.add_argument("--reason", help="why, recorded with the change")
+
+    p = sub.add_parser("alias", help="move a model alias: plan (assess), move, status, evaluate, cancel")
+    actions = p.add_subparsers(dest="action", required=True, help="what to do with the alias")
+    q = actions.add_parser("plan", help="assess a candidate pair for an alias: who depends on it, who is held, who is evaluated")
+    q.add_argument("alias", help="the alias, e.g. fast")
+    q.add_argument("--engine", required=True, help="the candidate's engine")
+    q.add_argument("--release", required=True, help="the candidate's model release (its manifest is merged first)")
+    q = actions.add_parser("move", help="start a move for an assessment that is not stale and not blocked")
+    q.add_argument("assessment", help="the assessment id `alias plan` printed")
+    q.add_argument("--sessions", choices=("finish", "cancel"), default="finish", help="what happens to running sessions of held agents (default: finish)")
+    q.add_argument("--evaluation-seconds", type=alias_seconds, help=f"how long the evaluation may take, {alias.MIN_SECONDS} to {alias.MAX_SECONDS} (default: the registry's)")
+    q = actions.add_parser("status", help="one move, or the open moves (of one alias)")
+    q.add_argument("move", nargs="?", help="a move id; without it the open moves are listed")
+    q.add_argument("--alias", help="only the open moves of this alias")
+    q = actions.add_parser("evaluate", help="say the engine is serving the candidate, so the evaluation starts")
+    q.add_argument("move", help="the move id")
+    q = actions.add_parser("cancel", help="cancel a move that is holding or held")
+    q.add_argument("move", help="the move id")
+    q.add_argument("--reason", required=True, help="why, recorded with the cancellation")
+    for q in actions.choices.values():
+        q.add_argument("--json", action="store_true", help="print the registry's document as JSON instead of text")
 
     p = sub.add_parser("revoke", help="prepare the reviewed revocation file for a release and regenerate the feed; commits and sends nothing")
     p.add_argument("agent", help="agent name")
@@ -329,6 +357,8 @@ def main(argv=None) -> int:
             return conclude(args, 0, approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
         if args.command == "authority":
             return conclude(args, 0, authority.take(root, args.agent) if args.action == "take" else authority.give_back(root, args.agent))
+        if args.command == "alias":
+            return alias.run(args)
         if args.command == "rollback":
             return conclude(args, 0, delivery.rollback(root, args.agent, to=args.to, reason=args.reason))
         if args.command == "pin":

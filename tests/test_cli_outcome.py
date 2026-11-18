@@ -57,7 +57,7 @@ class OutcomeModule(unittest.TestCase):
         self.assertEqual(
             set(outcome.CODES),
             {"invalid-arguments", "validation-failed", "not-found", "refused", "conflict", "check-failed", "failed", "not-confirmed", "no-consent", "timeout", "interrupted", "unavailable", "internal"}
-            | {"wrong-path", "not-signed-in", "stale-approval", "replayed-approval", "in-recovery", "registry-unreachable"},
+            | {"wrong-path", "not-signed-in", "stale-approval", "replayed-approval", "in-recovery", "registry-unreachable", "stale-assessment"},
         )
         self.assertEqual(
             {c for c, retryable in outcome.CODES.items() if retryable},
