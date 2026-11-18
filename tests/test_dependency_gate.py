@@ -205,6 +205,100 @@ class JsonOutput(unittest.TestCase):
         self.assertEqual((status, json.loads(text)["ok"]), (0, True))
 
 
+class SplitRun(unittest.TestCase):
+    """The run as the workflow splits it: compare without the registry, hand the two feeds over, then ask."""
+
+    BASE = staticmethod(lambda: feed(tool_contract=contract("execute_sql", "list_tables"), engines=[{"name": "fast", "cluster": "kubani", "servedName": "A", "release": "r1"}]))
+    HEAD = staticmethod(lambda: feed(tool_contract=contract("list_tables"), engines=[{"name": "fast", "cluster": "kubani", "servedName": "B", "release": "r2"}]))
+
+    def unreachable(self):
+        self.fail("an offline run built a registry client")
+
+    def offline(self, base, head, *extra):
+        def render(root):
+            return copy.deepcopy({"base": base, "head": head}[Path(root).name])
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            status = dependency_gate.main(["--base-root", "base", "--head-root", "head", "--offline", *extra], client_factory=self.unreachable, render=render)
+        return status, out.getvalue()
+
+    def from_files(self, directory, fake, *extra):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            status = dependency_gate.main(["--base-feed", str(Path(directory, "base.json")), "--head-feed", str(Path(directory, "head.json")), *extra], client_factory=lambda: fake, render=self.unreachable)
+        return status, out.getvalue()
+
+    def test_offline_lists_the_questions_and_is_not_a_pass(self):
+        status, text = self.offline(self.BASE(), self.HEAD())
+        self.assertEqual(status, 3)
+        for line in ("to ask   contract of postgres-admin-mcp", "to ask   alias fast: fast/r1 -> fast/r2", "not decided: 2 question(s) for the registry were not asked"):
+            self.assertIn(line, text)
+        self.assertNotIn("gate passed", text)
+        status, text = self.offline(self.BASE(), self.HEAD(), "--json")
+        doc = json.loads(text)
+        self.assertEqual((status, doc["ok"], doc["error"]["code"]), (3, False, "failed"))
+        self.assertEqual(doc["unasked"], [{"path": "/v1/checks/tool-contract", "about": "contract of postgres-admin-mcp"}, {"path": "/v1/checks/alias", "about": "alias fast: fast/r1 -> fast/r2"}])
+
+    def test_offline_with_nothing_to_ask_passes_and_a_removed_contract_still_fails(self):
+        status, text = self.offline(self.BASE(), self.BASE(), "--json")
+        self.assertEqual((status, json.loads(text)["ok"], json.loads(text)["unasked"]), (0, True, []))
+        gone = self.HEAD()
+        gone["toolServers"][0]["contract"] = None
+        status, text = self.offline(self.BASE(), gone)
+        self.assertEqual(status, 1)
+        self.assertIn("gate failed: 1 check(s)", text)
+        self.assertIn("to ask   alias fast", text)
+
+    def test_the_feeds_written_offline_give_the_second_run_the_same_questions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.offline(self.BASE(), self.HEAD(), "--feeds-out", tmp)[0], 3)
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()), ["base.json", "head.json"])
+            self.assertEqual(json.loads(Path(tmp, "head.json").read_text()), self.HEAD())
+            fake = Fake({"/v1/checks/tool-contract": BLOCKED, "/v1/checks/alias": {"allowed": True, "move": "mv-1", "assessment": "asm-1", "reason": ""}})
+            status, text = self.from_files(tmp, fake)
+            self.assertEqual(status, 1)
+            self.assertEqual(
+                fake.calls,
+                [
+                    ("/v1/checks/tool-contract", {"cluster": "kubani", "server": "postgres-admin-mcp", "contract": contract("list_tables")}),
+                    ("/v1/checks/alias", {"cluster": "kubani", "alias": "fast", "candidate": {"engine": "fast", "release": "r2"}}),
+                ],
+            )
+            self.assertIn("BLOCKED  contract of postgres-admin-mcp", text)
+            self.assertIn("ok       alias fast: fast/r1 -> fast/r2", text)
+            fake = Fake({"/v1/checks/tool-contract": CLEAR, "/v1/checks/alias": {"allowed": True, "reason": ""}})
+            self.assertEqual(self.from_files(tmp, fake)[0], 0)
+
+    def test_a_feed_file_that_is_not_a_feed_ends_the_run_without_asking(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            good = json.dumps(self.BASE())
+            bad = {
+                "not JSON": "{",
+                "not an object": "[]",
+                "a tool server without a name": json.dumps({**self.HEAD(), "toolServers": [{"contract": contract("a")}]}),
+                "an alias that is not an object": json.dumps({**self.HEAD(), "aliases": ["fast"]}),
+                "a served name that is not text": json.dumps({**self.HEAD(), "modelEngines": [{"name": "fast", "servedName": ["x"]}]}),
+            }
+            for why, text in bad.items():
+                with self.subTest(why):
+                    Path(tmp, "base.json").write_text(good)
+                    Path(tmp, "head.json").write_text(text)
+                    fake = Fake()
+                    status, out = self.from_files(tmp, fake, "--json")
+                    self.assertEqual((status, json.loads(out)["error"]["code"], fake.calls), (1, "check-failed", []))
+            Path(tmp, "head.json").write_text(good)
+            Path(tmp, "base.json").unlink()
+            status, out = self.from_files(tmp, Fake(), "--json")
+            self.assertEqual((status, json.loads(out)["error"]["code"]), (1, "failed"))
+
+    def test_the_two_ways_to_name_the_feeds_do_not_mix(self):
+        for argv in ([], ["--base-root", "a"], ["--base-root", "a", "--head-feed", "b"], ["--base-root", "a", "--head-root", "b", "--base-feed", "c"], ["--base-feed", "a", "--head-feed", "b", "--feeds-out", "c"]):
+            with self.subTest(argv), contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                dependency_gate.main(argv, client_factory=self.unreachable, render=self.unreachable)
+            self.assertEqual((raised.exception.code, json.loads(out.getvalue())["error"]["code"]), (2, "invalid-arguments"))
+
+
 class HeadIsData(unittest.TestCase):
     def test_nothing_in_the_head_tree_is_imported_or_run(self):
         with tempfile.TemporaryDirectory() as tmp:
