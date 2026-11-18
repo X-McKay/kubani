@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -37,8 +38,9 @@ def tool(name, schema=None):
 class FakeMcp:
     """An MCP server on localhost: Streamable HTTP at /mcp and the older HTTP+SSE transport at /sse, two pages of tools."""
 
-    def __init__(self, tools):
+    def __init__(self, tools, newline="\n"):
         self.tools = tools
+        self.newline = newline  # the line ending of the /sse stream
         self.requests = 0
         self.stop = threading.Event()
         self.outbox = queue.Queue()
@@ -92,14 +94,14 @@ class FakeMcp:
                 self.send_header("Content-Type", "text/event-stream")
                 self.end_headers()
                 try:
-                    self.wfile.write(b"event: endpoint\ndata: /messages?session=1\n\n")
+                    self.wfile.write(": ping{0}{0}event: endpoint{0}data: /messages?session=1{0}{0}".format(fake.newline).encode())
                     self.wfile.flush()
                     while not fake.stop.is_set():
                         try:
                             data = fake.outbox.get(timeout=0.05)
                         except queue.Empty:
                             continue
-                        self.wfile.write(f"event: message\ndata: {data}\n\n".encode())
+                        self.wfile.write("event: message{0}data: {1}{0}{0}".format(fake.newline, data).encode())
                         self.wfile.flush()
                 except OSError:
                     pass
@@ -209,6 +211,14 @@ class ContractTests(unittest.TestCase):
         document = json.loads(self.file("postgres-admin-mcp").read_text())
         self.assertEqual({t["name"]: t["effect"] for t in document["tools"]}, {"analyze_db_health": "remote_write", "execute_sql": "remote_read", "get_top_queries": "remote_write"})
         self.assertEqual(out["tools"], 3)
+
+    def test_sse_stream_with_other_line_endings(self):
+        """The event stream format ends a line with CRLF, LF or CR; a server built on sse-starlette sends CRLF."""
+        tools = [tool("execute_sql"), tool("analyze_db_health"), tool("get_top_queries")]
+        for newline in ("\r\n", "\r"):
+            with self.subTest(newline=newline), mock.patch.object(contract, "TIMEOUT", (5, 2)), FakeMcp(tools, newline) as fake:
+                out = contract.capture(self.root, "postgres-admin-mcp", url=fake.base + "/sse")
+                self.assertEqual(out["tools"], 3)
 
     def test_same_answer_same_bytes_and_a_schema_change_shows(self):
         first = [tool("pods_list"), tool("pods_get")]
