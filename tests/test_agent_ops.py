@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import py_compile
@@ -84,6 +86,7 @@ RELEASE_DOC = {
     },
 }
 RELEASE_TEXT = yaml.safe_dump(RELEASE_DOC, sort_keys=False)
+SKILL = {"name": "report-check", "digest": "sha256:" + "44" * 32, "description": "Checks a report.", "declared": True, "scripts": ["scripts/check_report.py"]}
 
 
 def write(path: Path, text: str) -> None:
@@ -360,10 +363,55 @@ class ApproveTests(unittest.TestCase):
                 {"type": "SignatureVerified", "status": "True", "reason": "Verified"},
             ]},
             "other object": {"metadata.name": "sample-2026-11-09-00000000"},
+            "skills the file does not list": {"spec.skills": [SKILL]},
         }
         for label, changes in failures.items():
             with self.subTest(label), self.assertRaises(approve.ApproveError):
                 approve.gates(committed, live_release(**changes), pin, REPO)
+
+    def test_gates_compare_the_skills_a_release_lists(self):
+        committed = json.loads(json.dumps(RELEASE_DOC))
+        committed["spec"]["skills"] = [SKILL]
+        pin = {"issuer": layout.ISSUER, "subjectRegExp": "^" + SUBJECT.replace(".", "\\.") + "$"}
+        self.assertEqual(approve.gates(committed, live_release(**{"spec.skills": [dict(SKILL)]}), pin, REPO)["signer"], SUBJECT)
+        for label, skills in (("absent", None), ("another digest", [{**SKILL, "digest": "sha256:" + "55" * 32}])):
+            with self.subTest(label), self.assertRaises(approve.ApproveError) as caught:
+                approve.gates(committed, live_release(**{"spec.skills": skills}), pin, REPO)
+            self.assertIn("spec.skills", str(caught.exception))
+
+    def test_an_approval_states_the_effect_its_release_requests(self):
+        # The sentence of zetra platform/registry/contract/effects.json, which every approval of the effect shows.
+        sentence = "effect sandbox_execute: skill scripts run inside the agent's container and can read the session's identity token"
+        asks = {"capabilities": {"models": [], "mcp": [], "effects": ["sandbox_execute"]}}
+        plain = {"capabilities": {"models": [], "mcp": []}}
+        self.assertEqual(approve.covers({"declaration": asks}, plain), [sentence])
+        self.assertEqual(approve.covers({"declaration": plain}, asks), [])  # the declaration is what the release was built from
+        self.assertEqual(approve.covers({}, asks), [sentence])  # a release without one follows its Agent
+        self.assertEqual(approve.covers({}, plain), [])
+        with self.assertRaises(approve.ApproveError):
+            approve.covers({"declaration": {"capabilities": {"effects": ["sandbox_execute", "host_execute"]}}}, plain)
+
+    def test_approve_shows_the_effect_and_records_it_in_its_answer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = json.loads(json.dumps(RELEASE_DOC))
+            doc["spec"]["declaration"] = {"owner": "owner@example.invalid", "identity": {"mode": "agent"}, "capabilities": {"models": [], "mcp": [], "effects": ["sandbox_execute"]}}
+            root = make_root(Path(tmp), release_text=yaml.safe_dump(doc, sort_keys=False))
+            kube = FakeKube({("agentrelease", RELEASE, "tenant-test"): live_release()})
+            shown = io.StringIO()
+            with contextlib.redirect_stderr(shown):
+                result = approve.approve(root, RELEASE, repo=REPO, kube=kube)
+            self.assertEqual(result["covers"], ["effect sandbox_execute: " + approve.EFFECT_STATEMENTS["sandbox_execute"]])
+            self.assertIn("This approval covers effect sandbox_execute: skill scripts run inside the agent's container", shown.getvalue())
+            self.assertTrue(yaml.safe_load((root / result["file"]).read_text())["spec"]["approval"]["approved"])
+
+    def test_approve_of_a_release_without_an_effect_shows_nothing_more(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            kube = FakeKube({("agentrelease", RELEASE, "tenant-test"): live_release()})
+            shown = io.StringIO()
+            with contextlib.redirect_stderr(shown):
+                result = approve.approve(root, RELEASE, repo=REPO, kube=kube)
+            self.assertEqual((result["covers"], shown.getvalue()), ([], ""))
 
     def test_approve_edits_only_the_approval_block(self):
         with tempfile.TemporaryDirectory() as tmp:

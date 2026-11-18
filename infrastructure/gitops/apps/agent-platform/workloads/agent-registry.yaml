@@ -44,8 +44,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent-registry
-          # built by zetra's release workflow, run 44343931258
-          image: registry.almckay.io/platform/agent-registry:d057abe@sha256:cde61ff6f75007ae25475526b4ca51c01cf31c3bb18e3cd3088843d98651267c
+          # built by zetra's release workflow, run 44369420437
+          image: registry.almckay.io/platform/agent-registry:589ec5c@sha256:49c3f5984cae9071a134093c1960892bcb05dec8f9b72673aa9f82dc63e758af
           args: ["serve"]
           env:
             # No password in the DSN: libpq reads PGPASSWORD.

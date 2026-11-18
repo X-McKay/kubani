@@ -41,7 +41,7 @@ reads Secrets, prints tokens or bypasses a release gate.
 | `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |
 | `check-sync` | every committed Agent, optionally the source checkout | nothing | header sha256 matches the body; with `--source`, the body matches the recorded commit and reports `stale` when HEAD differs | remote freshness |
 | `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision` | signature or attestations (the controller verifies those after apply) |
-| `approve` | the committed unapproved file and the live object | only the `approval` block | live spec equals the committed file; signature Verified by this agent's release workflow inside the tenant pin; all five attestations; NoDrift; digest equals `policySha256`; Ready is false solely for `NotApproved` | functional behavior, qualification |
+| `approve` | the committed unapproved file and the live object | only the `approval` block | live spec equals the committed file, the skills it lists included; signature Verified by this agent's release workflow inside the tenant pin; all five attestations; NoDrift; digest equals `policySha256`; Ready is false solely for `NotApproved`, so a release that requests an effect its tenant has not granted (`EffectNotGranted`) is refused | functional behavior, qualification |
 
 ## Running a session
 
@@ -881,6 +881,13 @@ object, then rewrites exactly the `approval` block with `approved: true`,
 `ticket`. The edited file must parse back to the committed release plus that
 block, or the command refuses. Commit and merge in a separate PR; `ls` shows
 the release as runnable once Ready.
+
+When the release requests an effect, `approve` prints what the approval covers
+and returns the same lines as `covers`. For `sandbox_execute` the line is
+`effect sandbox_execute: skill scripts run inside the agent's container and can
+read the session's identity token`. Put that line in the approval pull request.
+The tenant's grant is a separate change
+([agent-registry.md](agent-registry.md), milestone 4).
 
 ## Agents owned by the registry
 
