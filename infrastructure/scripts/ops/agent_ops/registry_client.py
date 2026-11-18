@@ -267,11 +267,31 @@ def _unknown(row: dict) -> str:
     return f"  unknown (last seen {_age(observation.get('ageSeconds'))})"
 
 
+def _delivery_lines(a: dict) -> list[str]:
+    """What the registry says of a release it delivers: in use, waiting, refused, pinned, revoked and whether the cluster has the last change."""
+    current, candidate, refused = a.get("current"), a.get("candidate"), a.get("lastRefused")
+    lines = [f"      in use: {current['release']} (revision {current.get('revision')}){' admitted by ' + current['admittedBy'] if current.get('admittedBy') else ''}" if current else "      in use: no current release"]
+    if candidate:
+        evaluation = candidate.get("evaluation")
+        lines.append(f"      candidate: {candidate.get('release')} (revision {candidate.get('revision')}) {candidate.get('phase')}: {candidate.get('reason') or 'no reason given'}" + (f"; evaluation attempt {evaluation.get('attempt')} {evaluation.get('state')}" if evaluation else ""))
+    if refused:
+        verdict = refused.get("evaluation")
+        lines.append(f"      last refused: {refused.get('release')} (revision {refused.get('revision')}): {refused.get('reason')}" + (f"; evaluation {verdict.get('verdict')}: {verdict.get('summary')}" if verdict else ""))
+    if a.get("pinned") is not None:
+        lines.append(f"      pinned: revision {a['pinned']}")
+    lines += [f"      revoked: {r.get('release')} ({r.get('reason')}, {r.get('id')})" for r in a.get("revoked") or []]
+    acknowledged = a.get("acknowledged")
+    lines.append("      cluster: " + {True: "has taken the last change", False: "has not taken the last change yet"}.get(acknowledged, "not known"))
+    return lines
+
+
 def format_status(doc: dict) -> str:
     lines = [f"cluster {doc.get('cluster')}  mode {doc.get('mode')}  generation {doc.get('generation')}", "", "Agents"]
     for a in doc.get("agents") or []:
         ready = {True: "ready", False: "not ready"}.get(a.get("ready"), "ready unknown")
         lines.append(f"  {a.get('agent')} ({a.get('tenant')})  {a.get('authority')}  current {a.get('currentRelease') or '-'}  newest {a.get('newestRelease') or '-'}  phase {a.get('phase') or '-'}  {ready}{_unknown(a)}")
+        if a.get("authority") == "registry":
+            lines += _delivery_lines(a)
         lines += [f"      blocker: {b}" for b in a.get("blockers") or []]
         lines += [f"      next: {n}" for n in a.get("nextActions") or []]
     if not doc.get("agents"):
