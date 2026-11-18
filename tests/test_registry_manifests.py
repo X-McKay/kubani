@@ -215,6 +215,19 @@ class RegistryManifestTests(unittest.TestCase):
         for user in users.values():
             self.assertNotIn("registry-operator", user.get("realmRoles", []))
 
+    def test_no_realm_description_is_longer_than_keycloak_stores(self) -> None:
+        # Keycloak keeps a description in 255 characters. A longer one makes the import
+        # into an empty database fail, which is found only on the day the realm is rebuilt.
+        realm = self.realm
+        described = [
+            *((f"client {c['clientId']}", c) for c in realm["clients"]),
+            *((f"scope {s['name']}", s) for s in realm["clientScopes"]),
+            *((f"role {r['name']}", r) for r in realm["roles"]["realm"]),
+        ]
+        for label, item in described:
+            with self.subTest(item=label):
+                self.assertLessEqual(len(item.get("description", "")), 255)
+
     def test_every_secret_placeholder_in_the_realm_has_a_required_variable(self) -> None:
         deployment = next(
             d for d in load(KEYCLOAK / "deployment.yaml") if d["kind"] == "Deployment"

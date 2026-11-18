@@ -295,7 +295,7 @@
     {
       "clientId": "agent-policy-service",
       "name": "Agent Policy Service",
-      "description": "Spec 7.5. Agent-mode exchange requester. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-agent-policy-service). The mcp:* optional scopes are what let an agent-mode exchange name an MCP resource as audience: Keycloak takes the audiences of an exchanged token from the requester's effective client scopes and only filters them by the audience parameter, so the APS requests scope=mcp:<backend> (2026-11-05, Phase B: without them every agent-mode exchange failed with 'Requested audience not available').",
+      "description": "Spec 7.5. Agent-mode exchange requester. Secret from Secret keycloak-client-secrets (same value as agent-platform/idp-client-agent-policy-service).",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -311,6 +311,7 @@
       "optionalClientScopes": ["mcp:kubernetes", "mcp:graphiti", "mcp:postgres", "mcp:github"],
       "attributes": {
         "standard.token.exchange.enabled": "true",
+        "x-note": "The mcp:* optional scopes are what let an agent-mode exchange name an MCP resource as audience: Keycloak takes the audiences of an exchanged token from the requester's effective client scopes and only filters them by the audience parameter, so the APS requests scope=mcp:<backend> (2026-11-05, Phase B: without them every agent-mode exchange failed with 'Requested audience not available'). Kept here and not in description, which Keycloak stores in 255 characters: a longer one fails the import into an empty database.",
         "x-confirm-from-export": "standard.token.exchange.enabled; delegation on and the client policy limiting may_act to clients whose ID starts with agent- (spec 7.5) are configured by hand on 26.8 and copied from the export: their keys are not known before the preview ships"
       }
     },
