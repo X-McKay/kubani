@@ -1,0 +1,83 @@
+# Hand-written input of the catalog feed. Everything that can be read from a
+# manifest (images, served model names, signer pins) is NOT repeated here; the
+# renderer reads it from the manifest named. Render with:
+#   uv run --locked python infrastructure/scripts/ops/registry_feed.py render --write
+version: 1
+cluster:
+  name: kubani
+  trustDomain: cluster.local
+  gateway: http://ai.ai-gateway.svc.cluster.local
+  fluxInventories:
+    - namespace: flux-system
+      name: apps
+toolServers:
+  - name: github-mcp
+    namespace: mcp
+    owner: platform
+    description: GitHub tools (upstream server)
+    source: github/github-mcp-server
+    manifest: infrastructure/gitops/apps/mcp/github-mcp.yaml
+    container: github-mcp
+    backend: null
+  - name: graphiti-mcp
+    namespace: mcp
+    owner: platform
+    description: Knowledge graph memory tools (upstream server)
+    source: getzep/graphiti
+    manifest: infrastructure/gitops/apps/mcp/graphiti-mcp.yaml
+    container: graphiti-mcp
+    backend: null
+  - name: kubernetes-mcp
+    namespace: mcp
+    owner: platform
+    description: Read-only Kubernetes tools (upstream server)
+    source: containers/kubernetes-mcp-server
+    manifest: infrastructure/gitops/apps/mcp/kubernetes-mcp.yaml
+    container: kubernetes-mcp
+    backend: kubernetes
+  - name: postgres-admin-mcp
+    namespace: mcp
+    owner: platform
+    description: Read-only database monitoring tools (upstream server)
+    source: crystaldba/postgres-mcp
+    manifest: infrastructure/gitops/apps/mcp/registry-generated/backends.yaml
+    container: postgres-admin-mcp
+    backend: postgres-admin
+  - name: postgres-mcp
+    namespace: mcp
+    owner: platform
+    description: Database tools for people (upstream server)
+    source: crystaldba/postgres-mcp
+    manifest: infrastructure/gitops/apps/mcp/postgres-mcp.yaml
+    container: postgres-mcp
+    backend: null
+modelEngines:
+  - name: main
+    namespace: vllm
+    owner: platform
+    description: Main model engine
+    source: vllm-project/vllm
+    workload: vllm
+    servedNameFrom: {configMap: model-config, key: LLM_MODEL_NAME}
+    backend: llm-main
+  - name: fast
+    namespace: vllm
+    owner: platform
+    description: Fast model engine
+    source: vllm-project/vllm
+    workload: vllm-fast
+    servedNameFrom: {configMap: model-config, key: FAST_MODEL_NAME}
+    backend: llm-fast
+  - name: embeddings
+    namespace: vllm
+    owner: platform
+    description: Embeddings engine
+    source: vllm-project/vllm
+    workload: vllm-embeddings
+    servedNameFrom: {configMap: model-config, key: EMBEDDINGS_MODEL_NAME}
+    backend: null
+aliases:
+  - alias: main
+    engine: main
+  - alias: fast
+    engine: fast

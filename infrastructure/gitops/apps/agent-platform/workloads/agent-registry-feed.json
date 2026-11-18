@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "clusters": [
+    {
+      "name": "kubani",
+      "trustDomain": "cluster.local",
+      "gateway": "http://ai.ai-gateway.svc.cluster.local",
+      "fluxInventories": [
+        {
+          "namespace": "flux-system",
+          "name": "apps"
+        }
+      ]
+    }
+  ],
+  "tenants": [
+    {
+      "cluster": "kubani",
+      "name": "tenant-test",
+      "namespace": "tenant-test",
+      "policy": {
+        "signer": {
+          "issuer": "https://token.actions.githubusercontent.com",
+          "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator)/v[0-9][A-Za-z0-9.+-]*$"
+        },
+        "vulnExceptions": []
+      }
+    }
+  ],
+  "trustedRepositories": [
+    {
+      "repository": "X-McKay/zetra-agents",
+      "cluster": "kubani",
+      "tenant": "tenant-test",
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator)/v[0-9][A-Za-z0-9.+-]*$",
+      "agents": [
+        "conformance",
+        "conformance-b",
+        "conformance-budget-day",
+        "conformance-budget-day-retry",
+        "conformance-budget-day-retry2",
+        "conformance-budget-session",
+        "conformance-checkpoint",
+        "conformance-lifecycle",
+        "conformance-performance",
+        "conformance-protocol",
+        "conformance-transport",
+        "db-admin",
+        "investigator"
+      ]
+    }
+  ],
+  "toolServers": [
+    {
+      "name": "github-mcp",
+      "cluster": "kubani",
+      "namespace": "mcp",
+      "owner": "platform",
+      "description": "GitHub tools (upstream server)",
+      "source": "github/github-mcp-server",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "github-mcp"
+      },
+      "image": "ghcr.io/github/github-mcp-server:v2.0.2",
+      "pinnedByDigest": false,
+      "registered": false,
+      "backend": null
+    },
+    {
+      "name": "graphiti-mcp",
+      "cluster": "kubani",
+      "namespace": "mcp",
+      "owner": "platform",
+      "description": "Knowledge graph memory tools (upstream server)",
+      "source": "getzep/graphiti",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "graphiti-mcp"
+      },
+      "image": "zepai/knowledge-graph-mcp:1.1.1-standalone",
+      "pinnedByDigest": false,
+      "registered": false,
+      "backend": null
+    },
+    {
+      "name": "kubernetes-mcp",
+      "cluster": "kubani",
+      "namespace": "mcp",
+      "owner": "platform",
+      "description": "Read-only Kubernetes tools (upstream server)",
+      "source": "containers/kubernetes-mcp-server",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "kubernetes-mcp"
+      },
+      "image": "quay.io/containers/kubernetes_mcp_server:v0.0.67",
+      "pinnedByDigest": false,
+      "registered": true,
+      "backend": "kubernetes"
+    },
+    {
+      "name": "postgres-admin-mcp",
+      "cluster": "kubani",
+      "namespace": "mcp",
+      "owner": "platform",
+      "description": "Read-only database monitoring tools (upstream server)",
+      "source": "crystaldba/postgres-mcp",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "postgres-admin-mcp"
+      },
+      "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+      "pinnedByDigest": true,
+      "registered": true,
+      "backend": "postgres-admin"
+    },
+    {
+      "name": "postgres-mcp",
+      "cluster": "kubani",
+      "namespace": "mcp",
+      "owner": "platform",
+      "description": "Database tools for people (upstream server)",
+      "source": "crystaldba/postgres-mcp",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "postgres-mcp"
+      },
+      "image": "crystaldba/postgres-mcp:0.3.0",
+      "pinnedByDigest": false,
+      "registered": false,
+      "backend": null
+    }
+  ],
+  "modelEngines": [
+    {
+      "name": "main",
+      "cluster": "kubani",
+      "namespace": "vllm",
+      "owner": "platform",
+      "description": "Main model engine",
+      "source": "vllm-project/vllm",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "vllm"
+      },
+      "servedName": "Qwen3.6-35B-A3B-NVFP4",
+      "servedNameFrom": {
+        "kind": "ConfigMap",
+        "name": "model-config",
+        "key": "LLM_MODEL_NAME"
+      },
+      "backend": "llm-main"
+    },
+    {
+      "name": "fast",
+      "cluster": "kubani",
+      "namespace": "vllm",
+      "owner": "platform",
+      "description": "Fast model engine",
+      "source": "vllm-project/vllm",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "vllm-fast"
+      },
+      "servedName": "Qwen/Qwen3.5-0.8B",
+      "servedNameFrom": {
+        "kind": "ConfigMap",
+        "name": "model-config",
+        "key": "FAST_MODEL_NAME"
+      },
+      "backend": "llm-fast"
+    },
+    {
+      "name": "embeddings",
+      "cluster": "kubani",
+      "namespace": "vllm",
+      "owner": "platform",
+      "description": "Embeddings engine",
+      "source": "vllm-project/vllm",
+      "workload": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "vllm-embeddings"
+      },
+      "servedName": "Qwen/Qwen3-Embedding-0.6B",
+      "servedNameFrom": {
+        "kind": "ConfigMap",
+        "name": "model-config",
+        "key": "EMBEDDINGS_MODEL_NAME"
+      },
+      "backend": null
+    }
+  ],
+  "aliases": [
+    {
+      "cluster": "kubani",
+      "alias": "main",
+      "engine": "main",
+      "backend": "llm-main"
+    },
+    {
+      "cluster": "kubani",
+      "alias": "fast",
+      "engine": "fast",
+      "backend": "llm-fast"
+    }
+  ]
+}
