@@ -232,9 +232,8 @@ against the image once it is built.
 
 The contract is zetra's `platform/registry/contract/delivery.md` (sections 3, 6, 8
 and 12) and `platform/session-api/contract/sessions.md`. This repository holds
-the manifests; none of them is rolled out by the change that adds them until the
-images exist (every new image is written `:PENDING` until zetra's release
-workflow has built it).
+the manifests. Every image is pinned by digest to what zetra's release workflow
+built from `54d66d2` (run 44337682384).
 
 ### What was added
 
@@ -303,10 +302,14 @@ Automation does none of these.
 
 ### Order of the roll-out
 
-Each image below is built by zetra's release workflow when the zetra change
-merges. Replace every `:PENDING`, and the commit in
-`infrastructure/agent-platform-crds/kustomization.yaml`, with what that run
-built before any of this is merged here.
+Each image below was built by zetra's release workflow from `54d66d2`, the
+commit `infrastructure/agent-platform-crds/kustomization.yaml` also names.
+
+One change carried all five steps. That was safe for two reasons. Flux applies
+the `infrastructure` root, which holds the CRD, before the workloads root. And no
+agent was registry-owned at the time, so nothing wrote a carried declaration
+while the controller was still rolling. With a registry-owned agent present, keep
+the order below across separate changes.
 
 1. The CRD first (`infrastructure/agent-platform-crds/`): the provisioner writes
    `spec.declaration`, and the API server drops a field its schema lacks. Check
@@ -322,8 +325,10 @@ built before any of this is merged here.
    `PROVISIONER_SESSION_API_URL`, both on the new images.
 4. The session interface (`session-api-tenant-test.yaml`, its RBAC, its Temporal
    certificate and the endpoint's new identity, the network policies).
-5. The evaluator, last, after the operator's Keycloak steps above; it needs the
-   session interface up.
+5. The evaluator, last; it needs the session interface up. Until the operator's
+   Keycloak steps above are done it gets no token, logs a failed pass each
+   interval and keeps running. It starts work on the first pass after its client
+   exists.
 
 The session runner's image needs no new pin for this milestone: the only change
 to its library is an optional argument the session interface passes when it
