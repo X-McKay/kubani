@@ -19,6 +19,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import outcome  # noqa: E402
 from agent_ops import layout, register  # noqa: E402
+from mcp_registry import contract as mcp_contract  # noqa: E402
 
 CATALOG = Path("infrastructure/registry/catalog.yaml")
 FEED = Path("infrastructure/gitops/apps/agent-platform/workloads/agent-registry-feed.json")
@@ -138,6 +139,38 @@ def _container_image(deployment: dict, container: str, where: str, manifest) -> 
     raise ValueError(f"{where}: no container {container} in Deployment in {manifest}")
 
 
+def _container(deployment: dict, container: str, where: str, manifest) -> dict:
+    spec = ((deployment.get("spec") or {}).get("template") or {}).get("spec") or {}
+    for item in spec.get("containers") or []:
+        if isinstance(item, dict) and item.get("name") == container:
+            return item
+    raise ValueError(f"{where}: no container {container} in Deployment in {manifest}")
+
+
+def _contract(root: Path, name: str, backend, image: str, digest: str, where: str):
+    """The tool server's contract file as an object, or None when there is none; ValueError when it does not belong to the entry as committed."""
+    rel = mcp_contract.contract_path(name)
+    path = _inside(root, rel)
+    if not path.is_file():
+        return None
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        raise ValueError(f"{rel}: not valid JSON") from None
+    if not isinstance(doc, dict) or doc.get("schemaVersion") != mcp_contract.SCHEMA_VERSION or not isinstance(doc.get("tools"), list):
+        raise ValueError(f"{rel}: not a tool contract (schemaVersion 1 with a tools list)")
+    if doc.get("server") != name:
+        raise ValueError(f"{where}: {rel} is the contract of server {doc.get('server')!r}")
+    if doc.get("backend") != backend:
+        raise ValueError(f"{where}: {rel} names backend {doc.get('backend')!r} but the catalog names {backend!r}")
+    if doc.get("configDigest") != digest:
+        raise ValueError(f"{where}: {rel} was captured with configDigest {doc.get('configDigest')!r} but the manifest's container has {digest!r}; capture it again (just mcp contract {name})")
+    pinned = mcp_contract.image_digest(image)
+    if pinned is not None and mcp_contract.image_digest(str(doc.get("image"))) != pinned:
+        raise ValueError(f"{where}: {rel} was captured from image {doc.get('image')!r} but the manifest pins {pinned}; capture it again (just mcp contract {name})")
+    return doc
+
+
 def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
     tools = []
     for entry in _entries(cat, "toolServers", TOOL_KEYS, identity="name"):
@@ -148,6 +181,7 @@ def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
         backend = entry["backend"]
         if backend is not None and (not isinstance(backend, str) or not BACKEND_NAME.fullmatch(backend)):
             raise ValueError(f"{where}: backend must be null or a backend name")
+        digest = mcp_contract.config_digest(_container(deployment, entry["container"], where, entry["manifest"]))
         tools.append(
             {
                 "name": name,
@@ -161,6 +195,8 @@ def _tool_servers(root: Path, cluster: str, cat: dict) -> list[dict]:
                 "pinnedByDigest": "@sha256:" in image,
                 "registered": backend is not None,
                 "backend": backend,
+                "configDigest": digest,
+                "contract": _contract(root, name, backend, image, digest, where),
             }
         )
     _check_backends(root, tools)

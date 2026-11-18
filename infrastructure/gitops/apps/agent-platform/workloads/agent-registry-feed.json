@@ -67,7 +67,9 @@
       "image": "ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796",
       "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:248560efc49ebf682e95f815a2a103ce084ffa8b5fbedfceec271df28938ebed",
+      "contract": null
     },
     {
       "name": "graphiti-mcp",
@@ -84,7 +86,9 @@
       "image": "docker.io/zepai/knowledge-graph-mcp@sha256:befb285c706da9853f3f9d741e49eabd6994b62521c822fba2dee99f2a161749",
       "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:5045082578f4140d7cf3c278b62c3640edd4404cd935c230307d08133ffde6c7",
+      "contract": null
     },
     {
       "name": "kubernetes-mcp",
@@ -101,7 +105,9 @@
       "image": "quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44",
       "pinnedByDigest": true,
       "registered": true,
-      "backend": "kubernetes"
+      "backend": "kubernetes",
+      "configDigest": "sha256:67a3acdd62aaa731bac27eec2d5dd397631e3485280a6c81ff9d7a0c6db34834",
+      "contract": null
     },
     {
       "name": "postgres-admin-mcp",
@@ -118,7 +124,9 @@
       "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
       "pinnedByDigest": true,
       "registered": true,
-      "backend": "postgres-admin"
+      "backend": "postgres-admin",
+      "configDigest": "sha256:fd32b0f6da5c6bc5869e36716d4149513a6806e9c37582545f436f6531c20adf",
+      "contract": null
     },
     {
       "name": "postgres-mcp",
@@ -135,7 +143,9 @@
       "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
       "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:97ad0238e7b98e317716fcebca2a26791f502970c30e8d66554307f2f385384b",
+      "contract": null
     }
   ],
   "modelEngines": [
