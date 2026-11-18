@@ -63,6 +63,14 @@ spec:
             # Back-channel JWKS; the realm's issuer stays idp.almckay.io.
             - name: REGISTRY_JWKS_URL
               value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
+            # Release reports are signed by the agent repositories' GitHub Actions
+            # workflows (delivery.md 3.2); the audience they ask for is this host.
+            - name: REGISTRY_GITHUB_ISSUER
+              value: https://token.actions.githubusercontent.com
+            - name: REGISTRY_GITHUB_JWKS_URL
+              value: https://token.actions.githubusercontent.com/.well-known/jwks
+            - name: REGISTRY_REPORT_AUDIENCE
+              value: https://agents.almckay.io
             - name: REGISTRY_FEED_PATH
               value: /etc/agent-registry/feed/agent-registry-feed.json
             - name: REGISTRY_PORT

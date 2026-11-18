@@ -23,6 +23,7 @@ from agent_ops import layout, register  # noqa: E402
 CATALOG = Path("infrastructure/registry/catalog.yaml")
 FEED = Path("infrastructure/gitops/apps/agent-platform/workloads/agent-registry-feed.json")
 BACKENDS = Path("infrastructure/mcp/backends")
+REVOCATIONS = Path("infrastructure/registry/revocations")
 MODEL_CONFIG = Path("infrastructure/gitops/apps/vllm/model-config.yaml")
 GATEWAY = Path("infrastructure/gitops/apps/ai-gateway/agents/backends.yaml")
 BACKEND_NAME = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*")
@@ -34,6 +35,10 @@ TOOL_KEYS = frozenset({"name", "namespace", "owner", "description", "source", "m
 ENGINE_KEYS = frozenset({"name", "namespace", "owner", "description", "source", "workload", "servedNameFrom", "backend"})
 SERVED_KEYS = frozenset({"configMap", "key"})
 ALIAS_KEYS = frozenset({"alias", "engine"})
+REVOCATION_KEYS = frozenset({"schemaVersion", "id", "kind", "item", "release", "reason", "sessions", "summary", "revokedBy", "revokedAt"})
+REVOCATION_REQUIRED = REVOCATION_KEYS - {"sessions"}
+REVOCATION_REASONS = frozenset({"security", "quality"})
+REVOCATION_SESSIONS = frozenset({"cancel", "finish"})
 
 
 def _inside(root: Path, rel) -> Path:
@@ -247,6 +252,47 @@ def _aliases(cluster: str, cat: dict, engines: list[dict]) -> list[dict]:
     return out
 
 
+class _TextLoader(yaml.SafeLoader):
+    """SafeLoader that leaves timestamps as the text written, so the feed carries revokedAt unchanged."""
+
+
+_TextLoader.yaml_implicit_resolvers = {
+    key: [(tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"]
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+
+
+def _revocations(root: Path) -> list[dict]:
+    """One object per infrastructure/registry/revocations/*.yaml, in id order (delivery.md 8.1); [] when there are none."""
+    base = _inside(root, REVOCATIONS)
+    files = sorted(p for p in base.glob("*.yaml") if p.is_file()) if base.is_dir() else []
+    out = []
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            doc = yaml.load(path.read_text(encoding="utf-8"), Loader=_TextLoader)  # noqa: S506 - SafeLoader subclass
+        except yaml.YAMLError:
+            raise ValueError(f"{rel}: not valid YAML") from None
+        if not isinstance(doc, dict):
+            raise ValueError(f"{rel}: must be one mapping")
+        missing = sorted(REVOCATION_REQUIRED - set(doc))
+        if missing:
+            raise ValueError(f"{rel}: missing key {', '.join(missing)}")
+        extra = sorted(set(doc) - REVOCATION_KEYS)
+        if extra:
+            raise ValueError(f"{rel}: unknown key {', '.join(map(str, extra))}")
+        if type(doc["schemaVersion"]) is not int or doc["schemaVersion"] != 1:
+            raise ValueError(f"{rel}: schemaVersion must be 1")
+        if doc["id"] != path.stem:
+            raise ValueError(f"{rel}: id {doc['id']!r} must equal the file name without .yaml")
+        if doc["reason"] not in REVOCATION_REASONS:
+            raise ValueError(f"{rel}: reason must be security or quality")
+        if "sessions" in doc and doc["sessions"] not in REVOCATION_SESSIONS:
+            raise ValueError(f"{rel}: sessions must be cancel or finish")
+        out.append(doc)
+    return sorted(out, key=lambda d: d["id"])
+
+
 def _tenant_pins(root: Path) -> dict[str, dict]:
     """Each tenant's pin: issuer and subjectRegExp from layout.signer_pin, vulnExceptions from the same pin JSON."""
     data = layout.load_one_plain(_inside(root, layout.SIGNERS)).get("data") or {}
@@ -303,6 +349,7 @@ def render(root: Path) -> dict:
         "toolServers": tools,
         "modelEngines": engines,
         "aliases": aliases,
+        "revocations": _revocations(root),
     }
 
 

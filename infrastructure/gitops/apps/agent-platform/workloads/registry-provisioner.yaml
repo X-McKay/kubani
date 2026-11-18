@@ -50,6 +50,10 @@ spec:
               value: kubani
             - name: PROVISIONER_REGISTRY_URL
               value: http://agent-registry.agent-platform.svc.cluster.local:8080
+            # Cancels a revoked release's sessions (delivery.md 8.3); {tenant} is the
+            # tenant name, so Service session-api-tenant-test.
+            - name: PROVISIONER_SESSION_API_URL
+              value: http://session-api-{tenant}.agent-platform.svc:8080
             - name: PROVISIONER_NAMESPACE
               valueFrom:
                 fieldRef:

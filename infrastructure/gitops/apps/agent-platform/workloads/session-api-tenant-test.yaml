@@ -1,0 +1,214 @@
+# The session interface for tenant tenant-test (zetra platform/session-api,
+# contract sessions.md): starts, reads, cancels and lists that tenant's agent
+# sessions over HTTP on 8080. Callers are the registry evaluator and the
+# provisioner inside the cluster, and release workflows through agents.almckay.io
+# path /v1/tenants/tenant-test/sessions. Every request carries a Keycloak bearer
+# token of realm agents with audience agent-registry, the registry's own.
+#
+# It talks to Temporal as the tenant's runner does (same mTLS endpoint, same
+# namespace, same payload key) under its own client certificate, and reads the
+# runner's artifact store read only for reports. Its Kubernetes surface is `get`
+# on Agents and AgentReleases in tenant-test (apps/agents/tenant-test/
+# session-api-rbac.yaml). It decides nothing about which release is approved.
+#
+# The artifact PVC is ReadWriteOnce, so the pod must run on the runner's node:
+# the pod affinity below. If the runner moves, delete this pod once.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: session-api-tenant-test
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: session-api
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: session-api
+      agentplatform.io/tenant: tenant-test
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: session-api
+        app.kubernetes.io/part-of: agent-platform
+        agentplatform.io/tenant: tenant-test
+    spec:
+      serviceAccountName: session-api-tenant-test
+      # The default token is the API-server identity: get on Agents and
+      # AgentReleases in tenant-test.
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: session-runner
+                  agentplatform.io/tenant: tenant-test
+      securityContext:
+        # The runner's identity (the image's own default is 65532), so the
+        # runner's artifact files are readable.
+        runAsNonRoot: true
+        runAsUser: 1600
+        runAsGroup: 1600
+        fsGroup: 1600
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: session-api
+          image: registry.almckay.io/platform/session-api:PENDING
+          env:
+            - name: SESSION_API_TENANT
+              value: tenant-test
+            # The cluster's name as the registry knows it (infrastructure/registry/catalog.yaml).
+            - name: SESSION_API_CLUSTER
+              value: kubani
+            - name: SESSION_API_ARTIFACT_ROOT
+              value: /var/lib/agent-artifacts
+            # The registry's own issuer, audience and back-channel JWKS (agent-registry.yaml).
+            - name: SESSION_API_ISSUER
+              value: https://idp.almckay.io/realms/agents
+            - name: SESSION_API_AUDIENCE
+              value: agent-registry
+            - name: SESSION_API_JWKS_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
+            - name: TEMPORAL_ADDRESS
+              value: temporal-mtls.temporal.svc.cluster.local:7233
+            - name: TEMPORAL_NAMESPACE
+              value: agents-tenant-test
+            - name: TEMPORAL_TLS_CERT
+              value: /etc/temporal-tls/tls.crt
+            - name: TEMPORAL_TLS_KEY
+              value: /etc/temporal-tls/tls.key
+            - name: TEMPORAL_TLS_CA
+              value: /etc/temporal-tls/ca.crt
+            - name: PAYLOAD_KEY_FILE
+              value: /etc/agent-platform/payload-key/tenant-test
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: temporal-tls
+              mountPath: /etc/temporal-tls
+              readOnly: true
+            - name: payload-key
+              mountPath: /etc/agent-platform/payload-key
+              readOnly: true
+            - name: artifacts
+              mountPath: /var/lib/agent-artifacts
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: temporal-tls
+          secret:
+            secretName: session-api-temporal-tls  # pragma: allowlist secret
+        - name: payload-key
+          secret:
+            secretName: session-payload-key-tenant-test  # pragma: allowlist secret
+            items:
+              - key: key
+                path: tenant-test
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: agent-artifacts-tenant-test
+            readOnly: true
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: session-api-tenant-test
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: session-api
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: session-api
+    agentplatform.io/tenant: tenant-test
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+---
+# Same host as the registry, no new host and no certificate: the path prefix
+# is longer than the registry's `/`, so Traefik routes it here. No Authentik
+# forward-auth: the API's own auth is the Keycloak bearer token.
+# Auth inventory row: docs/infrastructure/configuration/authentik-app-access.md
+# (agents.almckay.io).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: session-api-tenant-test
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: session-api
+    app.kubernetes.io/part-of: agent-platform
+    agentplatform.io/tenant: tenant-test
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: agents.almckay.io
+      http:
+        paths:
+          - path: /v1/tenants/tenant-test/sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: session-api-tenant-test
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - agents.almckay.io
+      secretName: agents-tls  # pragma: allowlist secret

@@ -227,3 +227,93 @@ KUBECONFIG=/home/al/.kube/config kubectl -n agent-platform logs deploy/registry-
 
 Read the provisioner's newest lines for a recent pass. Check the line's format
 against the image once it is built.
+
+## Milestone 2: delivery (session interface, evaluator, revocations)
+
+The contract is zetra's `platform/registry/contract/delivery.md` (sections 3, 6, 8
+and 12) and `platform/session-api/contract/sessions.md`. This repository holds
+the manifests; none of them is rolled out by the change that adds them until the
+images exist (every new image is written `:PENDING` until zetra's release
+workflow has built it).
+
+### What was added
+
+| | What | Where |
+|---|---|---|
+| A | The session interface for tenant `tenant-test`: Deployment, Service and ServiceAccount `session-api-tenant-test` (port 8080; the runner's Temporal settings, payload key and artifact store, read only), a Role that allows `get` on `agents` and `agentreleases` in `tenant-test`, and an Ingress path `/v1/tenants/tenant-test/sessions` on `agents.almckay.io` (the registry keeps `/`). A Temporal client certificate for it and its identity added to the mTLS endpoint | `workloads/session-api-tenant-test.yaml`, `apps/agents/tenant-test/session-api-rbac.yaml`, `registry-rbac.yaml`, `workloads/temporal-mtls.yaml` |
+| B | The evaluator: Deployment and ServiceAccount `registry-evaluator`; token from Keycloak by client assertion, no Kubernetes RBAC | `workloads/registry-evaluator.yaml`, `registry-rbac.yaml` |
+| C | `PROVISIONER_SESSION_API_URL` on the provisioner (it cancels a revoked release's sessions) | `workloads/registry-provisioner.yaml` |
+| D | `REGISTRY_GITHUB_ISSUER`, `REGISTRY_GITHUB_JWKS_URL`, `REGISTRY_REPORT_AUDIENCE` on the registry | `workloads/agent-registry.yaml` |
+| E | Network policies for the three paths into the session interface, its own egress, the evaluator's egress, the provisioner's egress to the session interface, the registry's egress to GitHub's keys on 443, and the matching Keycloak and Temporal ingress; each with its baseline entry | `netpol-registry.yaml`, `apps/keycloak/netpol.yaml`, `infrastructure/agent-platform-netpol/upstreams.yaml`, `infrastructure/mcp/baseline/effective-network-policies.json` |
+| F | The `agentreleases.agentplatform.io` CRD with `spec.declaration`, copied from zetra | `infrastructure/agent-platform-crds/` |
+| G | `infrastructure/registry/revocations/` and the feed key `revocations` | `infrastructure/registry/revocations/README.md`, `infrastructure/scripts/ops/registry_feed.py` |
+| H | The agents gateway's two model-pin policies accept the engine's served name or its catalog alias (`main`, `fast`). This widens an authorization rule and was committed on its own | `apps/ai-gateway/agents/policies-auth.yaml`, `tests/test_agents_gateway_model_alias.py` |
+
+Two facts about E:
+
+- The Temporal endpoint (`temporal-mtls`) is an Envoy TCP proxy. It admits a
+  client by the SPIFFE identity in its certificate and has no list of methods, so
+  the session interface got an identity (`session-api-tenant-test`) and a network
+  path, and no method list exists to extend. Changing its ConfigMap makes
+  Reloader restart the endpoint once; the runner and reconciler reconnect.
+- GitHub Actions runners (`arc-runners`) already reach `https://agents.almckay.io`:
+  their egress policy allows the internet on 443 and Traefik on 443 and 8443, and
+  CoreDNS answers every `*.almckay.io` name with Traefik's address. No rule was
+  added for them.
+
+### Steps only a person runs
+
+Automation does none of these.
+
+1. In the realm `agents`, create the realm role `registry-evaluator` and the
+   client `registry-evaluator-kubani`, the same way as the provisioner's client
+   in step b above (federated JWT, no secret, no default role). Start the shell
+   as in step b.
+
+   ```bash
+   : "${KC:?set KC and the K and scope helpers as in step b}"
+   K create roles -r agents -s name=registry-evaluator -s 'description=Agent registry: claim evaluations, run them through the session interface and post verdicts'
+   BODY=$(K get roles/registry-evaluator -r agents | tr -d '\n' | sed 's/^/[/; s/$/]/')
+   SID=$(scope agent-registry); [ ${#SID} = 36 ]
+   K create client-scopes/$SID/scope-mappings/realm -r agents -b "$BODY"
+   K create clients -r agents -s clientId=registry-evaluator-kubani -s publicClient=false -s clientAuthenticatorType=federated-jwt -s 'attributes."jwt.credential.issuer"=kubernetes-kubani' -s 'attributes."jwt.credential.sub"=system:serviceaccount:agent-platform:registry-evaluator' -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false -s 'defaultClientScopes=["basic","roles","agent-registry"]' -s 'optionalClientScopes=[]'
+   K remove-roles -r agents --uusername service-account-registry-evaluator-kubani --rolename default-roles-agents
+   K add-roles -r agents --uusername service-account-registry-evaluator-kubani --rolename registry-evaluator
+   ```
+
+   The realm file `apps/keycloak/realm-agents.json` is not changed by this
+   package. Keycloak never re-imports it into an existing realm, and a change to
+   it restarts Keycloak; mirror the role and the client into it in a separate
+   change if a fresh import must produce them.
+
+2. For each agent repository: a deploy key, held as the Actions secret
+   `RELEASE_TAG_KEY`, and two Actions variables:
+   `AGENT_REGISTRY_URL=https://agents.almckay.io` and
+   `AGENT_REGISTRY_AUDIENCE=https://agents.almckay.io`. The public half of the
+   deploy key is added to the repository with write access.
+
+### Order of the roll-out
+
+1. The CRD first (`infrastructure/agent-platform-crds/`): the controller and the
+   provisioner write `spec.declaration`, and the API server drops a field its
+   schema lacks. Check `kubectl get crd agentreleases.agentplatform.io -o yaml`
+   shows `declaration` before the next step.
+2. The registry (`agent-registry.yaml` with the three GitHub settings, and the new
+   feed), once its image is built.
+3. The provisioner, with `PROVISIONER_SESSION_API_URL`.
+4. The session interface (`session-api-tenant-test.yaml`, its RBAC, its Temporal
+   certificate and the endpoint's new identity, the network policies).
+5. The evaluator, last, after the operator's Keycloak steps above; it needs the
+   session interface up.
+
+### Hand-over rehearsal of 2026-11-18
+
+Whether Flux lets go of an object, keeps it, and takes it back, tried on a
+ConfigMap that carried `kustomize.toolkit.fluxcd.io/prune: disabled`:
+
+| | Change | Result |
+|---|---|---|
+| R1 (#432) | ConfigMap `agent-platform/handover-rehearsal` added, created 2026-11-18T06:06:14Z, carrying `kustomize.toolkit.fluxcd.io/prune: disabled` | In the `apps` inventory (354 entries) |
+| R2 (#433) | Removed from the kustomization | The object stayed; inventory 353 |
+| R3 (#434) | Added back | The same object was adopted (same creation time); inventory 354 |
+| R4 (#435) | Removed again | The object was kept and was absent from the inventory (353); then deleted by name |

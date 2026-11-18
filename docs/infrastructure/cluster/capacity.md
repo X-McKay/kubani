@@ -64,6 +64,8 @@ baseline.
 | Registry Controller (Agent Runtime Platform AP4) | agent-platform | 50m / 500m | 128Mi / 384Mi | strix |
 | Agent Registry | agent-platform | 50m / — | 128Mi / 512Mi | strix |
 | Registry provisioner (one per cluster) | agent-platform | 25m / — | 96Mi / 256Mi | strix |
+| Registry evaluator (one per cluster) | agent-platform | 25m / — | 96Mi / 256Mi | database role |
+| Session interface tenant-test | agent-platform | 50m / 500m | 128Mi / 512Mi | with the Session Runner |
 | Agent Registry database init (one-shot Job, runs once per password generation) | database | 10m / 200m | 32Mi / 128Mi | rig0 (platform role) |
 | temporal-mtls Envoy (Agent Runtime Platform AP5) | temporal | 20m / 500m | 32Mi / 128Mi | strix |
 | Session Runner tenant-test (Agent Runtime Platform AP5) | agent-platform | 100m / 1 | 256Mi / 1Gi | strix |
