@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 import outcome
-from agent_ops import approve, delegation, layout, live, register, run, stage, state, sync
+from agent_ops import approve, authority, delegation, layout, live, register, registry_client, run, stage, state, sync
 
 ERRORS = (
     layout.LayoutError,
@@ -21,6 +21,8 @@ ERRORS = (
     sync.SyncError,
     stage.StageError,
     approve.ApproveError,
+    authority.AuthorityError,
+    registry_client.RegistryError,
 )
 
 # Subcommands that print exactly one JSON document on stdout however they end, once their arguments have parsed.
@@ -166,9 +168,11 @@ def main(argv=None) -> int:
     p.add_argument("--cancel-on-timeout", action="store_true", help="when --wait-timeout passes, also ask the runner to cancel the session (default: leave it running)")
     p.add_argument("--out", type=Path, help="new private directory for receipt, status and report")
 
-    for name, text in (("status", "read the exact run named by a receipt"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
+    for name, text in (("status", "the registry's view of every agent, tool server and model; with --receipt, the exact run a receipt names"), ("wait", "keep following a receipt's run"), ("cancel", "request cancellation of a receipt's run")):
         p = sub.add_parser(name, help=text)
-        p.add_argument("--receipt", type=Path, required=True, help="the receipt.json a `run` wrote")
+        p.add_argument("--receipt", type=Path, required=name != "status", help="the receipt.json a `run` wrote" + ("; without it, the registry's view of every agent, tool server and model" if name == "status" else ""))
+        if name == "status":
+            p.add_argument("--json", action="store_true", help="without --receipt: print the registry's view as JSON instead of text")
         if name == "wait":
             p.add_argument("--wait-timeout", type=positive_float, default=900, help="seconds to follow the session before giving up (exit 124); above 0")
             p.add_argument("--poll-interval", type=positive_float, default=10, help="seconds between status polls; above 0")
@@ -202,9 +206,13 @@ def main(argv=None) -> int:
     p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout")
 
     p = sub.add_parser("approve", help="record approval after the controller verified the staged release")
-    p.add_argument("release", help="name of the staged AgentRelease to approve")
+    p.add_argument("release", help="name of the staged AgentRelease to approve, or an agent the registry owns")
     p.add_argument("--by", help="who approves (default: the Agent's owner)")
     p.add_argument("--ticket", help="URL or id recorded with the approval")
+
+    p = sub.add_parser("authority", help="hand an agent to the registry (take) or back to the pull request path (return)")
+    p.add_argument("action", choices=("take", "return"), help="take: the registry owns the agent; return: git owns it again")
+    p.add_argument("agent", help="committed agent whose authority moves")
 
     args = parser.parse_args(argv)
     root = args.root
@@ -243,6 +251,13 @@ def main(argv=None) -> int:
                 started=started,
             )
             return conclude(args, code, envelope)
+        if args.command == "status" and args.receipt is None:
+            doc = registry_client.status()
+            if args.json:
+                emit(outcome.document(doc))
+            else:
+                print(registry_client.format_status(doc))
+            return 0
         if args.command in ("status", "wait", "cancel"):
             code, envelope = run.resume(args.receipt, args.command, wait_timeout=getattr(args, "wait_timeout", 900), poll_interval=getattr(args, "poll_interval", 10))
             return conclude(args, code, envelope)
@@ -270,6 +285,8 @@ def main(argv=None) -> int:
             return conclude(args, 0, stage.stage(root, args.agent, args.tag, repo=args.repo, source=args.source))
         if args.command == "approve":
             return conclude(args, 0, approve.approve(root, args.release, by=args.by, ticket=args.ticket, repo=args.repo))
+        if args.command == "authority":
+            return conclude(args, 0, authority.take(root, args.agent) if args.action == "take" else authority.give_back(root, args.agent))
     except KeyboardInterrupt:
         message = "interrupted before the command finished; a run directory, when one was created, holds what was written by then"
         if args.command not in ONE_DOCUMENT:

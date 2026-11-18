@@ -292,7 +292,7 @@ class AgentOps(unittest.TestCase):
         self.assertEqual(only_document(out.getvalue())["error"]["code"], "interrupted")
 
     def test_malformed_command_lines_print_usage_to_stderr_and_a_document_to_stdout(self):
-        for argv in (["bogus"], [], ["run"], ["run", "sample", "--max-boundaries", "0"], ["status"], ["wait", "--receipt", "r", "--wait-timeout", "-1"]):
+        for argv in (["bogus"], [], ["run"], ["run", "sample", "--max-boundaries", "0"], ["wait"], ["cancel"], ["wait", "--receipt", "r", "--wait-timeout", "-1"]):
             with self.subTest(argv=argv):
                 code, out, err = call(agent_cli, argv)
                 self.assertEqual(code, 2)

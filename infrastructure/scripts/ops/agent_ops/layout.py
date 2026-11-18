@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ import outcome
 
 AGENTS_DIR = Path("infrastructure/gitops/apps/agents")
 SIGNERS = Path("infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml")
+AGENT_CRD = Path("infrastructure/gitops/infrastructure/agent-platform-crds/agents.agentplatform.io.yaml")
 NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\Z")
 TAG = re.compile(r"^(?P<agent>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)/(?P<version>v[0-9][A-Za-z0-9.+-]*)\Z")
 SHA256 = re.compile(r"^[0-9a-f]{64}\Z")
@@ -108,6 +110,38 @@ def committed_agent(d: AgentDir) -> dict:
     return doc
 
 
+def _with_defaults(value, schema: dict):
+    """A value with the schema's defaults filled in, the way the API server fills them: a default applies to a property
+    that is missing from a mapping which is itself present."""
+    if isinstance(value, dict):
+        properties = schema.get("properties") or {}
+        result = {key: _with_defaults(item, properties.get(key) or {}) for key, item in value.items()}
+        for key, prop in properties.items():
+            if "default" in prop and result.get(key) is None:
+                result[key] = copy.deepcopy(prop["default"])
+        return result
+    if isinstance(value, list):
+        return [_with_defaults(item, schema.get("items") or {}) for item in value]
+    return copy.deepcopy(value)
+
+
+def applied_agent(root: Path, d: AgentDir) -> dict:
+    """The committed Agent as the cluster and the registry hold it: apiVersion, kind, name, namespace and the spec with
+    the defaults of the committed Agent definition filled in."""
+    doc = committed_agent(d)
+    version = doc["apiVersion"].partition("/")[2]
+    versions = (load_one_plain(root / AGENT_CRD).get("spec") or {}).get("versions") or []
+    schemas = [((v.get("schema") or {}).get("openAPIV3Schema") or {}).get("properties", {}).get("spec") for v in versions if isinstance(v, dict) and v.get("name") == version]
+    if len(schemas) != 1 or not isinstance(schemas[0], dict):
+        raise LayoutError(f"{AGENT_CRD}: expected one {version} schema with a spec")
+    return {
+        "apiVersion": doc["apiVersion"],
+        "kind": doc["kind"],
+        "metadata": {"name": d.agent, "namespace": d.tenant},
+        "spec": _with_defaults(doc["spec"], schemas[0]),
+    }
+
+
 def signer_pin(root: Path, tenant: str) -> dict:
     doc = load_one_plain(root / SIGNERS)
     data = doc.get("data") or {}
@@ -166,3 +200,35 @@ def append_listed(path: Path, entry: str) -> None:
         raise LayoutError(f"{path}: {entry} is already listed")
     lines = path.read_text(encoding="utf-8").rstrip("\n").split("\n")
     path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")
+
+
+AGENTS_LIST = AGENTS_DIR / "kustomization.yaml"
+
+
+def list_entry(d: AgentDir) -> str:
+    return f"{d.tenant}/{d.agent}"
+
+
+def _same_entry(text: str, d: AgentDir) -> bool:
+    return text.removeprefix("./").rstrip("/") == list_entry(d)
+
+
+def is_listed(root: Path, d: AgentDir) -> bool:
+    """Whether `apps/agents/kustomization.yaml` lists the agent's directory: the pull request path owns it. An unlisted directory belongs to the registry."""
+    return any(_same_entry(entry, d) for entry in load_one_plain(root / AGENTS_LIST).get("resources") or [] if isinstance(entry, str))
+
+
+def unlist(root: Path, d: AgentDir) -> None:
+    """Remove the agent's one line from `apps/agents/kustomization.yaml`; every other line stays as it is."""
+    path = root / AGENTS_LIST
+    lines = path.read_text(encoding="utf-8").split("\n")
+    hits = [i for i, line in enumerate(lines) if re.match(r"^  - \S+\s*$", line) and _same_entry(line[4:].strip(), d)]
+    if len(hits) != 1:
+        raise LayoutError(f"{path}: expected exactly one line listing {list_entry(d)}, found {len(hits)}")
+    del lines[hits[0]]
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def relist(root: Path, d: AgentDir) -> None:
+    """List the agent's directory again, at the end of `apps/agents/kustomization.yaml`."""
+    append_listed(root / AGENTS_LIST, list_entry(d) + "/")
