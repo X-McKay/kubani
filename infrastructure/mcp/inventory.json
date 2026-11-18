@@ -40,7 +40,7 @@
         },
         {
           "apiVersion": "apps/v1",
-          "canonicalSHA256": "sha256:f9b49cadd6c71a6f93ea9eb8fa033b18c3861ef584d6cb3fcdc06b276b8fe5a3",
+          "canonicalSHA256": "sha256:80c1290864a743e7f529e137319790292ef2115929e2846834260f3bb6d62dda",
           "kind": "Deployment",
           "name": "kubernetes-mcp",
           "namespace": "mcp",

@@ -64,8 +64,8 @@
         "kind": "Deployment",
         "name": "github-mcp"
       },
-      "image": "ghcr.io/github/github-mcp-server:v2.0.2",
-      "pinnedByDigest": false,
+      "image": "ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796",
+      "pinnedByDigest": true,
       "registered": false,
       "backend": null
     },
@@ -81,8 +81,8 @@
         "kind": "Deployment",
         "name": "graphiti-mcp"
       },
-      "image": "zepai/knowledge-graph-mcp:1.1.1-standalone",
-      "pinnedByDigest": false,
+      "image": "docker.io/zepai/knowledge-graph-mcp@sha256:befb285c706da9853f3f9d741e49eabd6994b62521c822fba2dee99f2a161749",
+      "pinnedByDigest": true,
       "registered": false,
       "backend": null
     },
@@ -98,8 +98,8 @@
         "kind": "Deployment",
         "name": "kubernetes-mcp"
       },
-      "image": "quay.io/containers/kubernetes_mcp_server:v0.0.67",
-      "pinnedByDigest": false,
+      "image": "quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44",
+      "pinnedByDigest": true,
       "registered": true,
       "backend": "kubernetes"
     },
@@ -132,8 +132,8 @@
         "kind": "Deployment",
         "name": "postgres-mcp"
       },
-      "image": "crystaldba/postgres-mcp:0.3.0",
-      "pinnedByDigest": false,
+      "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+      "pinnedByDigest": true,
       "registered": false,
       "backend": null
     }
