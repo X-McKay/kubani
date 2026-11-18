@@ -1,0 +1,137 @@
+# Agent registry and its provisioner. Least privilege, no cluster-wide binding.
+# agent-registry gets a ServiceAccount and no RBAC at all. The provisioner's
+# whole Kubernetes surface is the Roles below plus tenant-test/
+# registry-provisioner-rbac.yaml in apps/agents/ (the only place it writes):
+#   tenant-test        agents, agentreleases: get, list, create, patch
+#   flux-system        Kustomization apps: get (the inventory it must respect)
+#   agent-platform     ConfigMap registry-provisioner-state: get, patch
+#   mcp, vllm          workloads: get (reported, never written)
+#   vllm               ConfigMap model-config: get
+# No delete, no update, no watch, no status subresource.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-registry
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: agent-registry
+    app.kubernetes.io/part-of: agent-platform
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-provisioner
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: registry-provisioner
+    app.kubernetes.io/part-of: agent-platform
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-provisioner
+  namespace: agent-platform
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [registry-provisioner-state]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-provisioner
+  namespace: agent-platform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: registry-provisioner
+    namespace: agent-platform
+---
+# Reads the Flux inventory of `apps` so it refuses to write an object Flux
+# still lists.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-provisioner
+  namespace: flux-system
+rules:
+  - apiGroups: [kustomize.toolkit.fluxcd.io]
+    resources: [kustomizations]
+    resourceNames: [apps]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-provisioner
+  namespace: flux-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: registry-provisioner
+    namespace: agent-platform
+---
+# Reports image and replica counts of tool servers; never writes them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-provisioner
+  namespace: mcp
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-provisioner
+  namespace: mcp
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: registry-provisioner
+    namespace: agent-platform
+---
+# Reports image and replica counts of model engines and reads model-config;
+# never writes either.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-provisioner
+  namespace: vllm
+rules:
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, daemonsets]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [model-config]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-provisioner
+  namespace: vllm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: registry-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: registry-provisioner
+    namespace: agent-platform

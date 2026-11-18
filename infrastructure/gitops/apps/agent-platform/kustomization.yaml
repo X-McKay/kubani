@@ -53,3 +53,11 @@ resources:
   - netpol-attestor.yaml
   - budget-conformance.yaml
   - budget-backend-key.enc.yaml
+
+  # Agent Registry and its provisioner: identities, RBAC and network policy.
+  # Inert until the two workloads are listed in workloads/. Still unlisted,
+  # waiting for the database role's Secrets (two .enc.yaml files only Al
+  # creates): registry-db-init-job.yaml. Steps and order:
+  # docs/infrastructure/configuration/agent-registry.md.
+  - registry-rbac.yaml
+  - netpol-registry.yaml

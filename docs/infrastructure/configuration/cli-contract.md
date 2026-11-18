@@ -66,6 +66,17 @@ without `proofs`.
 | `interrupted` | yes | interrupted before the command finished |
 | `unavailable` | yes | the cluster, a tool the command shells out to, or a remote service could not be reached |
 | `internal` | no | an unexpected error in the tool itself |
+| `wrong-path` | no | the agent is owned by the other path: a registry command was used on an agent that pull requests own, or the reverse |
+| `not-signed-in` | no | the agent registry needs a signed-in person and there is no token, or the token does not verify; sign in and repeat |
+| `stale-approval` | no | what the approval names is no longer so (another release, authority or tenant policy since the preview); preview again |
+| `replayed-approval` | no | this approval was used before |
+| `in-recovery` | yes | the agent registry is in recovery and writes nothing until a person ends it |
+| `registry-unreachable` | yes | the agent registry did not answer; nothing was changed |
+
+The last six belong to the commands that call the agent registry. The first
+five are the registry's own codes and are passed on unchanged, with its
+message. A registry answer of `unavailable` (its database is down) stays
+`unavailable`; `registry-unreachable` is this side's word for no answer at all.
 
 Where one code stands for several causes, and the cause was not at hand:
 

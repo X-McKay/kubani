@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,7 +12,7 @@ import yaml
 
 import outcome
 
-from . import layout, live, sync
+from . import layout, live, registry_client, sync
 
 APPROVAL_RE = re.compile(r"^  approval:\n    approved: false\n", re.MULTILINE)
 
@@ -73,8 +75,17 @@ def approve(
     kube: live.Kube | None = None,
     now: datetime | None = None,
 ) -> dict:
+    if any(x.agent == name for x in layout.agent_dirs(root)):
+        d = layout.find_agent(root, name)
+        if layout.is_listed(root, d):
+            raise ApproveError(f"{name} is an agent on the pull request path; approve one of its staged releases with `just agent approve <release>`", "wrong-path")
+        if by is not None:
+            raise ApproveError("--by does not apply to an agent owned by the registry: it records the person who signs in", "invalid-arguments")
+        return approve_registry(root, d, ticket=ticket)
     kube = kube or live.Kube()
     d, file, committed = layout.find_release(root, name)
+    if not layout.is_listed(root, d):
+        raise ApproveError(f"{name} belongs to {d.agent}, which the registry owns; approve it with `just agent approve {d.agent}`", "wrong-path")
     if committed["spec"].get("approval") != {"approved": False}:
         raise ApproveError(f"{file.relative_to(root)} is not an unapproved staged release", "conflict")
     observed = kube.get("agentrelease", name, d.tenant)
@@ -109,4 +120,64 @@ def approve(
         "ticket": ticket,
         "evidence": evidence,
         "next": "commit, merge, then confirm status.ready with `just agent ls`",
+    }
+
+
+def _highest(deployment: dict) -> int:
+    numbers = [r.get("number") for r in deployment.get("revisions") or [] if isinstance(r, dict) and isinstance(r.get("number"), int)]
+    if not numbers:
+        raise ApproveError("the registry holds no revision of this agent; record one with `just agent stage`")
+    return max(numbers)
+
+
+def _show(preview: dict, say) -> None:
+    say(f"Approval of {preview.get('deployment')}")
+    say(f"  revision {preview.get('revision')}, release {preview.get('release')}, policy revision {preview.get('policyRevision')}")
+    changes = preview.get("changes") or []
+    if changes:
+        say("  the authority is wider than the current release:")
+        for change in changes:
+            say(f"    - {change}")
+    else:
+        say("  the authority is no wider than the current release")
+
+
+def approve_registry(root: Path, d: layout.AgentDir, *, ticket: str | None = None) -> dict:
+    """Approve the newest revision of an agent the registry owns, after the person has read what the approval is bound to."""
+    cfg = registry_client.settings()
+    client = registry_client.Client(cfg, registry_client.person_token())
+    path = registry_client.deployment_path(cfg, d.tenant, d.agent)
+    deployment = client.get(path)
+    number = _highest(deployment)
+    preview = client.get(f"{path}/revisions/{number}/approval")
+    base = {"agent": d.agent, "deployment": preview.get("deployment") or registry_client.deployment_id(cfg, d.tenant, d.agent), "path": "registry", "release": preview.get("release"), "revision": number}
+    if preview.get("approved") is True:
+        return {**base, "changed": False, "next": "`just agent status` shows the revision's progress"}
+    if preview.get("approvable") is not True:
+        failures = preview.get("gateFailures") or []
+        state = (preview.get("observation") or {}).get("state")
+        raise ApproveError(f"revision {number} of {d.agent} cannot be approved now: " + ("; ".join(str(f) for f in failures) or "no gate failure is listed") + f" (observation {state})")
+    say = lambda line: print(line, file=sys.stderr, flush=True)  # noqa: E731
+    _show(preview, say)
+    print("Type yes to approve this revision: ", end="", file=sys.stderr, flush=True)
+    if sys.stdin.readline().strip().lower() != "yes":
+        raise ApproveError("not approved: the answer was not yes; nothing was sent", "not-confirmed")
+    approval_id = uuid.uuid4().hex
+    body = {
+        "approvalId": approval_id,
+        "revision": number,
+        "authorityDigest": preview.get("authorityDigest"),
+        "baseAuthorityDigest": preview.get("baseAuthorityDigest"),
+        "policyRevision": preview.get("policyRevision"),
+        "ticket": ticket,
+    }
+    answer = client.post(f"{path}/approvals", body)
+    approval = answer.get("approval") if isinstance(answer.get("approval"), dict) else {}
+    return {
+        **base,
+        "approvedBy": approval.get("approvedBy"),
+        "approvalId": approval.get("id") or approval_id,
+        "changes": preview.get("changes") or [],
+        "changed": True,
+        "next": "`just agent status` shows when the release is running",
     }

@@ -33,3 +33,17 @@ resources:
 
   # Retained governed A/B candidates; Temporal promotion is separate.
   - governed-workers
+
+# Agent Registry: the catalog feed it reads, rendered from
+# infrastructure/registry/ by `just registry-feed render --write` and held to
+# it by `just registry-feed-check`. The name has no hash suffix: the registry
+# reads the mounted file again when it changes, so no restart is wanted.
+# Still unlisted, waiting for images built by zetra's release workflow and for
+# the database role's Secrets: agent-registry.yaml, registry-provisioner.yaml.
+configMapGenerator:
+  - name: agent-registry-feed
+    namespace: agent-platform
+    files:
+      - agent-registry-feed.json
+    options:
+      disableNameSuffixHash: true
