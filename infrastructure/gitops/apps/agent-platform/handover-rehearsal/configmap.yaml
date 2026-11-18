@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: handover-rehearsal
+  namespace: agent-platform
+data:
+  note: scratch object for the Flux hand-over rehearsal; nothing reads it
