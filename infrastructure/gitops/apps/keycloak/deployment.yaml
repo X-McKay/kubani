@@ -144,13 +144,6 @@ spec:
                 secretKeyRef:
                   name: keycloak-client-secrets
                   key: registry-controller
-            # Optional: a missing key must not stop the identity provider from starting.
-            - name: KC_CLIENT_SECRET_REGISTRY_READER
-              valueFrom:
-                secretKeyRef:
-                  name: keycloak-client-secrets
-                  key: registry-reader
-                  optional: true
             - name: KC_AUTHENTIK_CLIENT_ID
               valueFrom:
                 secretKeyRef:

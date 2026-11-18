@@ -384,12 +384,11 @@
     {
       "clientId": "registry-reader",
       "name": "Registry reader",
-      "description": "Read-only client for the agent registry (CI, release checks). Secret from Secret keycloak-client-secrets, key registry-reader.",
+      "description": "Read-only client for the agent registry (operator commands, CI, release checks). No secret in this file: Keycloak generates one, and the operator copies it out (docs/infrastructure/configuration/agent-registry.md).",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
-      "secret": "${KC_CLIENT_SECRET_REGISTRY_READER}",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,

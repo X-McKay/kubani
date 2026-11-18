@@ -29,6 +29,11 @@ Manifests: `apps/agent-platform/workloads/agent-registry.yaml`,
 | registry-provisioner | API server | 443, 6443 | `registry-provisioner-egress` | none |
 | db-init Job (`database`) | PostgreSQL | 5432 | `allow-agent-registry-db-init-egress` | `allow-same-namespace` |
 
+Each of these policies also has an entry in the reviewed network baseline,
+`infrastructure/mcp/baseline/effective-network-policies.json`. The MCP registry
+tests fail when a policy in `agent-platform`, `auth` or `database` differs from
+its entry, so a policy change and its baseline entry go in one commit.
+
 ## Settings
 
 agent-registry:
@@ -75,22 +80,30 @@ shred -u "$STAGE"/db/secret.enc.yaml "$STAGE"/ap/secret.enc.yaml; rm -r "$STAGE"
 grep -c '^sops:' $D/agent-registry-db-database.enc.yaml $D/agent-registry-db.enc.yaml
 ```
 
-Commit both files. After Flux has applied them and the init Job has run, restart
-the registry (`kubectl -n agent-platform rollout restart deploy/agent-registry`)
-if it started before the Secret changed. Reloader does this on later changes.
+Commit both files in the change that lists `registry-db-init-job.yaml` in
+`apps/agent-platform/kustomization.yaml`, or in an earlier one. The Job gives up
+for good after 300 s without its Secret, and Flux does not run a failed Job of
+the same name again.
 
-### b. The reader client's secret
+The registry pod waits in `CreateContainerConfigError` until its Secret exists
+and starts by itself once it does. No restart is needed.
 
-Add key `registry-reader` to `infrastructure/gitops/apps/keycloak/keycloak-client-secrets.enc.yaml`
-(`SOPS_AGE_KEY_FILE=age.key sops <that file>`, add the key, save). Put the same
-value in `~/.config/kubani/registry-reader.secret` with mode 0600 (`umask 077`
-before creating it). Do this before the realm is ever rebuilt from the file:
-with the key absent, Keycloak would import the placeholder text as the secret.
+To change the password later: change both Secret files and raise
+`PASSWORD_GENERATION` in `registry-db-init-job.yaml` in one commit, then rename
+the Job as `tests/test_registry_manifests.py` asks. The new Job sets the role's
+password and Reloader restarts the registry. Changing the Secrets alone gives
+the registry a password PostgreSQL does not know.
 
-### c. The live realm
+### b. The live realm
 
 Keycloak never updates an existing realm from the file, so apply the same
 changes with kcadm. All commands `(unverified form)` except the sign-in.
+
+The reader client's secret is in no file of this repository. Keycloak generates
+it when the client is created, and step 5 copies it to
+`~/.config/kubani/registry-reader.secret`, which the operator commands read
+(`just agent status`). The copy is never shown. To replace the secret, run
+`K create clients/$RID/client-secret -r agents >/dev/null` and the copy line again.
 
 ```bash
 KC=$(kubectl get pod -n auth -l app.kubernetes.io/name=keycloak -o jsonpath='{.items[0].metadata.name}')
@@ -110,11 +123,12 @@ K create client-scopes/$SID/scope-mappings/realm -r agents -b "$BODY"
 # 4. optional scope on agent-cli
 CLI=$(K get clients -r agents -q clientId=agent-cli --fields id --format csv --noquotes | head -1)
 K update clients/$CLI/optional-client-scopes/$SID -r agents -b '{}'
-# 5. registry-reader: the secret goes in on stdin and is not shown
-kubectl exec -i -n auth "$KC" -- sh -c 'read -r S; /opt/keycloak/bin/kcadm.sh create clients -r agents -s clientId=registry-reader -s publicClient=false -s clientAuthenticatorType=client-secret -s "secret=$S" -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false' < ~/.config/kubani/registry-reader.secret
+# 5. registry-reader: Keycloak generates the secret; it goes to a private file and is not shown
+K create clients -r agents -s clientId=registry-reader -s publicClient=false -s clientAuthenticatorType=client-secret -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false
 RID=$(K get clients -r agents -q clientId=registry-reader --fields id --format csv --noquotes | head -1)
 K update clients/$RID/default-client-scopes/$SID -r agents -b '{}'
 K add-roles -r agents --uusername service-account-registry-reader --rolename registry-reader
+(umask 077; mkdir -p ~/.config/kubani; K get clients/$RID/client-secret -r agents --fields value --format csv --noquotes > ~/.config/kubani/registry-reader.secret)
 # 6. registry-provisioner-kubani (no secret; federated JWT)
 K create clients -r agents -s clientId=registry-provisioner-kubani -s publicClient=false -s clientAuthenticatorType=federated-jwt -s 'attributes."jwt.credential.issuer"=kubernetes-kubani' -s 'attributes."jwt.credential.sub"=system:serviceaccount:agent-platform:registry-provisioner' -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false -s fullScopeAllowed=false
 PID=$(K get clients -r agents -q clientId=registry-provisioner-kubani --fields id --format csv --noquotes | head -1)
@@ -129,15 +143,18 @@ A new client also gets the realm's default scopes (`profile`, `email`,
 for both new clients. Remove the others with `K delete clients/<id>/default-client-scopes/<scope id>
 -r agents` `(unverified form)`, then compare with `K get clients/<id> -r agents`.
 
-### d. Merging the realm file restarts Keycloak once
+### c. Merging the realm file restarts Keycloak once
 
 Reloader restarts the Keycloak pod when the realm ConfigMap changes. Identity
 sign-in is interrupted for a short time. Merge when no agent session is starting.
+The restart does not change the live realm: Keycloak imports the file only into
+a database that has no realm `agents`.
 
 ## How to check it works
 
 ```bash
 just agent state                          # platform pods and agents; both new pods Running
+just agent status                         # the registry's view; needs the reader secret file of step b
 curl -sS -o /dev/null -w '%{http_code}\n' https://agents.almckay.io/healthz   # 200
 KUBECONFIG=/home/al/.kube/config kubectl -n agent-platform logs deploy/registry-provisioner --tail=5
 ```

@@ -184,9 +184,9 @@ class RegistryManifestTests(unittest.TestCase):
         self.assertEqual(mapping["roles"], three)
 
         clients = {c["clientId"]: c for c in realm["clients"]}
-        self.assertEqual(
-            clients["registry-reader"]["secret"], "${KC_CLIENT_SECRET_REGISTRY_READER}"
-        )
+        # Keycloak generates the reader's secret. A placeholder here would become
+        # the secret itself whenever its variable is unset at import.
+        self.assertNotIn("secret", clients["registry-reader"])
         known = set(clients["registry-controller"]) | set(
             clients["agent-tenant-test-conformance"]
         )
@@ -215,14 +215,18 @@ class RegistryManifestTests(unittest.TestCase):
         for user in users.values():
             self.assertNotIn("registry-operator", user.get("realmRoles", []))
 
-    def test_keycloak_reader_secret_is_optional(self) -> None:
+    def test_every_secret_placeholder_in_the_realm_has_a_required_variable(self) -> None:
         deployment = next(
             d for d in load(KEYCLOAK / "deployment.yaml") if d["kind"] == "Deployment"
         )
         env = {e["name"]: e for e in container(deployment)["env"]}
-        ref = env["KC_CLIENT_SECRET_REGISTRY_READER"]["valueFrom"]["secretKeyRef"]
-        self.assertIs(ref["optional"], True)
-        self.assertEqual(ref["key"], "registry-reader")
+        placeholders = set(re.findall(r"\$\{(KC_[A-Z0-9_]+)\}", REALM.read_text()))
+        self.assertTrue(placeholders)
+        for name in sorted(placeholders):
+            with self.subTest(variable=name):
+                self.assertIn(name, env)
+                ref = env[name].get("valueFrom", {}).get("secretKeyRef", {})
+                self.assertIsNot(ref.get("optional"), True)
 
 
 if __name__ == "__main__":
