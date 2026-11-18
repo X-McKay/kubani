@@ -177,7 +177,7 @@ live-service-probes-internal:
 
 post-reconcile-validate: validate-flux live-service-probes
 
-validate-local: inventory secrets-check validate-gitops-build test mcp-check agent-check-sync hooks-check
+validate-local: inventory secrets-check validate-gitops-build test mcp-check registry-feed-check agent-check-sync hooks-check
 
 validate: validate-local validate-cluster
 
@@ -305,6 +305,13 @@ mcp-check:
     uv run --locked python infrastructure/scripts/ops/mcp-registry.py render --check
     uv run --locked python infrastructure/scripts/ops/mcp-registry.py check
 
+# The Agent Registry's catalog feed, rendered from infrastructure/registry/ and the manifests: render --write | render --check
+registry-feed *ARGS:
+    uv run --locked python -B infrastructure/scripts/ops/registry_feed.py {{ARGS}}
+
+registry-feed-check:
+    uv run --locked python -B infrastructure/scripts/ops/registry_feed.py render --check
+
 test-mcp-registry:
     just test tests/test_mcp_registry*.py tests/test_db_admin_identity.py tests/test_db_admin_gateway.py tests/test_db_admin_release.py tests/test_db_admin_backend.py
 
@@ -316,7 +323,7 @@ test-agent-preflight:
     just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: state | ls | register | run AGENT --task ... | status/wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve
+# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 
