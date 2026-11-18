@@ -91,10 +91,27 @@ def _status(response) -> None:
         raise _failed(f"the server answered HTTP {response.status_code}, which is not an MCP answer")
 
 
+def _lines(response):
+    """Each line of the stream as bytes. A line ends at CRLF, LF or CR; `iter_lines` reads a CRLF that arrives in two chunks as two endings."""
+    line, after_cr = bytearray(), False
+    for byte in response.iter_content(chunk_size=1):
+        if byte == b"\n" and after_cr:
+            after_cr = False
+            continue
+        after_cr = byte == b"\r"
+        if byte in (b"\r", b"\n"):
+            yield bytes(line)
+            line.clear()
+        else:
+            line += byte
+    if line:
+        yield bytes(line)
+
+
 def _events(response, deadline: float):
     """(event, data) of each server-sent event in the stream, in order."""
     event, data = "message", []
-    for raw in response.iter_lines(chunk_size=1):
+    for raw in _lines(response):
         if time.monotonic() > deadline:
             raise outcome.Coded("the server did not finish answering in time", "timeout")
         line = raw.decode("utf-8", errors="replace")
