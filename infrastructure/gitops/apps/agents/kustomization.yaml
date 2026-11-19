@@ -38,3 +38,4 @@ resources:
   # AgentReleases, no deletes. Inert until the provisioner runs.
   - tenant-test/registry-provisioner-rbac.yaml
   - tenant-test/session-api-rbac.yaml
+  - tenant-test/skill-rehearsal/
