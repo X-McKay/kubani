@@ -37,6 +37,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: registry-provisioner
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: registry-evaluator
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system

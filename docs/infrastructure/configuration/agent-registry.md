@@ -23,6 +23,7 @@ Manifests: `apps/agent-platform/workloads/agent-registry.yaml`,
 |---|---|---|---|---|
 | Traefik (`kube-system`) | agent-registry | 8080 | none (no egress policy in `kube-system`) | `agent-registry-ingress` |
 | registry-provisioner | agent-registry | 8080 | `registry-provisioner-egress` | `agent-registry-ingress` |
+| registry-evaluator | agent-registry | 8080 | `registry-evaluator-egress` | `agent-registry-ingress` |
 | agent-registry | PostgreSQL (`database`) | 5432 | `agent-registry-egress` | `allow-agent-registry-postgresql` |
 | agent-registry | Keycloak (`auth`) | 8080 | `agent-registry-egress` | `allow-keycloak-from-agent-platform` |
 | registry-provisioner | Keycloak (`auth`) | 8080 | `registry-provisioner-egress` | `allow-keycloak-from-agent-platform` |

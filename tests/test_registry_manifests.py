@@ -156,6 +156,8 @@ class RegistryManifestTests(unittest.TestCase):
         registry_in = find(self.netpol, "NetworkPolicy", "agent-registry-ingress")
         registry_out = find(self.netpol, "NetworkPolicy", "agent-registry-egress")
         prov_out = find(self.netpol, "NetworkPolicy", "registry-provisioner-egress")
+        eval_out = find(self.netpol, "NetworkPolicy", "registry-evaluator-egress")
+        session_in = find(self.netpol, "NetworkPolicy", "session-api-ingress")
         into_postgres = find(database, "NetworkPolicy", "allow-agent-registry-postgresql")
         into_keycloak = find(keycloak, "NetworkPolicy", "allow-keycloak-from-agent-platform")
         pairs = (
@@ -163,6 +165,9 @@ class RegistryManifestTests(unittest.TestCase):
             (registry_out, "keycloak", into_keycloak, "agent-registry", 8080),
             (prov_out, "keycloak", into_keycloak, "registry-provisioner", 8080),
             (prov_out, "agent-registry", registry_in, "registry-provisioner", 8080),
+            (eval_out, "agent-registry", registry_in, "registry-evaluator", 8080),
+            (eval_out, "keycloak", into_keycloak, "registry-evaluator", 8080),
+            (eval_out, "session-api", session_in, "registry-evaluator", 8080),
         )
         for egress, target, ingress, source, port in pairs:
             with self.subTest(source=source, target=target):
