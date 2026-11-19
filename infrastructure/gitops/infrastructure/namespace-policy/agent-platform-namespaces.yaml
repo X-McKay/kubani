@@ -42,6 +42,12 @@ metadata:
   # fails when it drifts from that derivation.
   # required-attestations is omitted: the default is all five.
   annotations:
+    # The effects this tenant grants its agents (zetra skills contract, section
+    # 7). A release that asks for an effect not listed here is not Ready. With
+    # sandbox_execute, skill scripts run inside the agent's container and can
+    # read the session's identity token. tests/test_tenant_effects.py holds
+    # the grants in this file to the list written there.
+    agentplatform.io/granted-effects: sandbox_execute
     agentplatform.io/signer-issuer: https://token.actions.githubusercontent.com
     # yamllint disable-line rule:line-length
     agentplatform.io/signer-subject-regexp: '^https://github\.com/X-McKay/zetra-agents/\.github/workflows/release\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator)/v[0-9][A-Za-z0-9.+-]*$'

@@ -376,14 +376,16 @@ does not constrain the agent container's environment, so it needs no change.
 
 ### The grant is a person's change
 
-No tenant grants the effect. A release that requests it is not Ready, with
-reason `EffectNotGranted`, which comes before `NotApproved`; `just agent
-approve` refuses it because the release is not waiting solely on approval, and
-no session starts for it.
+`tenant-test` grants the effect; no other tenant does. In a tenant without
+the grant, a release that requests the effect is not Ready, with reason
+`EffectNotGranted`, which comes before `NotApproved`; `just agent approve`
+refuses it because the release is not waiting solely on approval, and no
+session starts for it.
 
-To grant it, add one annotation to the tenant's Namespace in
-`infrastructure/namespace-policy/agent-platform-namespaces.yaml`, in its own
-pull request:
+The grant is one annotation on the tenant's Namespace in
+`infrastructure/namespace-policy/agent-platform-namespaces.yaml`, added in its
+own pull request. `tests/test_tenant_effects.py` lists the grants the file may
+hold, so a new grant is a change to that test as well:
 
 ```yaml
 metadata:
