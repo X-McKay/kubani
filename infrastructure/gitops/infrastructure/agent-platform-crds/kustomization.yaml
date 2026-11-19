@@ -5,7 +5,7 @@
 # (X-McKay/zetra, deploy/platform/crds/), which owns them; that copy is in
 # turn verbatim from spec sections 6.1 and 6.2. Do not edit them here: change
 # them upstream, then re-vendor and record the zetra revision below.
-#   Vendored from: X-McKay/zetra deploy/platform/crds/ at 158a170 (main).
+#   Vendored from: X-McKay/zetra deploy/platform/crds/ at 589ec5c (main; both gain effects, and releases gain skills).
 # Check: diff -r <zetra>/deploy/platform/crds/ . (only kustomization.yaml and
 # issuer-discovery-rbac.yaml differ).
 #

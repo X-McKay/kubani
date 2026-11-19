@@ -111,7 +111,7 @@ spec:
             capabilities:
               drop: ["ALL"]
         - name: kubernetes-mcp
-          image: quay.io/containers/kubernetes_mcp_server:v0.0.67
+          image: quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44 # v0.0.67
           args: ["--config", "/etc/kubernetes-mcp-server/config.toml"]
           ports:
             - name: server

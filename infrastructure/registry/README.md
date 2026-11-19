@@ -10,6 +10,8 @@ Inputs:
 - `catalog.yaml` is the only hand-written input. It names what a manifest cannot
   say: which Deployment and container is each tool server, which backend and
   gateway name each one uses, and which engine each alias points at.
+- `revocations/*.yaml` are the reviewed revocations of releases, one file each
+  (`revocations/README.md`); the feed carries them as `revocations`.
 - Everything else is read from committed files: image references and
   digests from the named manifest, served model names from
   `apps/vllm/model-config.yaml`, gateway model routes from

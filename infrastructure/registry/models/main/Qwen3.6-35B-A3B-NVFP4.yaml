@@ -1,0 +1,23 @@
+schemaVersion: 1
+engine: main
+name: Qwen3.6-35B-A3B-NVFP4
+servedName: Qwen3.6-35B-A3B-NVFP4
+weights:
+  source: hf://nvidia/Qwen3.6-35B-A3B-NVFP4
+  revision: null
+  files: null
+format: null
+quantisation: null
+engineImage: vllm/vllm-openai:v0.30.0-aarch64
+serving:
+  chatTemplate: null
+  toolCallParser: qwen3_xml
+  contextLength: 131072
+offers:
+  contextLength: null
+  toolCalling: true
+  structuredOutput: null
+  embeddingSize: null
+evidence:
+  benchmark: docs/infrastructure/inference/benchmarks/main/20261001T0553Z_candidate-mtp.json
+  changeRecord: docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md

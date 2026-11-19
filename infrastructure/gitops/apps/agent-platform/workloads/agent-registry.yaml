@@ -44,8 +44,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent-registry
-          # built by zetra's release workflow, run 44241363409
-          image: registry.almckay.io/platform/agent-registry:a28c108@sha256:97ac5b79850c8830af1d33fe9bea883eed3f65328c70be156410c2eb6fc3bbf7
+          # built by zetra's release workflow, run 44369420437
+          image: registry.almckay.io/platform/agent-registry:589ec5c@sha256:49c3f5984cae9071a134093c1960892bcb05dec8f9b72673aa9f82dc63e758af
           args: ["serve"]
           env:
             # No password in the DSN: libpq reads PGPASSWORD.
@@ -63,6 +63,14 @@ spec:
             # Back-channel JWKS; the realm's issuer stays idp.almckay.io.
             - name: REGISTRY_JWKS_URL
               value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/certs
+            # Release reports are signed by the agent repositories' GitHub Actions
+            # workflows (delivery.md 3.2); the audience they ask for is this host.
+            - name: REGISTRY_GITHUB_ISSUER
+              value: https://token.actions.githubusercontent.com
+            - name: REGISTRY_GITHUB_JWKS_URL
+              value: https://token.actions.githubusercontent.com/.well-known/jwks
+            - name: REGISTRY_REPORT_AUDIENCE
+              value: https://agents.almckay.io
             - name: REGISTRY_FEED_PATH
               value: /etc/agent-registry/feed/agent-registry-feed.json
             - name: REGISTRY_PORT

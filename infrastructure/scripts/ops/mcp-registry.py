@@ -95,6 +95,7 @@ def modules():
                 "status",
                 "provision",
                 "kube",
+                "contract",
             )
         }
     )
@@ -128,7 +129,38 @@ def parser():
         "status", help="read-only registration status; not a functional test"
     )
     status.add_argument("name")
+    contract = commands.add_parser(
+        "contract", help="record what a tool server lists as infrastructure/mcp/contracts/<server>.json; reads the server, writes only that file"
+    )
+    contract.add_argument("server")
+    contract.add_argument("--url", help="capture from this URL instead of a port-forward; you vouch that it runs the committed image with the committed flags")
+    contract.add_argument("--transport", choices=("streamable-http", "sse"))
+    contract.add_argument("--port", type=int)
+    contract.add_argument("--path")
+    contract.add_argument("--check", action="store_true", help="write nothing; exit check-failed when the file is missing or would change")
     return result
+
+
+def run_contract(args, root, services, cluster=None):
+    """The `contract` command. Its messages are written in this repository and name no credential, so they are shown as they are."""
+    try:
+        output = services.contract.capture(
+            root, args.server, url=args.url, transport=args.transport, port=args.port, path=args.path, check=args.check,
+            cluster=cluster or services.contract.Cluster(args.kubeconfig),
+        )
+    except outcome.Coded as error:
+        emit(outcome.document({"status": "refused", "stage": "contract"}, outcome.error(error.code, str(error))))
+        return 1
+    except (ValueError, OSError) as error:
+        code = "not-found" if isinstance(error, FileNotFoundError) else "validation-failed" if isinstance(error, ValueError) else "failed"
+        emit(outcome.document({"status": "refused", "stage": "contract"}, outcome.error(code, str(error) or type(error).__name__)))
+        return 1
+    if args.check and output["changed"]:
+        proofs = [{"path": output["path"], "state": output["status"]}]
+        emit(outcome.document(output, outcome.error("check-failed", f"{output['path']} is missing or differs from what the server lists; run it without --check", proofs=proofs)))
+        return 1
+    emit(outcome.document(output))
+    return 0
 
 
 def add_definition(root, name, model):
@@ -168,6 +200,8 @@ def main(argv=None):
         services = modules()
         if args.command == "add":
             output = add_definition(root, args.name, services.model)
+        elif args.command == "contract":
+            return run_contract(args, root, services)
         elif args.command == "provision":
             entries = services.model.load_registry(root, provisioning=True)
             selected = [entry for entry in entries if entry["name"] == args.name]

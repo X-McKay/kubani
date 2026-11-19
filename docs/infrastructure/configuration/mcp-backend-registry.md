@@ -226,3 +226,36 @@ The algorithm was verified against deployed Reloader v1.2.0's
 and its digest implementation. Wrong hashes, duplicate markers, unrelated
 environment variables and live ConfigMap changes remain drift. Initial mismatch
 and test failures are retained in local evidence; no broad normalization was added.
+
+## Recording what a tool server lists
+
+`just mcp contract <server>` asks a tool server what it lists and writes
+`infrastructure/mcp/contracts/<server>.json`: its tools sorted by name, each with
+description, input and output schema and an `effect`, plus the committed image and
+a `configDigest` of the container's command, args and env (a secret is named by
+its reference, never its value). A tool the backend's `authorization.tools` lists
+is `remote_read`; every other tool, and every tool of an unregistered server, is
+`remote_write`. The file holds no time or host, so an unchanged server gives the
+same bytes. The command sends no credential and reads none.
+
+```bash
+# Through a port-forward it starts and stops itself. It refuses unless the live
+# Deployment runs exactly the committed image, which must be pinned by digest.
+just mcp contract kubernetes-mcp
+just mcp contract postgres-admin-mcp
+
+# A proposed image, started elsewhere with the committed flags: you vouch for it.
+just mcp contract postgres-admin-mcp --url http://127.0.0.1:8000/sse --transport sse
+
+# Compare only: exits check-failed when the file is missing or would change.
+just mcp contract kubernetes-mcp --check
+```
+
+Defaults come from the backend definition (port, path, and Streamable HTTP or SSE);
+`--transport`, `--port` and `--path` override them, and an unregistered server needs
+`--port` or `--url`. Review the diff of the file like any other change, then run
+`uv run --locked python infrastructure/scripts/ops/registry_feed.py render --write`.
+The feed carries each server's `configDigest` and its contract (or `null`), and does
+not render when a contract's `server`, `backend` or `configDigest` differs from the
+entry, or its image names another digest than the pinned one: change a flag or an
+image, capture again.

@@ -1,0 +1,195 @@
+name: dependency-gate
+
+# Does a pull request change a tool server's contract or a model alias in a way
+# that breaks a running agent? Only the agent registry can say, and the registry
+# is reachable only from inside the tailnet, so one job has to run on the
+# self-hosted runner. This repository is public. The rules that keep that safe:
+#
+# - pull_request_target: this file and every script it runs come from the base
+#   branch, never from the pull request.
+# - The pull request's files are checked out only on a GitHub-hosted runner,
+#   beside the base checkout, and are read as data (dependency_gate.py renders
+#   them with the base branch's registry_feed.py; nothing in them is run).
+# - The self-hosted job never checks out the pull request. It receives the two
+#   rendered feeds as JSON files, reads them as JSON, and asks the registry. It
+#   runs only for a branch of this repository, never for a fork.
+# - No step puts text from the pull request into a shell command; such values
+#   reach a step through `env` only. Output that may carry text from the pull
+#   request is printed between stop-commands markers.
+# - The registry credential is a file on the runner host, read by the base
+#   branch's client (KUBANI_REGISTRY_READER_SECRET_FILE). It is never a
+#   repository secret and never appears in this file.
+#
+# A change to this file cannot be tried by its own pull request: the run uses
+# the copy on main. The whole workflow is off until the repository variable
+# DEPENDENCY_GATE is set to `enabled`.
+on:
+  pull_request_target:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    name: Compare the feeds before and after
+    if: vars.DEPENDENCY_GATE == 'enabled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      ask: ${{ steps.compare.outputs.ask }}
+    steps:
+      - name: Check out the reviewed code
+        uses: actions/checkout@v4
+        with:
+          path: code
+          persist-credentials: false
+
+      - name: Check out the pull request as merged
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          path: merge
+          fetch-depth: 2
+          persist-credentials: false
+
+      # The merge ref is computed by GitHub and can lag a push. Its second
+      # parent must be the head commit this run was started for.
+      - name: Name the two sides of the merge
+        id: sides
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$(git -C merge rev-parse HEAD^2)" != "$HEAD_SHA" ]; then
+            echo "::error::the merge ref is not of this pull request's head commit; run the job again"
+            exit 1
+          fi
+          echo "before=$(git -C merge rev-parse HEAD^1)" >>"$GITHUB_OUTPUT"
+
+      - name: Check out main as the merge saw it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.sides.outputs.before }}
+          path: before
+          persist-credentials: false
+
+      # No cache: a pull_request_target run can write the base branch's cache.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
+
+      - name: Sync dependencies of the reviewed code
+        working-directory: code
+        run: uv sync --group dev --locked
+
+      # Exit 0: nothing changed that the registry has to be asked about.
+      # Exit 3: there are questions; the next job asks them. Anything else fails.
+      - name: Compare, asking nothing
+        id: compare
+        working-directory: code
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          marker="$(cat /proc/sys/kernel/random/uuid)"
+          status=0
+          echo "::stop-commands::$marker"
+          uv run --locked python infrastructure/scripts/ops/dependency_gate.py \
+            --base-root "$GITHUB_WORKSPACE/before" --head-root "$GITHUB_WORKSPACE/merge" \
+            --offline --feeds-out "$RUNNER_TEMP/dependency-gate-feeds" || status=$?
+          echo "::$marker::"
+          case "$status" in
+            0)
+              echo "ask=false" >>"$GITHUB_OUTPUT"
+              ;;
+            3)
+              if [ "$HEAD_REPO" != "$THIS_REPO" ]; then
+                echo "::error::the agent registry has to be asked, which is not done for a fork; a maintainer pushes the change to a branch here"
+                exit 1
+              fi
+              echo "ask=true" >>"$GITHUB_OUTPUT"
+              ;;
+            *)
+              exit "$status"
+              ;;
+          esac
+
+      - name: Hand the two feeds to the next job
+        if: steps.compare.outputs.ask == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-gate-feeds
+          path: ${{ runner.temp }}/dependency-gate-feeds
+          if-no-files-found: error
+          retention-days: 1
+
+  registry:
+    name: Ask the agent registry
+    needs: compare
+    if: >-
+      vars.DEPENDENCY_GATE == 'enabled'
+      && needs.compare.outputs.ask == 'true'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, sparky]
+    timeout-minutes: 10
+    steps:
+      # The base branch, which is what pull_request_target checks out by
+      # default. Never add a `ref` that names the pull request here.
+      - name: Check out the reviewed code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Sync dependencies
+        run: uv sync --group dev --locked
+
+      - name: Receive the two feeds
+        uses: actions/download-artifact@v4
+        with:
+          name: dependency-gate-feeds
+          path: ${{ runner.temp }}/dependency-gate-feeds
+
+      - name: Ask
+        run: |
+          set -uo pipefail
+          marker="$(cat /proc/sys/kernel/random/uuid)"
+          status=0
+          echo "::stop-commands::$marker"
+          uv run --locked python infrastructure/scripts/ops/dependency_gate.py \
+            --base-feed "$RUNNER_TEMP/dependency-gate-feeds/base.json" \
+            --head-feed "$RUNNER_TEMP/dependency-gate-feeds/head.json" || status=$?
+          echo "::$marker::"
+          exit "$status"
+
+  # The one check to require on main. It passes only when the comparison ran
+  # and either had nothing to ask or the registry allowed everything asked.
+  verdict:
+    name: Dependency gate
+    needs: [compare, registry]
+    if: always() && vars.DEPENDENCY_GATE == 'enabled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Decide
+        env:
+          COMPARE: ${{ needs.compare.result }}
+          ASK: ${{ needs.compare.outputs.ask }}
+          REGISTRY: ${{ needs.registry.result }}
+        run: |
+          set -euo pipefail
+          if [ "$COMPARE" = success ] && [ "$ASK" = false ]; then
+            echo "no contract or alias changed; the registry was not asked"
+            exit 0
+          fi
+          if [ "$COMPARE" = success ] && [ "$ASK" = true ] && [ "$REGISTRY" = success ]; then
+            echo "the registry allowed every change it was asked about"
+            exit 0
+          fi
+          echo "::error::the dependency gate did not pass (compare: $COMPARE, ask: ${ASK:-none}, registry: $REGISTRY)"
+          exit 1

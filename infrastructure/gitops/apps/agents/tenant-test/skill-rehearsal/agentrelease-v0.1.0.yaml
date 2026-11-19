@@ -1,0 +1,45 @@
+# yamllint disable rule:line-length
+# Exact signed skill-rehearsal/v0.1.0 assets; SHA256SUMS verified by `just agent stage`.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: skill-rehearsal-2026-11-19-1fa0ef2e
+  namespace: tenant-test
+spec:
+  agent: skill-rehearsal
+  image: registry.almckay.io/agents/skill-rehearsal@sha256:1fa0ef2eb4eb34938964350c5448ceed03bad2c28279b20f59965f5a9aabe00e  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: 26267167bee710af4da5d35bbcf885f7d41133cc2f8f9e7060651dd27f2e4fb9  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: 46321178b32c412ab7b4f0a56586b0faa82d1b5c5fe178fb147a2f300215f933  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: 5996f70655a1c5b1d3cfe8d782ce4e3083a7de2fd2c1a2892f247c3eb63e34bd  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: 92769aa3e237ae62a5958d70eaeea610930f8000  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: true
+    approvedBy: 4785437+X-McKay@users.noreply.github.com
+    approvedAt: "2026-11-19T17:05:49Z"
+  declaration:
+    owner: 4785437+X-McKay@users.noreply.github.com
+    description: Rehearsal agent for skills with scripts; writes a report and runs
+      a skill's script to check it
+    identity:
+      mode: agent
+    capabilities:
+      models: []
+      mcp: []
+      effects:
+      - sandbox_execute
+    runtime:
+      cpu: '1'
+      memory: 1Gi
+      ttlSeconds: 300
+  skills:
+  - name: report-check
+    digest: sha256:c45ccbfed48ba26d48fe1035c97aa98250f3d75ccdc1765342a0e5c092cf1091
+    version: '1.0'
+    description: Checks that the report in the workspace is there, is within the size
+      the platform reads, and has the heading lines the task needs. Use after report.md
+      is written and before saying the work is done.
+    declared: true
+    scripts:
+    - scripts/check_report.py
+    interpreters:
+    - python3

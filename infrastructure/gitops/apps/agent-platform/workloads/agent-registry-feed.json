@@ -21,7 +21,7 @@
       "policy": {
         "signer": {
           "issuer": "https://token.actions.githubusercontent.com",
-          "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator)/v[0-9][A-Za-z0-9.+-]*$"
+          "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator|skill-rehearsal)/v[0-9][A-Za-z0-9.+-]*$"
         },
         "vulnExceptions": []
       }
@@ -33,7 +33,7 @@
       "cluster": "kubani",
       "tenant": "tenant-test",
       "issuer": "https://token.actions.githubusercontent.com",
-      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator)/v[0-9][A-Za-z0-9.+-]*$",
+      "subjectRegExp": "^https://github\\.com/X-McKay/zetra-agents/\\.github/workflows/release\\.yml@refs/tags/(?:conformance|conformance-b|conformance-budget-day|conformance-budget-day-retry|conformance-budget-day-retry2|conformance-budget-session|conformance-checkpoint|conformance-lifecycle|conformance-performance|conformance-protocol|conformance-transport|db-admin|investigator|skill-rehearsal)/v[0-9][A-Za-z0-9.+-]*$",
       "agents": [
         "conformance",
         "conformance-b",
@@ -47,7 +47,8 @@
         "conformance-protocol",
         "conformance-transport",
         "db-admin",
-        "investigator"
+        "investigator",
+        "skill-rehearsal"
       ]
     }
   ],
@@ -64,10 +65,12 @@
         "kind": "Deployment",
         "name": "github-mcp"
       },
-      "image": "ghcr.io/github/github-mcp-server:v2.0.2",
-      "pinnedByDigest": false,
+      "image": "ghcr.io/github/github-mcp-server@sha256:ffced0d76e77428532a2ced185516992d77fd146d69eec2f244e6237d1a97796",
+      "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:248560efc49ebf682e95f815a2a103ce084ffa8b5fbedfceec271df28938ebed",
+      "contract": null
     },
     {
       "name": "graphiti-mcp",
@@ -81,10 +84,12 @@
         "kind": "Deployment",
         "name": "graphiti-mcp"
       },
-      "image": "zepai/knowledge-graph-mcp:1.1.1-standalone",
-      "pinnedByDigest": false,
+      "image": "docker.io/zepai/knowledge-graph-mcp@sha256:befb285c706da9853f3f9d741e49eabd6994b62521c822fba2dee99f2a161749",
+      "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:5045082578f4140d7cf3c278b62c3640edd4404cd935c230307d08133ffde6c7",
+      "contract": null
     },
     {
       "name": "kubernetes-mcp",
@@ -98,10 +103,338 @@
         "kind": "Deployment",
         "name": "kubernetes-mcp"
       },
-      "image": "quay.io/containers/kubernetes_mcp_server:v0.0.67",
-      "pinnedByDigest": false,
+      "image": "quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44",
+      "pinnedByDigest": true,
       "registered": true,
-      "backend": "kubernetes"
+      "backend": "kubernetes",
+      "configDigest": "sha256:67a3acdd62aaa731bac27eec2d5dd397631e3485280a6c81ff9d7a0c6db34834",
+      "contract": {
+        "backend": "kubernetes",
+        "configDigest": "sha256:67a3acdd62aaa731bac27eec2d5dd397631e3485280a6c81ff9d7a0c6db34834",
+        "image": "quay.io/containers/kubernetes_mcp_server@sha256:e47f6ccc5347e1ea6be495d8d9ab55ac8a995fe87800fb984fa770cebe14ad44",
+        "schemaVersion": 1,
+        "server": "kubernetes-mcp",
+        "tools": [
+          {
+            "description": "List Kubernetes events (warnings, errors, state changes) for debugging and troubleshooting in the current cluster from all namespaces",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "fieldSelector": {
+                  "description": "Optional Kubernetes field selector to filter events by field values (e.g. 'type=Warning', 'involvedObject.name=my-pod'). Supported fields: involvedObject.kind, involvedObject.name, involvedObject.namespace, involvedObject.uid, involvedObject.apiVersion, involvedObject.resourceVersion, involvedObject.fieldPath, reason, reportingComponent, source, type. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+                  "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Optional Namespace to retrieve the events from. If not provided, will list events from all namespaces",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "events_list",
+            "outputSchema": null
+          },
+          {
+            "description": "List all the Kubernetes namespaces in the current cluster",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "fieldSelector": {
+                  "description": "Optional Kubernetes field selector to filter namespaces by field values (e.g. 'metadata.name=default', 'status.phase=Active'). Supported fields: metadata.name, status.phase. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+                  "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "namespaces_list",
+            "outputSchema": null
+          },
+          {
+            "description": "Get logs from a Kubernetes node (kubelet, kube-proxy, or other system logs). This accesses node logs through the Kubernetes API proxy to the kubelet",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "name": {
+                  "description": "Name of the node to get logs from",
+                  "type": "string"
+                },
+                "query": {
+                  "description": "query specifies services(s) or files from which to return logs (required). Example: \"kubelet\" to fetch kubelet logs, \"/<log-file-name>\" to fetch a specific log file from the node (e.g., \"/var/log/kubelet.log\" or \"/var/log/kube-proxy.log\")",
+                  "type": "string"
+                },
+                "tailLines": {
+                  "default": 100,
+                  "description": "Number of lines to retrieve from the end of the logs (Optional, 0 means all logs)",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name",
+                "query"
+              ],
+              "type": "object"
+            },
+            "name": "nodes_log",
+            "outputSchema": null
+          },
+          {
+            "description": "Get detailed resource usage statistics from a Kubernetes node via the kubelet's Summary API. Provides comprehensive metrics including CPU, memory, filesystem, and network usage at the node, pod, and container levels. On systems with cgroup v2 and kernel 4.20+, also includes PSI (Pressure Stall Information) metrics that show resource pressure for CPU, memory, and I/O. See https://kubernetes.io/docs/reference/instrumentation/understand-psi-metrics/ for details on PSI metrics",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "name": {
+                  "description": "Name of the node to get stats from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "nodes_stats_summary",
+            "outputSchema": null
+          },
+          {
+            "description": "List the resource consumption (CPU and memory) as recorded by the Kubernetes Metrics Server for the specified Kubernetes Nodes or all nodes in the cluster",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "label_selector": {
+                  "description": "Kubernetes label selector (e.g. 'node-role.kubernetes.io/worker=') to filter nodes by label (Optional, only applicable when name is not provided)",
+                  "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name of the Node to get the resource consumption from (Optional, all Nodes if not provided)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "nodes_top",
+            "outputSchema": null
+          },
+          {
+            "description": "Get a Kubernetes Pod in the current or provided namespace with the provided name",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "name": {
+                  "description": "Name of the Pod",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Namespace to get the Pod from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "pods_get",
+            "outputSchema": null
+          },
+          {
+            "description": "List all the Kubernetes pods in the current cluster from all namespaces",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "fieldSelector": {
+                  "description": "Optional Kubernetes field selector to filter pods by field values (e.g. 'status.phase=Running', 'spec.nodeName=node1'). Supported fields: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. Note: CrashLoopBackOff is a container state, not a pod phase, so it cannot be filtered directly. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+                  "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "labelSelector": {
+                  "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label",
+                  "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "pods_list",
+            "outputSchema": null
+          },
+          {
+            "description": "List all the Kubernetes pods in the specified namespace in the current cluster",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "fieldSelector": {
+                  "description": "Optional Kubernetes field selector to filter pods by field values (e.g. 'status.phase=Running', 'spec.nodeName=node1'). Supported fields: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. Note: CrashLoopBackOff is a container state, not a pod phase, so it cannot be filtered directly. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+                  "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "labelSelector": {
+                  "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label",
+                  "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Namespace to list pods from",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "namespace"
+              ],
+              "type": "object"
+            },
+            "name": "pods_list_in_namespace",
+            "outputSchema": null
+          },
+          {
+            "description": "Get the logs of a Kubernetes Pod in the current or provided namespace with the provided name",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "container": {
+                  "description": "Name of the Pod container to get the logs from (Optional)",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name of the Pod to get the logs from",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Namespace to get the Pod logs from",
+                  "type": "string"
+                },
+                "previous": {
+                  "description": "Return previous terminated container logs (Optional)",
+                  "type": "boolean"
+                },
+                "tail": {
+                  "default": 100,
+                  "description": "Number of lines to retrieve from the end of the logs (Optional, default: 100)",
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "pods_log",
+            "outputSchema": null
+          },
+          {
+            "description": "List the resource consumption (CPU and memory) as recorded by the Kubernetes Metrics Server for the specified Kubernetes Pods in the all namespaces, the provided namespace, or the current namespace",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "all_namespaces": {
+                  "default": true,
+                  "description": "If true, list the resource consumption for all Pods in all namespaces. If false, list the resource consumption for Pods in the provided namespace or the current namespace",
+                  "type": "boolean"
+                },
+                "label_selector": {
+                  "description": "Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the pods by label (Optional, only applicable when name is not provided)",
+                  "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name of the Pod to get the resource consumption from (Optional, all Pods in the namespace if not provided)",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Namespace to get the Pods resource consumption from (Optional, current namespace if not provided and all_namespaces is false)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "name": "pods_top",
+            "outputSchema": null
+          },
+          {
+            "description": "List all the OpenShift projects in the current cluster",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {},
+              "type": "object"
+            },
+            "name": "projects_list",
+            "outputSchema": null
+          },
+          {
+            "description": "Get a Kubernetes resource in the current cluster by providing its apiVersion, kind, optionally the namespace, and its name\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "apiVersion": {
+                  "description": "apiVersion of the resource (examples of valid apiVersion are: v1, apps/v1, networking.k8s.io/v1)",
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "kind of the resource (examples of valid kind are: Pod, Service, Deployment, Ingress)",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "Name of the resource",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Optional Namespace to retrieve the namespaced resource from (ignored in case of cluster scoped resources). If not provided, will get resource from configured namespace",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "apiVersion",
+                "kind",
+                "name"
+              ],
+              "type": "object"
+            },
+            "name": "resources_get",
+            "outputSchema": null
+          },
+          {
+            "description": "List Kubernetes resources and objects in the current cluster by providing their apiVersion and kind and optionally the namespace and label selector\n(common apiVersion and kind include: v1 Pod, v1 Service, v1 Node, apps/v1 Deployment, networking.k8s.io/v1 Ingress, route.openshift.io/v1 Route)",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "apiVersion": {
+                  "description": "apiVersion of the resources (examples of valid apiVersion are: v1, apps/v1, networking.k8s.io/v1)",
+                  "type": "string"
+                },
+                "fieldSelector": {
+                  "description": "Optional Kubernetes field selector to filter resources by field values (e.g. 'status.phase=Running', 'metadata.name=myresource'). Supported fields vary by resource type. For Pods: metadata.name, metadata.namespace, spec.nodeName, spec.restartPolicy, spec.schedulerName, spec.serviceAccountName, status.phase (Pending/Running/Succeeded/Failed/Unknown), status.podIP, status.nominatedNodeName. See https://kubernetes.io/docs/concepts/overview/working-with-objects/field-selectors/",
+                  "pattern": "^[.\\-A-Za-z0-9]+([=!,]{1,2}[./\\-A-Za-z0-9]+)+$",
+                  "type": "string"
+                },
+                "kind": {
+                  "description": "kind of the resources (examples of valid kind are: Pod, Service, Deployment, Ingress)",
+                  "type": "string"
+                },
+                "labelSelector": {
+                  "description": "Optional Kubernetes label selector (e.g. 'app=myapp,env=prod' or 'app in (myapp,yourapp)'), use this option when you want to filter the resources by label",
+                  "pattern": "^([/_.\\-A-Za-z0-9=, ()!])+$",
+                  "type": "string"
+                },
+                "namespace": {
+                  "description": "Optional Namespace to retrieve the namespaced resources from (ignored in case of cluster scoped resources). If not provided, will list resources from all namespaces",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "apiVersion",
+                "kind"
+              ],
+              "type": "object"
+            },
+            "name": "resources_list",
+            "outputSchema": null
+          }
+        ]
+      }
     },
     {
       "name": "postgres-admin-mcp",
@@ -118,7 +451,249 @@
       "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
       "pinnedByDigest": true,
       "registered": true,
-      "backend": "postgres-admin"
+      "backend": "postgres-admin",
+      "configDigest": "sha256:fd32b0f6da5c6bc5869e36716d4149513a6806e9c37582545f436f6531c20adf",
+      "contract": {
+        "backend": "postgres-admin",
+        "configDigest": "sha256:fd32b0f6da5c6bc5869e36716d4149513a6806e9c37582545f436f6531c20adf",
+        "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+        "schemaVersion": 1,
+        "server": "postgres-admin-mcp",
+        "tools": [
+          {
+            "description": "Analyzes database health. Here are the available health checks:\n- index - checks for invalid, duplicate, and bloated indexes\n- connection - checks the number of connection and their utilization\n- vacuum - checks vacuum health for transaction id wraparound\n- sequence - checks sequences at risk of exceeding their maximum value\n- replication - checks replication health including lag and slots\n- buffer - checks for buffer cache hit rates for indexes and tables\n- constraint - checks for invalid constraints\n- all - runs all checks\nYou can optionally specify a single health check or a comma-separated list of health checks. The default is 'all' checks.",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "health_type": {
+                  "default": "all",
+                  "description": "Optional. Valid values are: all, buffer, connection, constraint, index, replication, sequence, vacuum.",
+                  "title": "Health Type",
+                  "type": "string"
+                }
+              },
+              "title": "analyze_db_healthArguments",
+              "type": "object"
+            },
+            "name": "analyze_db_health",
+            "outputSchema": null
+          },
+          {
+            "description": "Analyze a list of (up to 10) SQL queries and recommend optimal indexes",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "max_index_size_mb": {
+                  "default": 10000,
+                  "description": "Max index size in MB",
+                  "title": "Max Index Size Mb",
+                  "type": "integer"
+                },
+                "method": {
+                  "default": "dta",
+                  "description": "Method to use for analysis",
+                  "enum": [
+                    "dta",
+                    "llm"
+                  ],
+                  "title": "Method",
+                  "type": "string"
+                },
+                "queries": {
+                  "description": "List of Query strings to analyze",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Queries",
+                  "type": "array"
+                }
+              },
+              "required": [
+                "queries"
+              ],
+              "title": "analyze_query_indexesArguments",
+              "type": "object"
+            },
+            "name": "analyze_query_indexes",
+            "outputSchema": null
+          },
+          {
+            "description": "Analyze frequently executed queries in the database and recommend optimal indexes",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "max_index_size_mb": {
+                  "default": 10000,
+                  "description": "Max index size in MB",
+                  "title": "Max Index Size Mb",
+                  "type": "integer"
+                },
+                "method": {
+                  "default": "dta",
+                  "description": "Method to use for analysis",
+                  "enum": [
+                    "dta",
+                    "llm"
+                  ],
+                  "title": "Method",
+                  "type": "string"
+                }
+              },
+              "title": "analyze_workload_indexesArguments",
+              "type": "object"
+            },
+            "name": "analyze_workload_indexes",
+            "outputSchema": null
+          },
+          {
+            "description": "Execute a read-only SQL query",
+            "effect": "remote_read",
+            "inputSchema": {
+              "properties": {
+                "sql": {
+                  "default": "all",
+                  "description": "SQL to run",
+                  "title": "Sql",
+                  "type": "string"
+                }
+              },
+              "title": "execute_sqlArguments",
+              "type": "object"
+            },
+            "name": "execute_sql",
+            "outputSchema": null
+          },
+          {
+            "description": "Explains the execution plan for a SQL query, showing how the database will execute it and provides detailed cost estimates.",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "analyze": {
+                  "default": false,
+                  "description": "When True, actually runs the query to show real execution statistics instead of estimates. Takes longer but provides more accurate information.",
+                  "title": "Analyze",
+                  "type": "boolean"
+                },
+                "hypothetical_indexes": {
+                  "default": [],
+                  "description": "A list of hypothetical indexes to simulate. Each index must be a dictionary with these keys:\n    - 'table': The table name to add the index to (e.g., 'users')\n    - 'columns': List of column names to include in the index (e.g., ['email'] or ['last_name', 'first_name'])\n    - 'using': Optional index method (default: 'btree', other options include 'hash', 'gist', etc.)\n\nExamples: [\n    {\"table\": \"users\", \"columns\": [\"email\"], \"using\": \"btree\"},\n    {\"table\": \"orders\", \"columns\": [\"user_id\", \"created_at\"]}\n]\nIf there is no hypothetical index, you can pass an empty list.",
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Hypothetical Indexes",
+                  "type": "array"
+                },
+                "sql": {
+                  "description": "SQL query to explain",
+                  "title": "Sql",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "sql"
+              ],
+              "title": "explain_queryArguments",
+              "type": "object"
+            },
+            "name": "explain_query",
+            "outputSchema": null
+          },
+          {
+            "description": "Show detailed information about a database object",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "object_name": {
+                  "description": "Object name",
+                  "title": "Object Name",
+                  "type": "string"
+                },
+                "object_type": {
+                  "default": "table",
+                  "description": "Object type: 'table', 'view', 'sequence', or 'extension'",
+                  "title": "Object Type",
+                  "type": "string"
+                },
+                "schema_name": {
+                  "description": "Schema name",
+                  "title": "Schema Name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_name",
+                "object_name"
+              ],
+              "title": "get_object_detailsArguments",
+              "type": "object"
+            },
+            "name": "get_object_details",
+            "outputSchema": null
+          },
+          {
+            "description": "Reports the slowest or most resource-intensive queries using data from the 'pg_stat_statements' extension.",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "limit": {
+                  "default": 10,
+                  "description": "Number of queries to return when ranking based on mean_time or total_time",
+                  "title": "Limit",
+                  "type": "integer"
+                },
+                "sort_by": {
+                  "default": "resources",
+                  "description": "Ranking criteria: 'total_time' for total execution time or 'mean_time' for mean execution time per call, or 'resources' for resource-intensive queries",
+                  "title": "Sort By",
+                  "type": "string"
+                }
+              },
+              "title": "get_top_queriesArguments",
+              "type": "object"
+            },
+            "name": "get_top_queries",
+            "outputSchema": null
+          },
+          {
+            "description": "List objects in a schema",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {
+                "object_type": {
+                  "default": "table",
+                  "description": "Object type: 'table', 'view', 'sequence', or 'extension'",
+                  "title": "Object Type",
+                  "type": "string"
+                },
+                "schema_name": {
+                  "description": "Schema name",
+                  "title": "Schema Name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "schema_name"
+              ],
+              "title": "list_objectsArguments",
+              "type": "object"
+            },
+            "name": "list_objects",
+            "outputSchema": null
+          },
+          {
+            "description": "List all schemas in the database",
+            "effect": "remote_write",
+            "inputSchema": {
+              "properties": {},
+              "title": "list_schemasArguments",
+              "type": "object"
+            },
+            "name": "list_schemas",
+            "outputSchema": null
+          }
+        ]
+      }
     },
     {
       "name": "postgres-mcp",
@@ -132,10 +707,72 @@
         "kind": "Deployment",
         "name": "postgres-mcp"
       },
-      "image": "crystaldba/postgres-mcp:0.3.0",
-      "pinnedByDigest": false,
+      "image": "docker.io/crystaldba/postgres-mcp@sha256:dbbd346860d29f1543e991f30f3284bf4ab5f096d049ecc3426528f20b1b6e6b",
+      "pinnedByDigest": true,
       "registered": false,
-      "backend": null
+      "backend": null,
+      "configDigest": "sha256:97ad0238e7b98e317716fcebca2a26791f502970c30e8d66554307f2f385384b",
+      "contract": null
+    }
+  ],
+  "modelReleases": [
+    {
+      "schemaVersion": 1,
+      "engine": "fast",
+      "name": "Qwen-Qwen3.5-0.8B",
+      "servedName": "Qwen/Qwen3.5-0.8B",
+      "weights": {
+        "source": "hf://Qwen/Qwen3.5-0.8B",
+        "revision": null,
+        "files": null
+      },
+      "format": null,
+      "quantisation": null,
+      "engineImage": "vllm/vllm-openai:v0.30.0-aarch64",
+      "serving": {
+        "chatTemplate": null,
+        "toolCallParser": "qwen3_xml",
+        "contextLength": 32768
+      },
+      "offers": {
+        "contextLength": null,
+        "toolCalling": true,
+        "structuredOutput": null,
+        "embeddingSize": null
+      },
+      "evidence": {
+        "benchmark": "docs/infrastructure/inference/benchmarks/fast/20261001T0409Z_candidate-v0.30.0.json",
+        "changeRecord": "docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md"
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "engine": "main",
+      "name": "Qwen3.6-35B-A3B-NVFP4",
+      "servedName": "Qwen3.6-35B-A3B-NVFP4",
+      "weights": {
+        "source": "hf://nvidia/Qwen3.6-35B-A3B-NVFP4",
+        "revision": null,
+        "files": null
+      },
+      "format": null,
+      "quantisation": null,
+      "engineImage": "vllm/vllm-openai:v0.30.0-aarch64",
+      "serving": {
+        "chatTemplate": null,
+        "toolCallParser": "qwen3_xml",
+        "contextLength": 131072
+      },
+      "offers": {
+        "contextLength": null,
+        "toolCalling": true,
+        "structuredOutput": null,
+        "embeddingSize": null
+      },
+      "evidence": {
+        "benchmark": "docs/infrastructure/inference/benchmarks/main/20261001T0553Z_candidate-mtp.json",
+        "changeRecord": "docs/infrastructure/inference/releases/2026-09-26-vllm-v0.30.0.md"
+      }
     }
   ],
   "modelEngines": [
@@ -157,7 +794,8 @@
         "name": "model-config",
         "key": "LLM_MODEL_NAME"
       },
-      "backend": "llm-main"
+      "backend": "llm-main",
+      "release": "Qwen3.6-35B-A3B-NVFP4"
     },
     {
       "name": "fast",
@@ -177,7 +815,8 @@
         "name": "model-config",
         "key": "FAST_MODEL_NAME"
       },
-      "backend": "llm-fast"
+      "backend": "llm-fast",
+      "release": "Qwen-Qwen3.5-0.8B"
     },
     {
       "name": "embeddings",
@@ -213,5 +852,6 @@
       "engine": "fast",
       "backend": "llm-fast"
     }
-  ]
+  ],
+  "revocations": []
 }

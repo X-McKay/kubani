@@ -255,6 +255,11 @@ inference-promote profile result:
 inference-preflight image *ARGS:
     ./infrastructure/scripts/inference_bench/image_preflight.sh {{image}} {{ARGS}}
 
+# Write the manifest of a new model release of an engine (infrastructure/registry/models/README.md).
+# e.g. just inference-manifest --engine fast --name <name> [--weights-revision R] [--benchmark F] [--change-record F] [--tool-calling true|false]
+inference-manifest *ARGS:
+    uv run --locked python infrastructure/scripts/ops/model_release.py new {{ARGS}}
+
 # Operations (docs/infrastructure/README.md#operations)
 
 # engine: main | fast. Pass --no-capture to skip the incident-capture reminder
@@ -323,7 +328,7 @@ test-agent-preflight:
     just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT
+# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 

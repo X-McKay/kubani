@@ -41,7 +41,7 @@ reads Secrets, prints tokens or bypasses a release gate.
 | `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |
 | `check-sync` | every committed Agent, optionally the source checkout | nothing | header sha256 matches the body; with `--source`, the body matches the recorded commit and reports `stale` when HEAD differs | remote freshness |
 | `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision` | signature or attestations (the controller verifies those after apply) |
-| `approve` | the committed unapproved file and the live object | only the `approval` block | live spec equals the committed file; signature Verified by this agent's release workflow inside the tenant pin; all five attestations; NoDrift; digest equals `policySha256`; Ready is false solely for `NotApproved` | functional behavior, qualification |
+| `approve` | the committed unapproved file and the live object | only the `approval` block | live spec equals the committed file, the skills it lists included; signature Verified by this agent's release workflow inside the tenant pin; all five attestations; NoDrift; digest equals `policySha256`; Ready is false solely for `NotApproved`, so a release that requests an effect its tenant has not granted (`EffectNotGranted`) is refused | functional behavior, qualification |
 
 ## Running a session
 
@@ -882,6 +882,13 @@ object, then rewrites exactly the `approval` block with `approved: true`,
 block, or the command refuses. Commit and merge in a separate PR; `ls` shows
 the release as runnable once Ready.
 
+When the release requests an effect, `approve` prints what the approval covers
+and returns the same lines as `covers`. For `sandbox_execute` the line is
+`effect sandbox_execute: skill scripts run inside the agent's container and can
+read the session's identity token`. Put that line in the approval pull request.
+The tenant's grant is a separate change
+([agent-registry.md](agent-registry.md), milestone 4).
+
 ## Agents owned by the registry
 
 An agent is owned either by the pull request path (its directory is listed in
@@ -916,6 +923,156 @@ passed on as the document's `error.code`.
   the Agent, or the registry holds it disabled) the command names the fields,
   writes no `agent.yaml` and leaves the directory unlisted; run `sync`, then
   `authority return` again. Safe to repeat.
+
+### Delivery commands (milestone 2)
+
+An agent is on the delivery path when its live Agent carries the annotation
+`registry.agentplatform.io/deployment`. `run` decides this from the Agent it
+already reads; it asks the registry nothing, so an agent without the annotation
+runs as above even while the registry is down.
+
+- `run <agent> --task ..` on the delivery path signs a person in (the same
+  sign-in and role as the commands above), starts the session at
+  `<registry URL>/v1/tenants/<tenant>/sessions` with `{"request": TEXT}` and
+  follows it by reading it. Nothing goes through `kubectl exec`. The run
+  directory is as before; `receipt.json` has `schemaVersion` 2 and
+  `path: session-interface`, with the interface's address and the session id.
+  `--no-wait`, `--wait-timeout`, `--poll-interval` and `--cancel-on-timeout`
+  mean what they meant. `--grant-handle` and a `--max-boundaries` other than
+  the default are refused before anything is sent, and so is `--release` of a
+  release that is not the current one (only the evaluator may name one). A
+  refusal from the interface is shown with its own message and code (an agent
+  that acts for a person is `refused`); an answer that does not arrive is
+  `not-confirmed`. An access token lasts five minutes and a session can last
+  longer: the command renews it with the refresh token of the same sign-in, and
+  sends the person to sign in once more only when Keycloak no longer honours
+  that. Both tokens are held in memory and are never written or printed.
+- `status --receipt`, `wait --receipt` and `cancel --receipt` read the receipt
+  and use the session interface for a delivery receipt (each signs in), the
+  runner for any other.
+- `status` shows, for each agent the registry owns, `in use`, `candidate` (phase,
+  reason and evaluation), `last refused` (reason and verdict), `pinned`,
+  `revoked` and whether the cluster has taken the last change.
+- `rollback <agent> [--to RELEASE] [--reason TEXT]`, `pin <agent> [--release
+  RELEASE]`, `unpin <agent>`, `disable|enable <agent> [--reason TEXT]` and
+  `evaluate <agent> [--reason TEXT]` are one registry route each, signed in as
+  the person, and pass the registry's refusal on with its code. `rollback`
+  without `--to` takes the registry's choice; `pin` without `--release` pins the
+  current release; `evaluate` asks again for the newest revision after a
+  refusal.
+- `revoke <agent> <release> --reason security|quality --summary TEXT --by WHO
+  [--sessions cancel|finish]` writes
+  `infrastructure/registry/revocations/<id>.yaml` (the id is
+  `<date>-<agent>-<suffix>` of the release name; an existing id is refused) and
+  regenerates the committed feed. It commits, pushes and contacts nothing:
+  open a pull request with the two files; the revocation takes effect when it
+  merges.
+
+### Moving a model alias (milestone 3)
+
+An alias such as `fast` names an engine and a release. Agents whose model
+resolves through it keep working when it moves, but they would be evaluated on
+one model and run on another. A move is how the registry holds those agents
+while the alias changes and then evaluates them on the new model. It is five
+steps:
+
+1. **Plan.** `just agent alias plan <alias> --engine E --release R` asks the
+   registry for an assessment (the release's manifest must be merged first). It
+   prints the pair behind the alias now and the candidate, one line per
+   dependant (agent, tenant, authority, enabled, release, whether it will be
+   held, whether it will be evaluated, each need and whether the candidate meets
+   it, `not recorded` when the manifest does not say), then, apart, the
+   dependants that will **not** be held: agents on the pull request path, whose
+   sessions use the new model with no hold and no evaluation. Decide whether
+   that is acceptable. A blocked assessment (an enabled dependant needs
+   something the candidate does not offer) is printed too, and the command ends
+   `refused`.
+2. **Move.** `just agent alias move <assessment> [--sessions finish|cancel]
+   [--evaluation-seconds N]` starts the move: each held agent stops taking new
+   sessions, and running ones finish (default) or are cancelled. An assessment
+   gone stale since the plan ends `stale-assessment`: plan again. An alias with
+   an open move ends `conflict`. `just agent alias status [<move>] [--alias A]`
+   shows the move, each hold (agent, state, running sessions, reason) and
+   `next`, one sentence saying what it waits for; without a move it lists the
+   open moves. `just agent status` shows them too, and which agents are held.
+3. **Merge the change that moves the alias**, when the move is `held`. This is
+   an ordinary pull request.
+4. **Say the engine is serving.** When the engine runs the candidate, `just
+   agent alias evaluate <move>` starts the evaluation. The registry refuses,
+   and says what is missing, unless it has a fresh observation of the engine
+   with a ready replica serving the candidate's name.
+5. **Read the result.** `status` shows the move until it is `completed`. A move
+   that has not moved yet can be ended with `just agent alias cancel <move>
+   --reason TEXT`.
+
+**Backing out.** Once the alias change is merged the move is `moving` and
+`cancel` is refused. If the engine never serves the candidate, the way back is
+a pull request that moves the alias to the pair it came from: the dependency
+gate allows it, the registry ends the move as `cancelled` and releases the
+holds, and each held agent takes sessions again on the revision it had. The
+registry then records one more revision per agent for the restored pair and
+evaluates it, as after any alias change.
+
+`suspended` is a hold that stays in force after the move: the agent takes no
+new sessions because its only evaluated revision was evaluated on the model
+that is gone. It ends when a later revision of the agent passes evaluation (a
+new release, or `just agent evaluate <agent>` once the cause is fixed) or the
+alias moves back and the agent passes there.
+
+`--json` prints the registry's document with `ok` added. Restarting an engine is
+not something these commands do: it is announced to the operator of the cluster
+first and done by hand.
+
+### The dependency gate on pull requests (milestone 3)
+
+`.github/workflows/dependency-gate.yml` asks the registry about every pull
+request to `main` that changes a tool server's recorded contract or the pair
+behind an alias. A contract change that removes or changes a tool a running
+agent uses fails the check and names the agent; an alias change passes only
+when the registry has a move for that candidate that is `held` (or the change
+backs a `moving` move out). The check to require on `main` is the job named
+`Dependency gate`.
+
+It runs in three jobs, because this repository is public and the registry is
+reachable only inside the tailnet:
+
+| Job | Runner | What it does |
+|---|---|---|
+| `compare` | GitHub-hosted | Checks out `main` and the pull request side by side, renders both feeds with `main`'s code, and stops there when no contract or alias changed |
+| `registry` | `sparky` | Receives the two rendered feeds as JSON and asks the registry. It never checks out the pull request, and it does not run for a fork |
+| `verdict` | GitHub-hosted | Passes only when `compare` succeeded and either nothing had to be asked or `registry` succeeded |
+
+The same script runs by hand, from a checkout of `main`:
+
+```bash
+uv run --locked python infrastructure/scripts/ops/dependency_gate.py \
+  --base-root <checkout of main> --head-root <checkout of the change>
+```
+
+`--offline` asks nothing and exits 3 when there is a question for the registry.
+
+What the operator sets up once:
+
+- The repository variable `DEPENDENCY_GATE` set to `enabled`. Until then every
+  job is skipped.
+- A `registry-reader` credential file for the runner's user on `sparky`, at
+  `~/.config/kubani/registry-reader.secret` (or the path in
+  `KUBANI_REGISTRY_READER_SECRET_FILE`). It is not a repository secret.
+- `Dependency gate` as a required status check on `main`.
+
+Limits:
+
+- A pull request from a fork that changes a contract or an alias fails the
+  check. A maintainer pushes the change to a branch of this repository.
+- While the runner on `sparky` is offline the check stays pending.
+- The workflow is `pull_request_target`, so a change to the workflow or to the
+  gate script takes effect only after it is merged; its own pull request runs
+  the copy on `main`.
+- The gate does not check a removed alias or a removed tool server.
+- The job log is public. It names the agents and tenants the registry reports
+  as affected.
+- `tests/test_dependency_gate_workflow.py` holds the workflow file to the rules
+  in its header. A failure there is a stop, not a test to relax.
 
 ## Verification (2026-11-09)
 

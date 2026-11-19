@@ -40,6 +40,11 @@ resources:
   - agent-registry.yaml
   - registry-provisioner.yaml
 
+  # Delivery (milestone 2): the session interface for tenant-test and the
+  # evaluator that drives it.
+  - session-api-tenant-test.yaml
+  - registry-evaluator.yaml
+
 # Agent Registry: the catalog feed it reads, rendered from
 # infrastructure/registry/ by `just registry-feed render --write` and held to
 # it by `just registry-feed-check`. The name has no hash suffix: the registry

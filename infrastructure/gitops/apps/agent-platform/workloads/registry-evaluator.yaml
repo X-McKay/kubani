@@ -1,0 +1,100 @@
+# The registry evaluator (zetra platform/evaluator, contract delivery.md 1.3 and
+# 6): one per cluster. It claims the oldest evaluation the agent registry holds
+# for this cluster, runs the release's evaluation suite one case at a time
+# through the session interface (session-api-tenant-test.yaml) and posts the
+# verdict to the registry. It needs no Kubernetes API access.
+#
+# Keycloak token: no client secret. The pod presents its projected
+# service-account token (audience = the realm issuer) as a client assertion for
+# the federated-jwt client registry-evaluator-kubani, which carries the realm
+# role registry-evaluator (operator steps:
+# docs/infrastructure/configuration/agent-registry.md). The same access token
+# goes to the registry and to the session interface.
+#
+# Single worker: replicas 1 and strategy Recreate. No liveness probe: one pass
+# lasts as long as a suite does. An evaluator that has stopped shows in
+# `just agent status` as an evaluation pending for more than ten minutes.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-evaluator
+  namespace: agent-platform
+  labels:
+    app.kubernetes.io/name: registry-evaluator
+    app.kubernetes.io/part-of: agent-platform
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry-evaluator
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry-evaluator
+        app.kubernetes.io/part-of: agent-platform
+    spec:
+      serviceAccountName: registry-evaluator
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      nodeSelector:
+        topology.kubani.io/role: database
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: registry-evaluator
+          # built by zetra's release workflow, run 44337682384
+          image: registry.almckay.io/platform/registry-evaluator:54d66d2@sha256:5342b8c2566d4390c826b4ea64e64e4d45c9bfdf237078f20e85184eed6c0928
+          env:
+            - name: EVALUATOR_CLUSTER
+              value: kubani
+            - name: EVALUATOR_REGISTRY_URL
+              value: http://agent-registry.agent-platform.svc.cluster.local:8080
+            - name: EVALUATOR_SESSION_API_URL
+              value: http://session-api-{tenant}.agent-platform.svc:8080
+            - name: EVALUATOR_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Back-channel token endpoint; the realm's issuer stays idp.almckay.io.
+            - name: EVALUATOR_TOKEN_URL
+              value: http://keycloak.auth.svc.cluster.local:8080/realms/agents/protocol/openid-connect/token
+            - name: EVALUATOR_TOKEN_PATH
+              value: /var/run/secrets/registry-evaluator/token
+          resources:
+            requests:
+              cpu: 25m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: idp-token
+              mountPath: /var/run/secrets/registry-evaluator
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: idp-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: https://idp.almckay.io/realms/agents
+                  expirationSeconds: 600
+                  path: token
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

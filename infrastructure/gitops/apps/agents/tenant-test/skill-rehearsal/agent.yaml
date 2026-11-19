@@ -1,0 +1,24 @@
+# Synced from X-McKay/zetra-agents agents/skill-rehearsal/deploy/agent.yaml at 92769aa3e237ae62a5958d70eaeea610930f8000
+# sha256:15bfec1bc2b327175b5055c67d9f1e318e119f575e101e1f1c971cfe24ca0050 of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync skill-rehearsal --source PATH
+# Written by `zetra-agents render` from agent.yaml; not edited by hand.
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: skill-rehearsal
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: Rehearsal agent for skills with scripts; writes a report and runs a
+    skill's script to check it
+  identity:
+    mode: agent
+  capabilities:
+    models: []
+    mcp: []
+    effects:
+    - sandbox_execute
+  runtime:
+    cpu: '1'
+    memory: 1Gi
+    ttlSeconds: 300
