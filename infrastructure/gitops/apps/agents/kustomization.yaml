@@ -39,3 +39,5 @@ resources:
   - tenant-test/registry-provisioner-rbac.yaml
   - tenant-test/session-api-rbac.yaml
   - tenant-test/skill-rehearsal/
+  - tenant-test/alias-rehearsal-pass/
+  - tenant-test/alias-rehearsal-fail/

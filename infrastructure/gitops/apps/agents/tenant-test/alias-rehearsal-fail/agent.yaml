@@ -1,0 +1,28 @@
+# Synced from X-McKay/zetra-agents agents/alias-rehearsal-fail/deploy/agent.yaml at 92769aa3e237ae62a5958d70eaeea610930f8000
+# sha256:8e1139f7b9f57b5fbaa9f4e0b11c1f29f774d5728ce23898fd586a1c49a29ffd of the body below; do not hand-edit.
+# Change deploy/agent.yaml in the source repository, then: just agent sync alias-rehearsal-fail --source PATH
+# Written by `zetra-agents render` from agent.yaml; not edited by hand.
+apiVersion: agentplatform.io/v1alpha1
+kind: Agent
+metadata:
+  name: alias-rehearsal-fail
+  namespace: tenant-test
+spec:
+  owner: 4785437+X-McKay@users.noreply.github.com
+  description: Rehearsal agent for moving the fast model alias; fails by construction
+    after the move
+  identity:
+    mode: agent
+  capabilities:
+    models:
+    - backend: llm-fast
+      models:
+      - fast
+      budget:
+        tokensPerDay: 200000
+        tokensPerSession: 20000
+    mcp: []
+  runtime:
+    cpu: '1'
+    memory: 1Gi
+    ttlSeconds: 300
