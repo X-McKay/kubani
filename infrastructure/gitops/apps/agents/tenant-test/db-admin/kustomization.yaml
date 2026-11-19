@@ -4,3 +4,8 @@ resources:
   - agent.yaml
   - agentrelease.yaml
   - agentrelease-v0.1.2.yaml
+# The hand-over to the registry (docs/infrastructure/configuration/agent-registry.md):
+# Flux leaves these objects on the cluster when this directory leaves the list in
+# ../../kustomization.yaml. Rehearsed 2026-11-18 (#432 to #435).
+commonAnnotations:
+  kustomize.toolkit.fluxcd.io/prune: disabled
