@@ -54,3 +54,50 @@ persistence. Mint output labels the mode and includes the server-reported
 `refresh_expires_in` as `refresh_lifetime_seconds` when present (otherwise null).
 A reported zero must not be treated as proof of unlimited session lifetime.
 Actual grant/vault TTL and refresh behavior still require the live test evidence.
+
+## Proposed Alice-only permission consolidation (new approval required)
+
+Read-only evaluation on pinned Keycloak 26.8.1 found that the two separately
+approved Alice/delegate permissions conflict under the admin-permissions
+resource server's UNANIMOUS strategy: conformance's own permission permits its
+actor, but the lifecycle permission denies it, so `canDelegate` denies overall
+and the parameterized consent scope is omitted. Do not change the global
+resource-server strategy or add a broader user/actor grant.
+
+The reviewed migration preserves both exact existing actor client policies.
+It updates only `conformance-alice-delegate` to resources=[exact synthetic Alice],
+scopes=[delegate], policies=[conformance-alice-actor,
+conformance-lifecycle-alice-actor], logic=POSITIVE, decisionStrategy=AFFIRMATIVE.
+After strict reads verify that combined permission and both unchanged policies,
+it deletes only the exact superseded `conformance-lifecycle-alice-delegate`
+permission. No user, actor policy, client, scope mapper or global setting changes.
+This replaces the previously approved two-permission representation and requires
+new user approval before applying, even though the intended allowed principal
+set is unchanged.
+
+Plan without mutation:
+
+```sh
+python infrastructure/scripts/ops/conformance-delegation.py --consolidate-alice-permissions
+```
+
+Only after the user approves the exact reviewed plan, root may add
+`--apply-consolidation`. Use an exclusive authorization-configuration window:
+Keycloak's policy update/delete endpoints have no revision/CAS support. The
+helper re-reads strict state immediately before each write and verifies after
+it, but cannot make separate REST calls atomic against another administrator.
+
+Only the exact legacy, verified expanded (PUT succeeded, DELETE outstanding),
+and completed consolidated states are recognized. An interrupted verified PUT
+can resume only its exact DELETE. Missing, unknown, broader or changed state is
+refused; no compensating recreation or global change is attempted. Repeated
+completed application writes nothing. Ordinary `configure` recognizes completed
+consolidation for either approved actor, rejects partial consolidation before
+any writes, and never recreates the conflicting separate lifecycle permission.
+Configuration no longer creates missing delegation policies/permissions; missing
+or unknown grant state needs an explicit reviewed recovery plan.
+
+After application, repeat read-only permission evaluation for each exact actor
+against Alice and verify PERMIT, and verify conformance-b/another user remain
+DENY. Then mint fresh explicit consent and continue T10a. Preparation and unit
+tests are not proof of live scope issuance or delegated exchange acceptance.
