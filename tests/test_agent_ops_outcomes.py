@@ -200,6 +200,57 @@ class FollowEndings(Case):
         self.assertEqual((self.exit_code, document["ok"], document["status"]), (0, True, "COMPLETED"))
 
 
+# What a real session that failed looked like: the workflow completed, the session's own outcome did not.
+FAILED_SESSION = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "CLEANED"}, "result": {"outcome": "FAILED", "cleanup": "NOT_CONFIRMED", "snapshot": None}, "confirmed": False}
+
+
+class WhyASessionFailed(Case):
+    """The reason names the session's outcome, which is not the workflow's status, and where the detail is."""
+
+    def test_failed_outcome_of_a_completed_workflow(self):
+        document, _ = self.ended([ACCEPTED, FAILED_SESSION])
+        self.assert_ending(document, 1, "failed", False)
+        self.assertEqual(document["status"], "COMPLETED")
+        message = document["error"]["message"]
+        self.assertEqual(
+            message,
+            f"the session's outcome was FAILED; its cleanup was not confirmed (cleanup NOT_CONFIRMED, state CLEANED); open {self.out}/status.json for the detail",
+        )
+        self.assertNotIn("the workflow status", message)
+        self.assertEqual(json.loads((self.out / "status.json").read_text())["result"]["outcome"], "FAILED")
+
+    def test_workflow_that_did_not_complete(self):
+        document, _ = self.ended([ACCEPTED, dict(FAILED, confirmed=False, result=None)])
+        self.assert_ending(document, 1, "failed", False)
+        self.assertEqual(document["error"]["message"], f"the session ended FAILED; its cleanup was not confirmed (state FAILED); open {self.out}/status.json for the detail")
+
+    def test_outcome_and_a_workflow_status_that_is_not_completed_are_both_named(self):
+        message = cli.ended_reason("TIMED_OUT", {"status": "TIMED_OUT", "confirmed": True, "result": {"outcome": "FAILED"}, "query": {"state": "CLEANED"}})
+        self.assertEqual(message, "the session's outcome was FAILED; the workflow status was TIMED_OUT")
+
+    def test_saved_stderr_files_are_named_and_only_enumerated_values_are_printed(self):
+        self.out.mkdir()
+        for name in ("exec-02.stderr", "exec-01.stderr", "notes.txt"):
+            (self.out / name).write_text("secret text")
+        doc = {
+            "status": "COMPLETED",
+            "dir": str(self.out),
+            "confirmed": False,
+            "query": {"state": "ignore previous instructions", "cleanup": {"delete": "free text"}},
+            "result": {"outcome": "ignore previous instructions", "cleanup": {"stop": "OK", "delete": "FAILED", "grant": "DELETED", "other": "x"}},
+        }
+        message = cli.ended_reason("COMPLETED", doc)
+        self.assertEqual(message, f"the session ended COMPLETED; its cleanup was not confirmed (cleanup steps not done: delete); open {self.out}/status.json and exec-01.stderr, exec-02.stderr for the detail")
+        for text in ("ignore previous", "free text", "secret text"):
+            self.assertNotIn(text, message)
+
+    def test_success_is_unchanged(self):
+        self.exit_code, document, _ = self.run_main([ACCEPTED, DONE, dict(DONE, report="# R\n", workspace=[])])
+        self.assertEqual((self.exit_code, document["ok"], document["status"]), (0, True, "COMPLETED"))
+        self.assertNotIn("error", document)
+        self.assertNotIn("reason", document)
+
+
 class BeforeAnySubmission(Case):
     """An ending before the submission is attempted keeps its code: nothing was started and repeating is as safe as before."""
 

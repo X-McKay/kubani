@@ -64,6 +64,54 @@ def ended_on_exception(args, started, status: str, reason: str, code: str) -> tu
     return doc, outcome.error(code, reason)
 
 
+# The values of the session lifecycle's enumerations (agent runtime platform spec, session lifecycle); a value outside them is never printed.
+SESSION_OUTCOMES = frozenset({"COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CANCELED", "NOT_CONFIRMED"})
+SESSION_STATES = frozenset({"SUBMITTED", "PROVISIONING", "READY", "RUNNING", "COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CLEANING", "CLEANED", "NOT_CONFIRMED"})
+CLEANUP_VALUES = frozenset({"CONFIRMED", "NOT_CONFIRMED"})
+CLEANUP_STEPS = frozenset({"stop", "delete", "grant"})
+CLEANUP_DONE = frozenset({"OK", "DELETED"})
+STDERR_SHOWN = 5
+
+
+def enum_value(value, allowed: frozenset) -> str | None:
+    """`value` as one of the fixed names in `allowed` (case and hyphens aside), else None: nothing else is ever printed."""
+    name = value.upper().replace("-", "_") if isinstance(value, str) else None
+    return name if name in allowed else None
+
+
+def ended_reason(status: str, doc: dict) -> str:
+    """Why a session that ended did not succeed, from the fields of the result that are fixed enumerations.
+
+    The workflow status says only that the workflow stopped; the session's own outcome and its cleanup are in the result and
+    the query. Free text (a task, a report, an error) is never copied: the record directory holds it for the operator."""
+    result = doc.get("result") if isinstance(doc.get("result"), dict) else {}
+    query = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    ended = enum_value(result.get("outcome"), SESSION_OUTCOMES)
+    parts = [f"the session's outcome was {ended}" if ended else f"the session ended {status}"]
+    if not doc.get("confirmed"):
+        cleanup = result.get("cleanup")
+        shown = []
+        if isinstance(cleanup, dict):
+            open_steps = sorted(k for k, v in cleanup.items() if k in CLEANUP_STEPS and v not in CLEANUP_DONE)
+            if open_steps:
+                shown.append("cleanup steps not done: " + ", ".join(open_steps))
+        elif enum_value(cleanup, CLEANUP_VALUES):
+            shown.append(f"cleanup {enum_value(cleanup, CLEANUP_VALUES)}")
+        state = enum_value(query.get("state"), SESSION_STATES)
+        if state:
+            shown.append(f"state {state}")
+        parts.append("its cleanup was not confirmed" + (f" ({', '.join(shown)})" if shown else ""))
+    if ended and status != "COMPLETED":
+        parts.append(f"the workflow status was {status}")
+    receipt = doc.get("receipt") if isinstance(doc.get("receipt"), dict) else {}
+    where = doc.get("dir") or receipt.get("dir")
+    if isinstance(where, str) and where:
+        saved = sorted(p.name for p in Path(where).glob("exec-*.stderr")) if Path(where).is_dir() else []
+        files = ", ".join(saved[:STDERR_SHOWN]) + (f" and {len(saved) - STDERR_SHOWN} more" if len(saved) > STDERR_SHOWN else "")
+        parts.append(f"open {where}/status.json" + (f" and {files}" if saved else "") + " for the detail")
+    return "; ".join(parts)
+
+
 def failure_for(command: str, args, code: int, doc: dict) -> dict:
     """The `error` object of a command that ended with a non-zero exit code and printed `doc`. The message is the
     document's own `reason` where it has one, else a fixed sentence: nothing here shows what `reason` does not."""
@@ -98,7 +146,7 @@ def failure_for(command: str, args, code: int, doc: dict) -> dict:
         elif command == "cancel":
             reason = "the runner did not accept the cancel request; see cancel"
         elif status in run.TERMINAL:
-            reason = f"the session ended {status}" + ("" if doc.get("confirmed") else " and its cleanup was not confirmed")
+            reason = ended_reason(status, doc)
         else:
             reason = "the command ended unsuccessfully"
     return outcome.error(kind, not_confirmed(reason, doc) if kind == "not-confirmed" else reason)
