@@ -24,6 +24,8 @@ import yaml
 OPS = Path(__file__).resolve().parents[1] / "infrastructure/scripts/ops"
 sys.path.insert(0, str(OPS))
 from agent_ops import approve, layout, live, register, run, stage, state, sync  # noqa: E402
+from test_registry_feed import build_tree  # noqa: E402
+import registry_feed  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("agent_ops_cli", OPS / "agent-ops.py")
 cli = importlib.util.module_from_spec(_spec)
@@ -687,8 +689,11 @@ class RemoteScriptTests(unittest.TestCase):
 
 
 def synced_root(tmp: Path) -> Path:
-    """A root whose sample Agent carries a header from REPO, as a registered agent does."""
+    """A root whose sample Agent carries a header from REPO, as a registered agent does, with the files the feed renderer reads."""
     root = make_root(tmp, release_text=None)
+    signers = (root / layout.SIGNERS).read_bytes()
+    build_tree(root)  # the feed's inputs, which also writes an empty signer ConfigMap
+    (root / layout.SIGNERS).write_bytes(signers)
     file = root / layout.AGENTS_DIR / "tenant-test/sample/agent.yaml"
     file.write_text(sync.header(REPO, "sample", "a" * 40, AGENT_BODY) + AGENT_BODY)
     return root
@@ -716,13 +721,15 @@ class RegisterTests(unittest.TestCase):
         self.assertFalse(layout.subject_matches({"subjectRegExp": pin}, layout.expected_subject(REPO, "sample/v1").replace("refs/tags", "refs/heads")))
 
     def test_committed_tenant_test_pin_is_derived_from_the_sync_headers(self):
-        """The real repository: both pin copies equal the pin derived from the 16 headers."""
+        """The real repository: both pin copies equal the pin derived from the headers of every committed Agent."""
         result = register.check(ROOT)
         self.assertTrue(result["ok"], result)
         row = result["tenants"][0]
         self.assertEqual(row["tenant"], "tenant-test")
         self.assertEqual(list(row["sources"]), ["X-McKay/zetra-agents"])
-        self.assertEqual(len(row["sources"]["X-McKay/zetra-agents"]), 16)
+        committed = sorted(p.parent.name for p in (ROOT / layout.AGENTS_DIR / "tenant-test").glob("*/agent.yaml"))
+        self.assertTrue(committed)
+        self.assertEqual(sorted(row["sources"]["X-McKay/zetra-agents"]), committed)  # no committed Agent is missing from the pin, and the pin names none that is not committed
         self.assertEqual(register.derived_pin(ROOT, "tenant-test"), register.committed_pins(ROOT, "tenant-test")["configmap"])
 
     def test_check_reports_drift_in_either_copy(self):
@@ -755,6 +762,22 @@ class RegisterTests(unittest.TestCase):
             self.assertEqual(result["added"], ["new-agent"])
             self.assertEqual(result["sources"], {REPO: ["sample"], "example/my-agent": ["new-agent"]})
             self.assertEqual(len(result["pinFiles"]), 2)
+            self.assertEqual(
+                result["files"],
+                sorted(
+                    [
+                        str(layout.AGENTS_DIR / "kustomization.yaml"),
+                        str(layout.AGENTS_DIR / "tenant-test/new-agent/agent.yaml"),
+                        str(layout.AGENTS_DIR / "tenant-test/new-agent/kustomization.yaml"),
+                        str(layout.SIGNERS),
+                        str(register.NAMESPACES),
+                        str(registry_feed.FEED),
+                    ]
+                ),
+            )
+            # The feed is rendered by `register` itself: it already names the new repository and agent.
+            self.assertEqual((root / registry_feed.FEED).read_bytes(), registry_feed.feed_bytes(registry_feed.render(root)))
+            self.assertEqual({t["repository"]: t["agents"] for t in registry_feed.render(root)["trustedRepositories"]}, {REPO: ["sample"], "example/my-agent": ["new-agent"]})
             d = layout.find_agent(root, "new-agent")
             meta, body = sync.split(d.agent_file.read_text())
             self.assertEqual((meta["repo"], body), ("example/my-agent", new_body))
@@ -770,11 +793,27 @@ class RegisterTests(unittest.TestCase):
             # Registering again is idempotent for the same repository and refused for another.
             with patch.object(sync, "_git", git):
                 again = register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
-            self.assertEqual((again["added"], again["alreadyRegistered"], again["pinFiles"]), ([], ["new-agent"], []))
+            self.assertEqual((again["added"], again["alreadyRegistered"], again["pinFiles"], again["files"]), ([], ["new-agent"], [], []))
             with patch.object(sync, "_git", git), self.assertRaises(register.RegisterError):
                 register.register(root, "tenant-test", "example/other", ["new-agent"], Path("/src"))
             with patch.object(sync, "_git", git), self.assertRaises((register.RegisterError, layout.LayoutError)):
                 register.register(root, "tenant-other", "example/other", ["x"], Path("/src"))  # no such tenant pin
+
+    def test_register_rolls_everything_back_when_the_feed_cannot_be_rendered(self):
+        new_body = AGENT_BODY.replace("name: sample", "name: new-agent")
+        git = FakeGit({"b" * 40: {"agents/new-agent/deploy/agent.yaml": new_body}}, "b" * 40)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            watched = [root / layout.AGENTS_DIR / "kustomization.yaml", root / layout.SIGNERS, root / register.NAMESPACES, root / registry_feed.FEED]
+            watched[3].parent.mkdir(parents=True, exist_ok=True)
+            watched[3].write_bytes(registry_feed.feed_bytes(registry_feed.render(root)))
+            before = [p.read_bytes() for p in watched]
+            (root / registry_feed.CATALOG).write_text("version: 2\n")  # the renderer refuses this catalog
+            with patch.object(sync, "_git", git), self.assertRaisesRegex(register.RegisterError, "feed could not be rendered") as caught:
+                register.register(root, "tenant-test", "example/my-agent", ["new-agent"], Path("/src"))
+            self.assertEqual(caught.exception.code, "validation-failed")
+            self.assertEqual([p.read_bytes() for p in watched], before)
+            self.assertFalse((root / layout.AGENTS_DIR / "tenant-test/new-agent").exists())
 
     def test_register_leaves_nothing_behind_when_the_source_refuses(self):
         cases = {

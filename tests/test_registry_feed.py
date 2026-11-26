@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -129,7 +130,7 @@ class RepositoryFeed(unittest.TestCase):
 
     def test_tool_servers(self):
         tools = {t["name"]: t for t in self.feed["toolServers"]}
-        self.assertEqual(len(tools), 5)
+        self.assertEqual(sorted(tools), sorted(t["name"] for t in yaml.safe_load((ROOT / registry_feed.CATALOG).read_text())["toolServers"]))
         self.assertEqual({name for name, t in tools.items() if not t["registered"]}, {"github-mcp", "graphiti-mcp", "postgres-mcp"})
         self.assertEqual(tools["kubernetes-mcp"]["backend"], "kubernetes")
         self.assertEqual(tools["postgres-admin-mcp"]["backend"], "postgres-admin")
@@ -137,19 +138,22 @@ class RepositoryFeed(unittest.TestCase):
 
     def test_model_engines_and_aliases(self):
         engines = {e["name"]: e for e in self.feed["modelEngines"]}
-        self.assertEqual(len(engines), 3)
+        self.assertEqual(sorted(engines), sorted(e["name"] for e in yaml.safe_load((ROOT / registry_feed.CATALOG).read_text())["modelEngines"]))
         self.assertIsNone(engines["embeddings"]["backend"])
         aliases = {a["alias"]: a["backend"] for a in self.feed["aliases"]}
         self.assertEqual(aliases, {"main": "llm-main", "fast": "llm-fast"})
 
     def test_tenant_and_trusted_repository(self):
         self.assertEqual([t["name"] for t in self.feed["tenants"]], ["tenant-test"])
-        self.assertEqual(len(self.feed["trustedRepositories"]), 1)
-        repo = self.feed["trustedRepositories"][0]
-        tenant = self.feed["tenants"][0]
-        self.assertEqual(repo["subjectRegExp"], tenant["policy"]["signer"]["subjectRegExp"])
         agents_dir = ROOT / "infrastructure/gitops/apps/agents/tenant-test"
-        self.assertEqual(repo["agents"], sorted(p.name for p in agents_dir.iterdir() if p.is_dir()))
+        by_repo: dict[str, list[str]] = {}
+        for p in sorted(agents_dir.glob("*/agent.yaml")):
+            by_repo.setdefault(re.match(r"# Synced from (\S+) ", p.read_text().split("\n", 1)[0]).group(1), []).append(p.parent.name)
+        self.assertEqual({r["repository"]: r["agents"] for r in self.feed["trustedRepositories"]}, by_repo)
+        self.assertEqual(sorted(a for agents in by_repo.values() for a in agents), sorted(p.name for p in agents_dir.iterdir() if p.is_dir()))
+        tenant = self.feed["tenants"][0]
+        if len(by_repo) == 1:  # one repository: its own pin is the tenant's pin
+            self.assertEqual(self.feed["trustedRepositories"][0]["subjectRegExp"], tenant["policy"]["signer"]["subjectRegExp"])
 
     def test_revocations_are_a_list(self):
         self.assertIsInstance(self.feed["revocations"], list)

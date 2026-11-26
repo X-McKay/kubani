@@ -217,6 +217,29 @@ def _index(lines: list[str], exact: str, path: Path) -> int:
     return hits[0]
 
 
+def render_feed(root: Path, restore: list[Path], added: list[layout.AgentDir], before: dict[Path, bytes | None]) -> list[str]:
+    """Regenerate the registry's catalog feed, which carries the tenant pins and the trusted repositories.
+
+    The feed is written with the files `register` already wrote; when it cannot be rendered, `restore` (read back from
+    `before`) and the new agent directories are put back as they were, as `revoke` does for its revocation file."""
+    import registry_feed  # imports this module for the pins, so it cannot be imported at the top
+
+    feed_path = root / registry_feed.FEED
+    try:
+        feed_path.parent.mkdir(parents=True, exist_ok=True)
+        feed_path.write_bytes(registry_feed.feed_bytes(registry_feed.render(root)))
+    except (ValueError, OSError, layout.LayoutError, RegisterError, sync.SyncError) as exc:
+        for path in restore:
+            if before[path] is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.write_bytes(before[path])
+        for d in added:
+            shutil.rmtree(d.path, ignore_errors=True)
+        raise RegisterError(f"the registry feed could not be rendered after the change, so nothing was kept: {exc}", "validation-failed") from None
+    return [str(registry_feed.FEED)] if feed_path.read_bytes() != before[feed_path] else []
+
+
 def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path) -> dict:
     """Add `agents` of `repo` to `tenant`, synced from `source`, and regenerate the pin."""
     if not layout.NAME.match(tenant):
@@ -230,6 +253,12 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
     listed = layout.listed_resources(top)  # refuses a kustomization that cannot be appended
     existing = {d.agent: d for d in layout.agent_dirs(root)}
     added, kept = [], []
+    added_dirs: list[layout.AgentDir] = []
+    wrote: list[str] = []
+    import registry_feed
+
+    touched = [top, root / layout.SIGNERS, root / NAMESPACES, root / registry_feed.FEED]
+    before = {path: path.read_bytes() if path.is_file() else None for path in touched}
     for agent in agents:
         if not layout.NAME.match(agent):
             raise RegisterError(f"agent name {agent!r} is not a DNS label", "invalid-arguments")
@@ -243,6 +272,7 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
             if entry not in listed:  # an earlier run stopped between sync and the listing
                 layout.append_listed(top, entry)
                 listed.append(entry)
+                wrote.append(str(layout.AGENTS_DIR / "kustomization.yaml"))
             kept.append(agent)
             continue
         d = layout.AgentDir(root, tenant, agent)
@@ -261,8 +291,11 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
             raise
         listed.append(entry)
         added.append(agent)
+        added_dirs.append(d)
+        wrote += [str(d.agent_file.relative_to(root)), str(d.kustomization.relative_to(root)), str(layout.AGENTS_DIR / "kustomization.yaml")]
     pattern = derived_pin(root, tenant)
     changed = write_pins(root, tenant, pattern) if any(v != pattern for v in committed_pins(root, tenant).values()) else []
+    feed = render_feed(root, touched, added_dirs, before)
     return {
         "tenant": tenant,
         "repo": repo,
@@ -270,5 +303,6 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
         "alreadyRegistered": kept,
         "sources": {r: list(a) for r, a in sorted(sources(root, tenant).items())},
         "pinFiles": changed,
-        "next": "commit as one PR; after Flux applies, `just agent stage <agent> <agent>/vX.Y.Z` per release",
+        "files": sorted({*wrote, *changed, *feed}),
+        "next": "commit as one PR (the registry feed is already regenerated); after Flux applies, `just agent stage <agent> <agent>/vX.Y.Z` per release",
     }
