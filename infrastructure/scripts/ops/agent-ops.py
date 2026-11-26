@@ -67,9 +67,8 @@ def ended_on_exception(args, started, status: str, reason: str, code: str) -> tu
 # The values of the session lifecycle's enumerations (agent runtime platform spec, session lifecycle); a value outside them is never printed.
 SESSION_OUTCOMES = frozenset({"COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CANCELED", "NOT_CONFIRMED"})
 SESSION_STATES = frozenset({"SUBMITTED", "PROVISIONING", "READY", "RUNNING", "COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CLEANING", "CLEANED", "NOT_CONFIRMED"})
-CLEANUP_VALUES = frozenset({"CONFIRMED", "NOT_CONFIRMED"})
-CLEANUP_STEPS = frozenset({"stop", "delete", "grant"})
-CLEANUP_DONE = frozenset({"OK", "DELETED"})
+# What each cleanup step reads when it is done, as the runner records it (`CLEAN` in agent_ops/remote_session.py).
+CLEANUP_DONE = {"stop": "OK", "delete": "DELETED", "grant": "OK"}
 STDERR_SHOWN = 5
 
 
@@ -89,18 +88,18 @@ def ended_reason(status: str, doc: dict) -> str:
     ended = enum_value(result.get("outcome"), SESSION_OUTCOMES)
     parts = [f"the session's outcome was {ended}" if ended else f"the session ended {status}"]
     if not doc.get("confirmed"):
-        cleanup = result.get("cleanup")
-        shown = []
-        if isinstance(cleanup, dict):
-            open_steps = sorted(k for k, v in cleanup.items() if k in CLEANUP_STEPS and v not in CLEANUP_DONE)
-            if open_steps:
-                shown.append("cleanup steps not done: " + ", ".join(open_steps))
-        elif enum_value(cleanup, CLEANUP_VALUES):
-            shown.append(f"cleanup {enum_value(cleanup, CLEANUP_VALUES)}")
+        # `confirmed` is false for a session that failed and was cleaned up as much as for one whose cleanup is open,
+        # so the cleanup is read from its own record: every step done in each record there is, and the state CLEANED.
+        records = [result.get("cleanup"), query.get("cleanup")] if result else [query.get("cleanup")]
+        open_steps = sorted({step for record in records if isinstance(record, dict) for step, done in CLEANUP_DONE.items() if record.get(step) != done})
         state = enum_value(query.get("state"), SESSION_STATES)
-        if state:
-            shown.append(f"state {state}")
-        parts.append("its cleanup was not confirmed" + (f" ({', '.join(shown)})" if shown else ""))
+        if all(isinstance(record, dict) for record in records) and not open_steps and state == "CLEANED":
+            parts.append("its sandbox was cleaned up")
+            if ended == "COMPLETED" and not result.get("snapshot"):
+                parts.append("no snapshot of its workspace was recorded")
+        else:
+            shown = ([f"steps not done: {', '.join(open_steps)}"] if open_steps else []) + ([f"state {state}"] if state else [])
+            parts.append("its cleanup is not confirmed" + (f" ({', '.join(shown)})" if shown else ""))
     if ended and status != "COMPLETED":
         parts.append(f"the workflow status was {status}")
     receipt = doc.get("receipt") if isinstance(doc.get("receipt"), dict) else {}
@@ -108,7 +107,7 @@ def ended_reason(status: str, doc: dict) -> str:
     if isinstance(where, str) and where:
         saved = sorted(p.name for p in Path(where).glob("exec-*.stderr")) if Path(where).is_dir() else []
         files = ", ".join(saved[:STDERR_SHOWN]) + (f" and {len(saved) - STDERR_SHOWN} more" if len(saved) > STDERR_SHOWN else "")
-        parts.append(f"open {where}/status.json" + (f" and {files}" if saved else "") + " for the detail")
+        parts.append(f"the record is {where}/status.json" + (f", with what the runner's commands printed in {files}" if saved else ""))
     return "; ".join(parts)
 
 

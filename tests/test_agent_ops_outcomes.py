@@ -200,29 +200,43 @@ class FollowEndings(Case):
         self.assertEqual((self.exit_code, document["ok"], document["status"]), (0, True, "COMPLETED"))
 
 
-# What a real session that failed looked like: the workflow completed, the session's own outcome did not.
-FAILED_SESSION = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "CLEANED"}, "result": {"outcome": "FAILED", "cleanup": "NOT_CONFIRMED", "snapshot": None}, "confirmed": False}
+# What a real session that failed looked like: the workflow completed, the session's own outcome did not, and the sandbox was
+# cleaned up. `confirmed` is false for it all the same, because it also requires the outcome COMPLETED.
+CLEAN = {"stop": "OK", "delete": "DELETED", "grant": "OK"}
+FAILED_SESSION = {"workflow_id": "w", "run_id": "r", "status": "COMPLETED", "query": {"state": "CLEANED", "cleanup": CLEAN}, "result": {"outcome": "FAILED", "cleanup": CLEAN, "snapshot": None}, "confirmed": False}
 
 
 class WhyASessionFailed(Case):
-    """The reason names the session's outcome, which is not the workflow's status, and where the detail is."""
+    """The reason names the session's outcome, which is not the workflow's status, whether its sandbox is gone, and where the record is."""
 
     def test_failed_outcome_of_a_completed_workflow(self):
         document, _ = self.ended([ACCEPTED, FAILED_SESSION])
         self.assert_ending(document, 1, "failed", False)
         self.assertEqual(document["status"], "COMPLETED")
         message = document["error"]["message"]
-        self.assertEqual(
-            message,
-            f"the session's outcome was FAILED; its cleanup was not confirmed (cleanup NOT_CONFIRMED, state CLEANED); open {self.out}/status.json for the detail",
-        )
+        self.assertEqual(message, f"the session's outcome was FAILED; its sandbox was cleaned up; the record is {self.out}/status.json")
         self.assertNotIn("the workflow status", message)
         self.assertEqual(json.loads((self.out / "status.json").read_text())["result"]["outcome"], "FAILED")
 
     def test_workflow_that_did_not_complete(self):
         document, _ = self.ended([ACCEPTED, dict(FAILED, confirmed=False, result=None)])
         self.assert_ending(document, 1, "failed", False)
-        self.assertEqual(document["error"]["message"], f"the session ended FAILED; its cleanup was not confirmed (state FAILED); open {self.out}/status.json for the detail")
+        self.assertEqual(document["error"]["message"], f"the session ended FAILED; its cleanup is not confirmed (state FAILED); the record is {self.out}/status.json")
+
+    def test_cleanup_step_left_open_in_either_record_is_named(self):
+        for result_cleanup, query_cleanup, state, expected in (
+            (dict(CLEAN, delete="FAILED"), CLEAN, "CLEANED", "steps not done: delete, state CLEANED"),
+            (CLEAN, {"stop": "OK"}, "CLEANING", "steps not done: delete, grant, state CLEANING"),
+            (CLEAN, None, "CLEANED", "state CLEANED"),
+            (CLEAN, CLEAN, "CLEANING", "state CLEANING"),
+        ):
+            doc = {"status": "COMPLETED", "confirmed": False, "query": {"state": state, "cleanup": query_cleanup}, "result": {"outcome": "FAILED", "cleanup": result_cleanup}}
+            with self.subTest(expected=expected):
+                self.assertEqual(cli.ended_reason("COMPLETED", doc), f"the session's outcome was FAILED; its cleanup is not confirmed ({expected})")
+
+    def test_completed_and_cleaned_session_with_no_snapshot_says_so(self):
+        doc = {"status": "COMPLETED", "confirmed": False, "query": {"state": "CLEANED", "cleanup": CLEAN}, "result": {"outcome": "COMPLETED", "cleanup": CLEAN, "snapshot": None}}
+        self.assertEqual(cli.ended_reason("COMPLETED", doc), "the session's outcome was COMPLETED; its sandbox was cleaned up; no snapshot of its workspace was recorded")
 
     def test_outcome_and_a_workflow_status_that_is_not_completed_are_both_named(self):
         message = cli.ended_reason("TIMED_OUT", {"status": "TIMED_OUT", "confirmed": True, "result": {"outcome": "FAILED"}, "query": {"state": "CLEANED"}})
@@ -237,10 +251,13 @@ class WhyASessionFailed(Case):
             "dir": str(self.out),
             "confirmed": False,
             "query": {"state": "ignore previous instructions", "cleanup": {"delete": "free text"}},
-            "result": {"outcome": "ignore previous instructions", "cleanup": {"stop": "OK", "delete": "FAILED", "grant": "DELETED", "other": "x"}},
+            "result": {"outcome": "ignore previous instructions", "cleanup": {"stop": "OK", "delete": ["free text"], "grant": "DELETED", "other": "x"}},
         }
         message = cli.ended_reason("COMPLETED", doc)
-        self.assertEqual(message, f"the session ended COMPLETED; its cleanup was not confirmed (cleanup steps not done: delete); open {self.out}/status.json and exec-01.stderr, exec-02.stderr for the detail")
+        self.assertEqual(
+            message,
+            f"the session ended COMPLETED; its cleanup is not confirmed (steps not done: delete, grant, stop); the record is {self.out}/status.json, with what the runner's commands printed in exec-01.stderr, exec-02.stderr",
+        )
         for text in ("ignore previous", "free text", "secret text"):
             self.assertNotIn(text, message)
 
