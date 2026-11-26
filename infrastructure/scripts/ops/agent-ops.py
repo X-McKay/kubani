@@ -195,6 +195,10 @@ def conclude(args, code: int, doc: dict) -> int:
     return code
 
 
+SOURCE_HELP_REGISTER = f"clean checkout of the repository (default: ${sync.SOURCE_ENV}); its origin must be that repository"
+SOURCE_HELP_SYNC = f"checkout of the source repository to copy deploy/agent.yaml from (default: ${sync.SOURCE_ENV}); its origin must be the repository the header records"
+
+
 def main(argv=None) -> int:
     parser = Parser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3])
@@ -245,21 +249,21 @@ def main(argv=None) -> int:
     p.add_argument("tenant", help="tenant name, e.g. tenant-test")
     p.add_argument("repository", help="owner/name of the repository whose release workflow signs these agents")
     p.add_argument("agents", nargs="+", help="names of the agents to add to the tenant")
-    p.add_argument("--source", type=Path, required=True, help="clean checkout of the repository")
+    p.add_argument("--source", type=Path, help=SOURCE_HELP_REGISTER)
 
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
     p.add_argument("agent", help="committed agent to refresh from the source checkout")
-    p.add_argument("--source", type=Path, required=True, help="checkout of the source repository to copy deploy/agent.yaml from")
+    p.add_argument("--source", type=Path, help=SOURCE_HELP_SYNC)
     p.add_argument("--allow-repo-change", action="store_true", help="let --repo differ from the repository the header records")
 
     p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header and every tenant pin against the headers")
     p.add_argument("agents", nargs="*", help="limit the check to these committed agents (default: all)")
-    p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout")
+    p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout, whose origin must be the repository the header names")
 
     p = sub.add_parser("stage", help="download, verify and stage an unapproved AgentRelease")
     p.add_argument("agent", help="committed agent the release belongs to")
     p.add_argument("tag", help="release tag to download from the source repository")
-    p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout")
+    p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout, whose origin must be the repository the release comes from")
 
     p = sub.add_parser("approve", help="record approval after the controller verified the staged release")
     p.add_argument("release", help="name of the staged AgentRelease to approve, or an agent the registry owns")
@@ -390,9 +394,9 @@ def main(argv=None) -> int:
                 code, report = run.consent(root, args.agent, args.session, run_dir=args.run_dir, timeout=args.timeout, browser=args.browser)
             return conclude(args, code, report)
         if args.command == "register":
-            return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, args.source))
+            return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, sync.source_path(args.source)))
         if args.command == "sync":
-            return conclude(args, 0, sync.sync(root, args.agent, args.source, repo=args.repo, allow_repo_change=args.allow_repo_change))
+            return conclude(args, 0, sync.sync(root, args.agent, sync.source_path(args.source), repo=args.repo, allow_repo_change=args.allow_repo_change))
         if args.command == "check-sync":
             result = sync.check(root, source=args.source, agents=args.agents or None)
             pins = register.check(root)

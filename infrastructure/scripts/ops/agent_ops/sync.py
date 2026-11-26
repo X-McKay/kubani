@@ -8,6 +8,7 @@ offline and, given a source checkout, against the recorded commit.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -23,6 +24,11 @@ HEADER_RE = re.compile(
     r"# Change deploy/agent\.yaml in the source repository, then: just agent sync (?P<agent>[a-z0-9-]+) --source PATH\n",
 )
 DEFAULT_REPO = "X-McKay/zetra-agents"
+SOURCE_ENV = "KUBANI_AGENT_SOURCE"
+ORIGIN_RE = re.compile(
+    r"^(?:git@github\.com:|(?:https?|ssh|git)://(?:[^@/]+@)?github\.com/)"
+    r"(?P<repo>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
+)
 
 
 class SyncError(outcome.Coded):
@@ -54,6 +60,36 @@ def _git(source: Path, *args: str) -> str:
         raise SyncError(f"git {' '.join(args)} failed in {source}: timed out after 30 seconds", "timeout") from exc
     except OSError as exc:
         raise SyncError(f"git {' '.join(args)} failed in {source}: git could not be run: {exc.strerror or type(exc).__name__}", "unavailable") from exc
+
+
+def source_path(given: Path | None) -> Path:
+    """The source checkout: the `--source` flag, else the environment variable, else a refusal that names both."""
+    if given is not None:
+        return given
+    value = os.environ.get(SOURCE_ENV, "").strip()
+    if value:
+        return Path(value)
+    raise SyncError(f"no source checkout: pass --source PATH or set the environment variable {SOURCE_ENV} to the checkout of the agent source repository", "invalid-arguments")
+
+
+def origin_repo(source: Path) -> str | None:
+    """`owner/name` of the checkout's `origin` remote; None when it has no origin, so there is nothing to compare."""
+    if "origin" not in _git(source, "remote").split():
+        return None
+    url = _git(source, "remote", "get-url", "origin").strip()
+    match = ORIGIN_RE.match(url)
+    if match is None:
+        # The URL itself is not printed: a remote can carry a credential.
+        raise SyncError(f"the origin remote of {source} is not a github.com repository URL (git@github.com:owner/name.git or https://github.com/owner/name), so it cannot be compared with the repository the agents come from", "conflict")
+    return match["repo"]
+
+
+def check_origin(source: Path, repo: str, agent: str | None = None) -> None:
+    """Refuse a checkout whose origin is another repository than `repo`, the one the Agent file is (to be) synced from."""
+    found = origin_repo(source)
+    if found is not None and found.lower() != repo.lower():
+        subject = f"{agent} is synced from {repo}" if agent else f"the agents come from {repo}"
+        raise SyncError(f"{source} is a checkout of {found}, but {subject}; pass the checkout of {repo} (--source PATH or {SOURCE_ENV})", "conflict")
 
 
 def source_file(source: Path, agent: str, commit: str) -> str:
@@ -118,6 +154,7 @@ def sync(
         raise SyncError(f"{agent}: no sync header to take the repository from; pass --repo")
     if recorded is not None and repo != recorded and not allow_repo_change:
         raise SyncError(f"{agent} is recorded from {recorded}; pass --allow-repo-change to move it to {repo}", "conflict")
+    check_origin(source, repo, agent)
     head, dirty = source_head(source, agent)
     if dirty:
         raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first", "conflict")
@@ -190,6 +227,11 @@ def _check_one(d: layout.AgentDir, source: Path | None) -> dict:
     row.update(commit=meta["commit"], repo=meta["repo"])
     if source is None:
         row.update(state="ok", detail="header verified offline; source not compared")
+        return row
+    try:
+        check_origin(source, meta["repo"], d.agent)
+    except SyncError as exc:
+        row.update(state="fail", detail=str(exc))
         return row
     try:
         recorded = source_file(source, d.agent, meta["commit"])

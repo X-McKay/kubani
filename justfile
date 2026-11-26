@@ -320,7 +320,7 @@ registry-feed-check:
 test-mcp-registry:
     just test tests/test_mcp_registry*.py tests/test_db_admin_identity.py tests/test_db_admin_gateway.py tests/test_db_admin_release.py tests/test_db_admin_backend.py
 
-# Local compatibility only; --live adds read-only MCP registration evidence.
+# Local compatibility only; --live adds read-only MCP registration evidence. --source PATH defaults to KUBANI_AGENT_SOURCE.
 agent-preflight AGENT *ARGS:
     uv run --locked python -B infrastructure/scripts/ops/agent-preflight.py {{AGENT}} {{ARGS}}
 
@@ -328,7 +328,7 @@ test-agent-preflight:
     just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE
+# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE. register and sync take --source PATH, or read KUBANI_AGENT_SOURCE when it is not given; the checkout's origin must be the repository the agent is synced from
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 

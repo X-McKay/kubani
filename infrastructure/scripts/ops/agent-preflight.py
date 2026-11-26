@@ -10,6 +10,7 @@ import traceback
 from pathlib import Path
 
 import outcome
+from agent_ops import sync
 from agent_preflight.core import run
 from agent_preflight.source import NO_ENVIRONMENT
 
@@ -46,8 +47,7 @@ def main(argv=None):
     parser.add_argument(
         "--source",
         type=Path,
-        required=True,
-        help="explicit trusted executable source checkout",
+        help=f"explicit trusted executable source checkout (default: ${sync.SOURCE_ENV})",
     )
     parser.add_argument("--tag", required=True, help="prospective AGENT/vVERSION tag")
     parser.add_argument(
@@ -60,7 +60,13 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     try:
-        result = run(args.root, args.source, args.agent, args.tag, live_scope=args.live)
+        source = sync.source_path(args.source)
+    except sync.SyncError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        emit(outcome.document({}, outcome.error(outcome.code_of(exc), str(exc))))
+        return 2
+    try:
+        result = run(args.root, source, args.agent, args.tag, live_scope=args.live)
     except KeyboardInterrupt:
         emit(outcome.document({}, outcome.error("interrupted", "interrupted before the preflight finished")))
         raise

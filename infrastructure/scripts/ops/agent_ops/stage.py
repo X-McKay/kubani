@@ -143,6 +143,8 @@ def stage(root: Path, agent: str, tag: str, *, repo: str | None = None, source: 
         raise StageError("tag must be <agent>/v<version> for this agent", "invalid-arguments")
     d = layout.find_agent(root, agent)
     repo = repo or sync.source_repo(d)
+    if source is not None:
+        sync.check_origin(source, repo, agent)
     if not layout.is_listed(root, d):
         return stage_registry(root, d, tag, repo=repo, source=source)
     file_name = f"agentrelease-{m.group('version')}.yaml"

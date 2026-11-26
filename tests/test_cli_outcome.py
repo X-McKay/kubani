@@ -5,6 +5,7 @@ import importlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -412,6 +413,22 @@ class AgentPreflight(unittest.TestCase):
         self.assertRegex(document["error"]["message"], r"^unexpected RuntimeError at \w+\.py:\d+$")
         self.assertNotIn("SECRET-RESPONSE", out)
         self.assertIn("RuntimeError", err)
+
+    def test_source_defaults_to_the_variable_and_is_refused_without_either(self):
+        receipt = {"schemaVersion": 1, "ok": True, "checks": []}
+        with patch.dict(os.environ, {"KUBANI_AGENT_SOURCE": "/from/env"}), patch.object(preflight_cli, "run", return_value=receipt) as run:
+            code, _, _ = call(preflight_cli, ["sample", "--tag", "sample/v1"])
+            self.assertEqual((code, run.call_args.args[1]), (0, Path("/from/env")))
+            call(preflight_cli, ["sample", "--source", "/from/flag", "--tag", "sample/v1"])
+            self.assertEqual(run.call_args.args[1], Path("/from/flag"))
+        with patch.dict(os.environ), patch.object(preflight_cli, "run") as run:
+            os.environ.pop("KUBANI_AGENT_SOURCE", None)
+            code, out, _ = call(preflight_cli, ["sample", "--tag", "sample/v1"])
+            document = only_document(out)
+            self.assertEqual((code, document["error"]["code"]), (2, "invalid-arguments"))
+            self.assertIn("--source", document["error"]["message"])
+            self.assertIn("KUBANI_AGENT_SOURCE", document["error"]["message"])
+            run.assert_not_called()
 
     def test_malformed_command_lines(self):
         for argv in ([], ["sample"], ["sample", "--source", "/s"], ["sample", "--source", "/s", "--tag", "t", "--nope"]):
