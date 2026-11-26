@@ -1,5 +1,5 @@
-# Synced from X-McKay/zetra-agents agents/alias-rehearsal-pass/deploy/agent.yaml at 92769aa3e237ae62a5958d70eaeea610930f8000
-# sha256:33a6f154f7fa45084fe7157c8669bbce62593d73e488560a30a78605d63e3a15 of the body below; do not hand-edit.
+# Synced from X-McKay/zetra-agents agents/alias-rehearsal-pass/deploy/agent.yaml at 9e7c65666dbe38aa31b3435c82ceadcf577d04ac
+# sha256:41e089736109c05828cbd29e1ee0be64729e314ecf6893bde69c3a3f9d12cb0f of the body below; do not hand-edit.
 # Change deploy/agent.yaml in the source repository, then: just agent sync alias-rehearsal-pass --source PATH
 # Written by `zetra-agents render` from agent.yaml; not edited by hand.
 apiVersion: agentplatform.io/v1alpha1
@@ -20,7 +20,7 @@ spec:
       - fast
       budget:
         tokensPerDay: 200000
-        tokensPerSession: 20000
+        tokensPerSession: 70000
     mcp: []
   runtime:
     cpu: '1'

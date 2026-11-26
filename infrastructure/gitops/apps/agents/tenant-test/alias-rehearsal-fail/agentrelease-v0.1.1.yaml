@@ -1,0 +1,35 @@
+# yamllint disable rule:line-length
+# Exact signed alias-rehearsal-fail/v0.1.1 assets; SHA256SUMS verified by `just agent stage`.
+apiVersion: agentplatform.io/v1alpha1
+kind: AgentRelease
+metadata:
+  name: alias-rehearsal-fail-2026-11-26-99680d3e
+  namespace: tenant-test
+spec:
+  agent: alias-rehearsal-fail
+  image: registry.almckay.io/agents/alias-rehearsal-fail@sha256:99680d3e29ec2f99095251b709893d9d4b1b92b44ad1122c99bc84f2fe99af3a  # pragma: allowlist secret (verified public release fingerprint)
+  manifestSha256: de17d32a9b51a30ba7c6a25aff49a86d5361635b2bcdd460f6a3e2e4b3a35742  # pragma: allowlist secret (verified public release fingerprint)
+  policySha256: b6c8229020bc2dc17fd1e33cc1200769a8f02ae36cca6b667e5904453e2c00cc  # pragma: allowlist secret (verified public release fingerprint)
+  lockSha256: b70330e2c0d38dd1670ceecc7ae774bcce13e9e0416fa41ed52cebe8139dce27  # pragma: allowlist secret (verified public release fingerprint)
+  buildRevision: 9e7c65666dbe38aa31b3435c82ceadcf577d04ac  # pragma: allowlist secret (verified public release fingerprint)
+  approval:
+    approved: false
+  declaration:
+    owner: 4785437+X-McKay@users.noreply.github.com
+    description: Rehearsal agent for moving the fast model alias; fails by construction
+      after the move
+    identity:
+      mode: agent
+    capabilities:
+      models:
+      - backend: llm-fast
+        models:
+        - fast
+        budget:
+          tokensPerDay: 200000
+          tokensPerSession: 70000
+      mcp: []
+    runtime:
+      cpu: '1'
+      memory: 1Gi
+      ttlSeconds: 300
