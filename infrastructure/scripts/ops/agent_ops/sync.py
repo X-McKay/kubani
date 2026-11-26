@@ -160,6 +160,9 @@ def sync(
         raise SyncError(f"{source}/agents/{agent} has uncommitted changes; commit them first", "conflict")
     body = source_file(source, agent, head)
     doc = _parse_agent(body, d)
+    problems = layout.budget_problems(root, doc)
+    if problems:
+        raise SyncError("; ".join(problems))
     current = layout.committed_agent(d) if d.agent_file.is_file() else None
     spec_changed = current is None or current["spec"] != doc["spec"]
     d.agent_file.write_text(header(repo, agent, head, body) + body, encoding="utf-8")
@@ -220,9 +223,12 @@ def _check_one(d: layout.AgentDir, source: Path | None) -> dict:
         row.update(state="fail", detail="body does not match the header sha256; hand-edited?")
         return row
     try:
-        layout.committed_agent(d)
+        problems = layout.budget_problems(d.root, layout.committed_agent(d))
     except layout.LayoutError as exc:
         row.update(state="fail", detail=str(exc))
+        return row
+    if problems:
+        row.update(state="fail", detail="; ".join(problems))
         return row
     row.update(commit=meta["commit"], repo=meta["repo"])
     if source is None:
