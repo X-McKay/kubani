@@ -14,6 +14,9 @@ import outcome
 
 AGENTS_DIR = Path("infrastructure/gitops/apps/agents")
 SIGNERS = Path("infrastructure/gitops/infrastructure/kyverno/tenant-signers.yaml")
+POLICY_SERVICE = Path("infrastructure/gitops/apps/agent-platform/workloads/agent-policy-service.yaml")
+BACKEND_CATALOGUE = "APS_BACKEND_CATALOGUE"
+BUDGET_FIELDS = ("tokensPerSession", "tokensPerDay")
 AGENT_CRD = Path("infrastructure/gitops/infrastructure/agent-platform-crds/agents.agentplatform.io.yaml")
 NAME = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\Z")
 TAG = re.compile(r"^(?P<agent>[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?)/(?P<version>v[0-9][A-Za-z0-9.+-]*)\Z")
@@ -108,6 +111,60 @@ def committed_agent(d: AgentDir) -> dict:
     if doc["metadata"].get("name") != d.agent or doc["metadata"].get("namespace") != d.tenant:
         raise LayoutError(f"{d.agent_file}: metadata must name {d.agent} in {d.tenant}")
     return doc
+
+
+def backend_reservations(root: Path) -> dict[str, int]:
+    """Backend -> the tokens the policy service reserves for each call to it (`maxModelLen`), as the policy service's own
+    manifest in `root` declares them in APS_BACKEND_CATALOGUE."""
+    path = root / POLICY_SERVICE
+    try:
+        docs = [d for d in yaml.safe_load_all(path.read_text(encoding="utf-8")) if isinstance(d, dict)]
+    except OSError as exc:
+        raise LayoutError(f"{POLICY_SERVICE}: {exc.strerror or type(exc).__name__}", "not-found") from None
+    except yaml.YAMLError as exc:
+        raise LayoutError(f"{POLICY_SERVICE}: not valid YAML: {exc}") from None
+    values = [
+        env.get("value")
+        for doc in docs
+        if doc.get("kind") == "Deployment"
+        for container in (((doc.get("spec") or {}).get("template") or {}).get("spec") or {}).get("containers") or []
+        for env in container.get("env") or []
+        if isinstance(env, dict) and env.get("name") == BACKEND_CATALOGUE
+    ]
+    if len(values) != 1 or not isinstance(values[0], str):
+        raise LayoutError(f"{POLICY_SERVICE}: expected exactly one {BACKEND_CATALOGUE} value on the Deployment, found {len(values)}")
+    try:
+        catalogue = json.loads(values[0])
+        return {backend: entry["maxModelLen"] for backend, entry in catalogue.items() if isinstance(entry["maxModelLen"], int)}
+    except (ValueError, AttributeError, KeyError, TypeError):
+        raise LayoutError(f"{POLICY_SERVICE}: {BACKEND_CATALOGUE} is not an object of backends that each carry an integer maxModelLen") from None
+
+
+def budget_problems(root: Path, doc: dict) -> list[str]:
+    """Why a call to a model backend of this Agent could never be admitted, one message per problem; empty when none.
+
+    The policy service reserves the backend's whole context length for every call, so a session or day budget below it
+    admits nothing, and a backend the catalogue does not list is refused outright. A grant with no budget is skipped."""
+    spec = doc.get("spec") if isinstance(doc.get("spec"), dict) else {}
+    models = (spec.get("capabilities") or {}).get("models") or []
+    if not models:
+        return []
+    name = (doc.get("metadata") or {}).get("name") or "agent"
+    reserved = backend_reservations(root)
+    problems = []
+    for grant in models:
+        if not isinstance(grant, dict):
+            continue
+        backend = grant.get("backend")
+        if backend not in reserved:
+            problems.append(f"{name}: model grant names backend {backend}, which is not in {BACKEND_CATALOGUE}; the policy service would refuse every call. Use a backend the catalogue lists ({', '.join(sorted(reserved))})")
+            continue
+        budget = grant.get("budget")
+        for field in BUDGET_FIELDS:
+            declared = budget.get(field) if isinstance(budget, dict) else None
+            if isinstance(declared, int) and not isinstance(declared, bool) and declared < reserved[backend]:
+                problems.append(f"{name}: {field} {declared} is below the {reserved[backend]} tokens reserved for each call to {backend} ({BACKEND_CATALOGUE}); no call would be admitted. Raise the budget in the agent's source and release a new version")
+    return problems
 
 
 def _with_defaults(value, schema: dict):

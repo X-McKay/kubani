@@ -64,6 +64,53 @@ def ended_on_exception(args, started, status: str, reason: str, code: str) -> tu
     return doc, outcome.error(code, reason)
 
 
+# The values of the session lifecycle's enumerations (agent runtime platform spec, session lifecycle); a value outside them is never printed.
+SESSION_OUTCOMES = frozenset({"COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CANCELED", "NOT_CONFIRMED"})
+SESSION_STATES = frozenset({"SUBMITTED", "PROVISIONING", "READY", "RUNNING", "COMPLETED", "FAILED", "TIMED_OUT", "CANCELLED", "CLEANING", "CLEANED", "NOT_CONFIRMED"})
+# What each cleanup step reads when it is done, as the runner records it (`CLEAN` in agent_ops/remote_session.py).
+CLEANUP_DONE = {"stop": "OK", "delete": "DELETED", "grant": "OK"}
+STDERR_SHOWN = 5
+
+
+def enum_value(value, allowed: frozenset) -> str | None:
+    """`value` as one of the fixed names in `allowed` (case and hyphens aside), else None: nothing else is ever printed."""
+    name = value.upper().replace("-", "_") if isinstance(value, str) else None
+    return name if name in allowed else None
+
+
+def ended_reason(status: str, doc: dict) -> str:
+    """Why a session that ended did not succeed, from the fields of the result that are fixed enumerations.
+
+    The workflow status says only that the workflow stopped; the session's own outcome and its cleanup are in the result and
+    the query. Free text (a task, a report, an error) is never copied: the record directory holds it for the operator."""
+    result = doc.get("result") if isinstance(doc.get("result"), dict) else {}
+    query = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    ended = enum_value(result.get("outcome"), SESSION_OUTCOMES)
+    parts = [f"the session's outcome was {ended}" if ended else f"the session ended {status}"]
+    if not doc.get("confirmed"):
+        # `confirmed` is false for a session that failed and was cleaned up as much as for one whose cleanup is open,
+        # so the cleanup is read from its own record: every step done in each record there is, and the state CLEANED.
+        records = [result.get("cleanup"), query.get("cleanup")] if result else [query.get("cleanup")]
+        open_steps = sorted({step for record in records if isinstance(record, dict) for step, done in CLEANUP_DONE.items() if record.get(step) != done})
+        state = enum_value(query.get("state"), SESSION_STATES)
+        if all(isinstance(record, dict) for record in records) and not open_steps and state == "CLEANED":
+            parts.append("its sandbox was cleaned up")
+            if ended == "COMPLETED" and not result.get("snapshot"):
+                parts.append("no snapshot of its workspace was recorded")
+        else:
+            shown = ([f"steps not done: {', '.join(open_steps)}"] if open_steps else []) + ([f"state {state}"] if state else [])
+            parts.append("its cleanup is not confirmed" + (f" ({', '.join(shown)})" if shown else ""))
+    if ended and status != "COMPLETED":
+        parts.append(f"the workflow status was {status}")
+    receipt = doc.get("receipt") if isinstance(doc.get("receipt"), dict) else {}
+    where = doc.get("dir") or receipt.get("dir")
+    if isinstance(where, str) and where:
+        saved = sorted(p.name for p in Path(where).glob("exec-*.stderr")) if Path(where).is_dir() else []
+        files = ", ".join(saved[:STDERR_SHOWN]) + (f" and {len(saved) - STDERR_SHOWN} more" if len(saved) > STDERR_SHOWN else "")
+        parts.append(f"the record is {where}/status.json" + (f", with what the runner's commands printed in {files}" if saved else ""))
+    return "; ".join(parts)
+
+
 def failure_for(command: str, args, code: int, doc: dict) -> dict:
     """The `error` object of a command that ended with a non-zero exit code and printed `doc`. The message is the
     document's own `reason` where it has one, else a fixed sentence: nothing here shows what `reason` does not."""
@@ -98,7 +145,7 @@ def failure_for(command: str, args, code: int, doc: dict) -> dict:
         elif command == "cancel":
             reason = "the runner did not accept the cancel request; see cancel"
         elif status in run.TERMINAL:
-            reason = f"the session ended {status}" + ("" if doc.get("confirmed") else " and its cleanup was not confirmed")
+            reason = ended_reason(status, doc)
         else:
             reason = "the command ended unsuccessfully"
     return outcome.error(kind, not_confirmed(reason, doc) if kind == "not-confirmed" else reason)
@@ -145,6 +192,10 @@ def conclude(args, code: int, doc: dict) -> int:
     """Print `doc` with `ok` (and, when `code` is not 0, `error`) added, and give back the exit code unchanged."""
     emit(outcome.document(doc, None if code == 0 else failure_for(args.command, args, code, doc)))
     return code
+
+
+SOURCE_HELP_REGISTER = f"clean checkout of the repository (default: ${sync.SOURCE_ENV}); its origin must be that repository"
+SOURCE_HELP_SYNC = f"checkout of the source repository to copy deploy/agent.yaml from (default: ${sync.SOURCE_ENV}); its origin must be the repository the header records"
 
 
 def main(argv=None) -> int:
@@ -197,21 +248,21 @@ def main(argv=None) -> int:
     p.add_argument("tenant", help="tenant name, e.g. tenant-test")
     p.add_argument("repository", help="owner/name of the repository whose release workflow signs these agents")
     p.add_argument("agents", nargs="+", help="names of the agents to add to the tenant")
-    p.add_argument("--source", type=Path, required=True, help="clean checkout of the repository")
+    p.add_argument("--source", type=Path, help=SOURCE_HELP_REGISTER)
 
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
     p.add_argument("agent", help="committed agent to refresh from the source checkout")
-    p.add_argument("--source", type=Path, required=True, help="checkout of the source repository to copy deploy/agent.yaml from")
+    p.add_argument("--source", type=Path, help=SOURCE_HELP_SYNC)
     p.add_argument("--allow-repo-change", action="store_true", help="let --repo differ from the repository the header records")
 
     p = sub.add_parser("check-sync", help="verify every committed Agent against its sync header and every tenant pin against the headers")
     p.add_argument("agents", nargs="*", help="limit the check to these committed agents (default: all)")
-    p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout")
+    p.add_argument("--source", type=Path, help="also compare with the recorded commit in this checkout, whose origin must be the repository the header names")
 
     p = sub.add_parser("stage", help="download, verify and stage an unapproved AgentRelease")
     p.add_argument("agent", help="committed agent the release belongs to")
     p.add_argument("tag", help="release tag to download from the source repository")
-    p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout")
+    p.add_argument("--source", type=Path, help="verify manifest/lock hashes at buildRevision in this checkout, whose origin must be the repository the release comes from")
 
     p = sub.add_parser("approve", help="record approval after the controller verified the staged release")
     p.add_argument("release", help="name of the staged AgentRelease to approve, or an agent the registry owns")
@@ -342,9 +393,9 @@ def main(argv=None) -> int:
                 code, report = run.consent(root, args.agent, args.session, run_dir=args.run_dir, timeout=args.timeout, browser=args.browser)
             return conclude(args, code, report)
         if args.command == "register":
-            return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, args.source))
+            return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, sync.source_path(args.source)))
         if args.command == "sync":
-            return conclude(args, 0, sync.sync(root, args.agent, args.source, repo=args.repo, allow_repo_change=args.allow_repo_change))
+            return conclude(args, 0, sync.sync(root, args.agent, sync.source_path(args.source), repo=args.repo, allow_repo_change=args.allow_repo_change))
         if args.command == "check-sync":
             result = sync.check(root, source=args.source, agents=args.agents or None)
             pins = register.check(root)
