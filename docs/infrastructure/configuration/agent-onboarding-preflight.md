@@ -17,6 +17,9 @@ just agent-preflight investigator --source ../zetra-agents --tag investigator/v1
 just agent-preflight db-admin --source ../zetra-agents --tag db-admin/v1.2.3 --live
 ```
 
+`--source` defaults to the environment variable `KUBANI_AGENT_SOURCE`; the flag
+wins, and with neither the command refuses with `invalid-arguments`.
+
 The default checker is offline. It does not authenticate, fetch, generate GitOps,
 provision or deploy. `uv run` may provision the Python environment or fetch missing
 dependencies (including the existing live transport's pinned PyJWT dependency) before starting the checker; prepare that environment separately if
