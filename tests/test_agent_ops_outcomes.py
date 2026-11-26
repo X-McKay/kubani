@@ -199,6 +199,25 @@ class FollowEndings(Case):
         self.exit_code, document, _ = self.run_main([ACCEPTED, DONE, dict(DONE, report="# R\n", workspace=[])])
         self.assertEqual((self.exit_code, document["ok"], document["status"]), (0, True, "COMPLETED"))
 
+    def test_a_completed_session_whose_agent_wrote_no_report_is_a_failure_with_a_record_not_a_failed_follow_up(self):
+        document, _ = self.ended([ACCEPTED, DONE, {"error": "report missing"}])
+        self.assert_ending(document, 1, "failed", False)
+        self.assertEqual(document["status"], "COMPLETED")
+        self.assertNotIn("next", document)
+        self.assertNotIn("report", document)
+        reason = f"{run.NO_REPORT}; the record is {self.out}/status.json"
+        self.assertEqual((document["reason"], document["error"]["message"]), (reason, reason))
+        self.assertEqual(json.loads((self.out / "status.json").read_text())["reason"], reason)
+        self.assertFalse((self.out / "report.md").exists())
+
+    def test_any_other_error_reading_the_report_is_still_a_follow_up_that_failed(self):
+        document, _ = self.ended([ACCEPTED, DONE, {"error": "snapshot bounds/hash mismatch"}])
+        self.assertEqual(document["status"], "FOLLOW_FAILED")
+        self.assert_not_confirmed(document, 2, receipt=True)
+
+    def test_the_answer_run_reads_as_no_report_is_the_one_the_pod_gives(self):
+        self.assertIn(f'fail("{run.NO_REPORT_ANSWER}")', run.REMOTE.read_text(encoding="utf-8"))
+
 
 # What a real session that failed looked like: the workflow completed, the session's own outcome did not, and the sandbox was
 # cleaned up. `confirmed` is false for it all the same, because it also requires the outcome COMPLETED.
@@ -302,6 +321,19 @@ class ResumeEndings(Case):
         receipt = self.receipt()
         self.exit_code, document, _ = self.main([command, "--receipt", receipt, *extra], self.kube(results))
         return document
+
+    def test_a_later_command_keeps_what_an_earlier_one_saved_of_the_runners_stderr(self):
+        receipt = self.receipt()
+        for name in ("exec-01.stderr", "exec-02.stderr"):
+            (self.out / name).write_text("earlier\n")
+        kube = self.kube([DONE, {"error": "report missing"}])
+        answer = kube.exec
+        kube.exec = lambda *args: subprocess.CompletedProcess((done := answer(*args)).args, done.returncode, done.stdout, b"later\n")
+        self.exit_code, document, _ = self.main(["status", "--receipt", receipt], kube)
+        self.assert_ending(document, 1, "failed", False)
+        self.assertEqual(document["reason"], f"{run.NO_REPORT}; the record is {self.out}/status.json")
+        saved = {p.name: p.read_text() for p in self.out.glob("exec-*.stderr")}
+        self.assertEqual(saved, {"exec-01.stderr": "earlier\n", "exec-02.stderr": "earlier\n", "exec-03.stderr": "later\n", "exec-04.stderr": "later\n"})
 
     def test_wait_that_passes_its_own_deadline_stays_a_retryable_timeout(self):
         document = self.resume("wait", [*[RUNNING] * 200], "--wait-timeout", "0.05", "--poll-interval", "0.01")

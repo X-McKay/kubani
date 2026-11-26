@@ -69,6 +69,10 @@ GRANT_MAY_BE_HELD = "a grant may be held for this session until the cleanup reco
 # Answers of the pod's deposit that mean this call left no grant: the policy service refused the token, or the request never reached it.
 NO_GRANT_ANSWERS = ("deposit refused:", "invalid request", "session identity already exists", "session must be a canonical UUIDv4")
 
+# What the pod answers when a session's snapshot holds no `workspace/report.md` (remote_session.py), and what `run` says then.
+NO_REPORT_ANSWER = "report missing"
+NO_REPORT = "the session completed and its sandbox was cleaned up, but its workspace holds no report.md, so there is no report to copy out"
+
 
 class RunError(outcome.Coded):
     """A run, status, wait or cancel could not be carried out. A refusal is the default; a raise site that knows better says so."""
@@ -180,7 +184,10 @@ class Runner:
         self.stderr_prefix = stderr_prefix
         self.pod = live.runner_pod(kube, tenant)
         self.code = REMOTE.read_bytes()
-        self.calls = 0
+        # A later command on the same record (`status`, `wait`, `cancel`) numbers on from what an earlier one saved: the
+        # files are never overwritten, and a name already taken would end the command before it wrote its answer.
+        taken = (p.name[len(stderr_prefix) + 1 : -len(".stderr")] for p in out.glob(f"{stderr_prefix}-*.stderr"))
+        self.calls = max((int(n) for n in taken if n.isdigit()), default=0)
         self.identity_changed = False
 
     def remote(self, request: dict) -> dict:
@@ -507,11 +514,19 @@ def finish(receipt: dict, runner: Runner, status: dict) -> tuple[int, dict]:
     }
     code = 1
     if status["status"] == "COMPLETED" and status.get("confirmed"):
-        report = runner.remote(_identity(receipt, "report"))
-        _private(runner.out / "report.md", report["report"])
-        envelope["report"] = str(runner.out / "report.md")
-        envelope["workspace"] = report.get("workspace", [])
-        code = 0
+        try:
+            report = runner.remote(_identity(receipt, "report"))
+        except RunError as exc:
+            if not str(exc).endswith(f": {NO_REPORT_ANSWER}"):
+                raise
+            # The session ended and is cleaned up; only its agent wrote no report. That is a failed run with a record,
+            # not a follow-up that failed: there is nothing left to follow.
+            envelope["reason"] = f"{NO_REPORT}; the record is {runner.out}/status.json"
+        else:
+            _private(runner.out / "report.md", report["report"])
+            envelope["report"] = str(runner.out / "report.md")
+            envelope["workspace"] = report.get("workspace", [])
+            code = 0
     _private(runner.out / "status.json", json.dumps(envelope, indent=2, sort_keys=True) + "\n")
     return code, tag(envelope, "failed" if code else None)
 
