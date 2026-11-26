@@ -29,6 +29,73 @@ The implementation is `infrastructure/scripts/ops/agent-ops.py` with the
 Reads use `KUBECONFIG=/home/al/.kube/config`. Nothing here applies objects,
 reads Secrets, prints tokens or bypasses a release gate.
 
+## The three procedures
+
+Each step is one command or one pull request, in the order to do it. "Operator"
+is the person running the commands from a checkout of this repository. Where a
+step is a pull request it says so, and nothing in a procedure changes the
+cluster except by a merged pull request that Flux applies. Each step links to
+the section that explains it; this section holds only what is typed.
+
+`--source` names a checkout of the agent's source repository. Set it once with
+`export KUBANI_AGENT_SOURCE=~/git/zetra-agents` and leave the flag out of
+`register`, `sync` and `agent-preflight`; the flag wins when both are given.
+`stage` and `check-sync` take `--source` only when given and never read the
+variable. The checkout's `origin` must be the repository the agent comes from
+(see [Syncing the Agent](#syncing-the-agent)). The examples below name
+`my-agent`, `tenant-test` and `OWNER/REPO`; substitute your own.
+
+### 1. A new agent, from merged source to its first session
+
+Start with the agent's source merged in the agent repository, and its
+repository holding the registry credential secrets and the `RELEASE_RUNNER`
+variable ([Registering a repository](#registering-a-repository); the first
+agent of a repository only, and the operator's human step).
+
+1. Operator: `just agent-preflight my-agent --source ~/git/my-agent --tag my-agent/v0.1.0`. Offline; it checks the source against this repository before the tag exists ([agent onboarding preflight](agent-onboarding-preflight.md)).
+2. Operator: `just agent register tenant-test OWNER/REPO my-agent --source ~/git/my-agent`. It writes the agent's directory, the tenant's signer pin and the registry feed, and prints the files it wrote under `files`. **Pull request 1**: commit those files and merge; Flux applies the Agent.
+3. Operator, in the agent repository: push the release tag `my-agent/v0.1.0` on the merged commit. The repository's own `release.yml` builds, signs and publishes the release.
+4. Operator: `just agent stage my-agent my-agent/v0.1.0 --source ~/git/my-agent`. **Pull request 2**: commit the new `agentrelease-v0.1.0.yaml` and the kustomization entry, unapproved, and merge; Flux applies it.
+5. Operator: `just agent approve <release> --ticket <URL or id>`, where `<release>` is the `release` name `stage` printed. The ticket is optional and recorded with the approval. It refuses until the controller has verified the staged release; retry after Flux has applied it. **Pull request 3**: commit the changed `approval` block, separately from pull request 2, and merge.
+6. Operator: `just agent run my-agent --task "..."`. A person who is signed in is needed only when the release requires delegation ([Running a session](#running-a-session)).
+
+Steps 4 and 5 are two pull requests on purpose: the controller verifies the
+signature of what pull request 2 applied, and `approve` reads that verdict
+([Staging and approving a release](#staging-and-approving-a-release)).
+
+### 2. A new version of an agent that already runs
+
+1. In the agent repository: a pull request that changes the source and raises the version; merge it.
+2. Operator: `just agent-preflight my-agent --source ~/git/my-agent --tag my-agent/v0.1.1` (optional; offline).
+3. Operator, in the agent repository: push the tag `my-agent/v0.1.1` on the merged commit.
+4. Only when `deploy/agent.yaml` changed: operator, with the checkout on the tagged commit, `just agent sync my-agent --source ~/git/my-agent`. **A pull request**: commit it and merge. `sync` reports `specChanged`. From the moment Flux applies the changed Agent, every release approved for the old Agent shows `PolicyDrift` and `just agent ls` shows no runnable release, until step 6 is merged ([A session failed: why](#a-session-failed-why)). `stage` refuses a release whose published Agent differs from the committed one, so this step comes before step 5.
+5. Operator: `just agent stage my-agent my-agent/v0.1.1 --source ~/git/my-agent`. **A pull request**: commit and merge; Flux applies the release unapproved.
+6. Operator: `just agent approve <release> --ticket <URL or id>`. **A separate pull request**: commit and merge.
+7. Operator: `just agent ls`, then `just agent run my-agent --task "..."`. `run` takes the most recently approved runnable release unless `--release` names one.
+
+When the agent is owned by the registry ([Agents owned by the registry](#agents-owned-by-the-registry)),
+steps 5 and 6 are different: `stage` and `approve my-agent` are a signed-in
+person's commands and open no pull request.
+
+### 3. Take and return: handing an agent to the registry and back
+
+`take` and `return` are a signed-in person's commands: each signs the person in
+at the terminal with a `registry-operator` role, so an automated session does
+not run them. The pull requests around them are the operator's.
+
+Take:
+
+1. Operator: a pull request that adds `commonAnnotations` `kustomize.toolkit.fluxcd.io/prune: disabled` to the agent's `kustomization.yaml`. Merge it and let Flux apply it, or Flux deletes the agent's objects when the directory leaves the list.
+2. Signed-in person: `just agent authority take my-agent`. It refuses until the annotation is in git and on every live Agent and AgentRelease of the agent.
+3. Operator: **a pull request** with the one list line it removed from `apps/agents/kustomization.yaml`. Merge.
+4. From then on `stage`, `approve my-agent` and the other registry commands are the signed-in person's; `just agent status` shows the registry's view.
+
+Return:
+
+1. Signed-in person: `just agent authority return my-agent`. It writes back the releases the registry recorded or approved, and lists the directory again.
+2. If it names fields where the registry's Agent differs from `agent.yaml`, it writes no `agent.yaml` and leaves the directory unlisted: operator, `just agent sync my-agent --source ~/git/my-agent`, then the signed-in person runs `just agent authority return my-agent` again. Repeating it is safe.
+3. Operator: **a pull request** with the files it wrote. Flux owns the agent again once it is merged.
+
 ## What each command establishes
 
 | Command | Reads | Writes | Proves | Does not prove |
@@ -38,9 +105,10 @@ reads Secrets, prints tokens or bypasses a release gate.
 | `run` | the same, plus the tenant's Ready Session Runner pod; for a release that requires delegation and a run started from a terminal, one person's sign-in and consent | a private run directory; one Temporal workflow via the runner; for a release that requires delegation, one grant at the APS for that session, made from the person's consent | exact-run identity, confirmed completion and cleanup, the verified report | task correctness, qualification |
 | `consent --check` | the committed Agent; one person's sign-in and consent at the `agents` realm's `agent-cli` client; the realm's signing keys | no file, no cluster object and nothing at the APS; at Keycloak, what any sign-in leaves: a session, the tokens issued for it and the consent answer for `agent-cli` | whether Keycloak issued that person, for that agent, an access token that meets the four conditions the APS deposit handler places on a bearer token | that a deposit or a session would succeed; it deposits nothing and never calls the APS |
 | `consent --session` | the committed Agent; the run directory of a `run` waiting on this machine; one person's sign-in and consent; the realm's signing keys; the tenant's Ready Session Runner pod | one grant at the APS for the waiting session; `consent.json` in that run directory (no token, no handle); at Keycloak, what any sign-in leaves | that the APS accepted that person's token for that session, tenant and agent | that the session will run, or that the person's own access is enough for the task |
-| `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit | that the commit is on the source's main branch |
-| `check-sync` | every committed Agent, optionally the source checkout | nothing | header sha256 matches the body; with `--source`, the body matches the recorded commit and reports `stale` when HEAD differs | remote freshness |
-| `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision` | signature or attestations (the controller verifies those after apply) |
+| `register` | the source checkout (as for `sync`), the committed agents, the policy service's `APS_BACKEND_CATALOGUE` | the agent's directory, the agents kustomization, the tenant signer pin in both places and the registry feed; it lists them under `files` | what `sync` proves, and that the pin and the feed derive from the committed Agents; if the feed cannot be rendered, every file is restored and the new directories are removed | that the agent's release workflow exists or that a release has been published |
+| `sync` | `agents/<agent>/deploy/agent.yaml` at the source checkout's clean HEAD; the checkout's `origin`; the policy service's `APS_BACKEND_CATALOGUE` | the committed `agent.yaml` with a provenance header | the committed Agent is byte-for-byte the source file at a named commit, from a checkout of the repository the header names, and no model grant has a budget its backend can never admit | that the commit is on the source's main branch |
+| `check-sync` | every committed Agent, optionally the source checkout and its `origin` | nothing | header sha256 matches the body and no model budget is below its backend's reservation; with `--source`, the checkout is of the header's repository and the body matches the recorded commit, and it reports `stale` when HEAD differs | remote freshness |
+| `stage` | the GitHub release assets, the committed Agent, the tenant signer pin | `agentrelease-<version>.yaml` plus its kustomization entry | checksums, image/predicate/bundle agreement, Agent equality, signer pin acceptance; with `--source`, manifest and lock hashes at `buildRevision`, read from a checkout whose `origin` is the release's repository | signature or attestations (the controller verifies those after apply) |
 | `approve` | the committed unapproved file and the live object | only the `approval` block | live spec equals the committed file, the skills it lists included; signature Verified by this agent's release workflow inside the tenant pin; all five attestations; NoDrift; digest equals `policySha256`; Ready is false solely for `NotApproved`, so a release that requests an effect its tenant has not granted (`EffectNotGranted`) is refused | functional behavior, qualification |
 
 ## Running a session
@@ -101,7 +169,7 @@ stdout however it ends, and each ending has one exit code. A `REFUSED` or
 | --- | --- | --- | --- |
 | the workflow closed with confirmed success and cleanup, and the report was copied out | 0 | the workflow's status | `request.json`, `receipt.json`, `status.json`, `report.md` |
 | `--no-wait`, the workflow was started | 0 | `SUBMITTED` | `request.json`, `receipt.json` |
-| the workflow closed without confirmed success or without confirmed cleanup | 1 | the workflow's status | `request.json`, `receipt.json`, `status.json` |
+| the workflow closed without confirmed success or without confirmed cleanup | 1 | the workflow's status; `error.message` says why ([A session failed: why](#a-session-failed-why)) | `request.json`, `receipt.json`, `status.json` |
 | `--wait-timeout` passed | 124 | the workflow's status, with `timedOut: true` | `request.json`, `receipt.json`, `status.json` |
 | Ctrl-C while following the workflow; the workflow is not cancelled | 130 | `INTERRUPTED` | `request.json`, `receipt.json` |
 | refused before a run directory exists: the input, the release, the identity row, no Ready runner pod, PyJWT missing for a sign-in | 2 | `REFUSED` | none |
@@ -199,6 +267,31 @@ script. The deployed session-runner image (built from zetra `18aee61`, kubani
 #419) includes zetra's `agent-session-submit --wait --report` (zetra PR #71),
 as every image since `541e2ef` (kubani #415) has; `run` does not use that CLI,
 and the two success contracts have not been compared line by line.
+
+### A session failed: why
+
+When a session ends without a confirmed success, `run` (and `status` and
+`wait` on the same run) puts a reason in `error.message`, built only from fixed
+values of the result: the session's own outcome, each cleanup step in the
+result and in the query, the session's state, and where the record is. A
+workflow status of `COMPLETED` says only that the workflow stopped; the
+session's outcome is the second word to read. Free text from the task, the
+report or an error is never copied into the message; the record directory
+holds it (`status.json`, and `exec-NN.stderr` for what a remote call printed;
+up to five are named).
+
+| What `run` prints, or the record shows | Cause | Where to look | Fix |
+| --- | --- | --- | --- |
+| exit 1, `the session's outcome was FAILED; its sandbox was cleaned up; the record is <dir>/status.json` | The session ran and failed on its own terms. Every cleanup step is done (stop `OK`, delete `DELETED`, grant `OK`) and the state is `CLEANED`; nothing is left to clean | `<dir>/status.json` `result`; `exec-NN.stderr`; the APS log for the session | Fix the cause, then run again: a new session. Nothing needs deleting |
+| exit 1, `the session's outcome was FAILED; its cleanup is not confirmed (steps not done: delete, grant, state CLEANING)` | The session failed and its sandbox, or its grant, is not confirmed gone. The message names each step not done in either record, then the state | `just agent status --receipt <dir>/receipt.json`; `just agent state` lists sandboxes | Read it again after the cleanup reconciler's next pass (every five minutes). `run` repairs nothing; a step still open after that is the operator's to inspect |
+| exit 1, `the session ended FAILED; its cleanup is not confirmed (state FAILED)` | The workflow itself failed, so there is no session result to read | `status.json`, `exec-NN.stderr`; the runner's logs | As above; start from the runner's error |
+| exit 1, `the session's outcome was COMPLETED; its sandbox was cleaned up; no snapshot of its workspace was recorded` | The session finished and was cleaned up, but no snapshot exists, so there is no `workspace/report.md` to copy | `status.json` `result.snapshot` | `run` reads the report from `workspace/report.md` in the snapshot (see above), so a session with no snapshot has none to give; why the agent left none is in its own record |
+| exit 1, `the session's outcome was FAILED; the workflow status was TIMED_OUT` | The workflow's status and the session's outcome disagree, and both are named; the message does not say more | `status.json` `result` and `query` | Read the record; this table has nothing further to say about it |
+| The session fails at its first model call: `status.json` has outcome `FAILED`, no tokens used, the guest's `BudgetExceeded`, and the gateway's decision `deny.budget_exhausted` (HTTP 429) | The Agent's `tokensPerSession` or `tokensPerDay` is below the backend's reservation. The APS reserves the backend's whole `maxModelLen` for every call: 131072 for `llm-main`, 32768 for `llm-fast` (`APS_BACKEND_CATALOGUE` in `agent-policy-service.yaml`). A smaller budget admits no call. `register`, `sync` and `check-sync` refuse such an Agent, so it is one committed before that check existed | The APS and gateway logs for `deny.budget_exhausted`; `just agent check-sync` names the agent and the field; [the Phase B record](agent-runtime-platform-phase-b-qualification.md) (run 3) and the [deviations table](agent-runtime-platform.md) | Raise the budget in the agent's source to at least the reservation, release a new version and follow procedure 2. Changing the applied Agent alone would only show as `PolicyDrift` |
+| The first model call is admitted and a later one is `deny.budget_exhausted` | The budget holds one reservation but not two. A reservation stays at the full amount until it settles; a tool that makes a model call of its own while the session's call is unsettled needs room for two (`floor((budget - spent - inflight) / reservation)` calls). A settlement stream that stopped has the same effect: nothing settles, and the second call is refused | The `AgentPlatformSettlementStalled` alert; Alloy's exporter errors (the Phase B record, runs 4 and 5) | Budget at least two reservations for such an agent. If the alert is firing, restore settlement first |
+| `NOT_SUBMITTED`, exit 3, `no consent was recorded in time; no consent command reached the deposit step and no workflow was started`, or the sign-in at this terminal was not completed in time | Nobody signed in. The release requires delegation and `--consent-timeout` passed. Nothing was submitted | [What can go wrong](#what-can-go-wrong); `deposit.attempted` in the run directory | Run again and have the person sign in; consent is a person's step. If the reason says a grant may be held, it stays until the cleanup reconciler's next pass |
+| exit 124, `the wait ended before the session did (status RUNNING)`, `timedOut: true` | `--wait-timeout` passed (900 s by default). The session is not cancelled unless `--cancel-on-timeout` was given | `just agent status --receipt <path>`, the `next` the document names | `just agent wait --receipt <path>`; do not run again, that starts a second session |
+| `run` refuses: `<agent> has no approved Ready release` (exit 2, `REFUSED`), and `just agent ls` shows `none` under RUNNABLE RELEASE | Every release is unapproved, not Ready, not signature-verified or drifting. After `sync` changed the Agent and before the new release is approved, each earlier release shows `PolicyDrift`: its `policySha256` no longer matches the policy compiled from the Agent, and a drifting release is never run | `just agent ls`; `status.conditions` `PolicyDrift` on the AgentRelease | Stage and approve a release published from the same source ([procedure 2](#2-a-new-version-of-an-agent-that-already-runs)), then `just agent ls` |
 
 ### Consent for a release that requires delegation
 
@@ -556,9 +649,9 @@ What a missing or wrong handle produces:
 | delegation required, handle deposited for another session id | Session Runner preflight | `Forbidden` (`delegated session without a grant`); the same outcome and exit code |
 
 The release is resolved before the handle is looked at; while investigator has
-two Ready releases, `run investigator` without `--release` uses the most
-recently approved one, and refuses only if their approval times cannot order
-them.
+more than one Ready release, `run investigator` without `--release` uses the
+most recently approved one, and refuses only if their approval times cannot
+order them.
 
 Cleanup runs for the handle a session was given whether or not preflight
 accepted it, and preflight reads the handle only for an on-behalf-of release
@@ -770,9 +863,9 @@ On the machine and for the command:
 - **PyJWT is in the synced environment** (`just setup`, or `uv sync
   --locked`). A run that would sign someone in refuses before creating a run
   directory when it is missing.
-- **investigator has two Ready releases**; `run` takes the most recently
-  approved unless `--release` pins the other, and `just agent ls` shows which
-  it would use. The release is resolved before anything about
+- **When investigator has more than one Ready release**, `run` takes the most
+  recently approved unless `--release` pins another, and `just agent ls` shows
+  which it would use. The release is resolved before anything about
   consent is looked at.
 - **Automation gives the run time.** A run that waits for consent lasts up to
   `--consent-timeout` seconds before it submits anything. An automated
@@ -819,16 +912,28 @@ operator registers it with a tenant:
 just agent register tenant-test OWNER/REPO my-agent --source ~/git/my-agent
 ```
 
+`--source` may be left out when `KUBANI_AGENT_SOURCE` names the checkout; the
+flag wins when both are given. The checkout's `origin` must be `OWNER/REPO`.
+
 This creates `apps/agents/tenant-test/my-agent/` from the checkout (a `sync`
 with the repository recorded in the header), lists it in the agents
 kustomization, and regenerates the tenant's signer pin in both places it is
 declared: the Namespace annotation the Registry Controller reads and the
-`kyverno/tenant-signers` ConfigMap Kyverno reads. The pin is derived from the
+`kyverno/tenant-signers` ConfigMap Kyverno reads. It also regenerates the
+registry feed (`infrastructure/gitops/apps/agent-platform/workloads/agent-registry-feed.json`),
+which carries the pins and the trusted repositories, so no separate feed render
+follows `register`. If the feed cannot be rendered, `register` restores every
+file it touched, removes the new agent directories and exits with
+`validation-failed` (`the registry feed could not be rendered after the change,
+so nothing was kept: ...`). The output lists the files it wrote under `files`;
+commit exactly those. The pin is derived from the
 sync headers of the tenant's committed Agents, one branch per repository bound
 to exactly its own agents, so a repository can never sign another repository's
 agent. `check-sync` fails when either copy differs from that derivation.
 Registering the same agent from a second repository is refused; agent names are
-unique across tenants because image paths are `agents/<agent>`. Commit the
+unique across tenants because image paths are `agents/<agent>`. Like `sync`, it
+refuses an Agent whose model budget is below its backend's reservation or whose
+backend is not in the catalogue, and writes nothing for it. Commit the
 result as one PR; after Flux applies the Agent, releases follow the usual
 `stage` and `approve` steps. The scaffolded agent runs with its own identity,
 so its first `just agent run` takes no grant handle. An agent changed to
@@ -846,20 +951,48 @@ comment lines:
 # Change deploy/agent.yaml in the source repository, then: just agent sync db-admin --source PATH
 ```
 
+`--source PATH` on `register`, `sync` and `agent-preflight` defaults to the
+environment variable `KUBANI_AGENT_SOURCE`; the flag wins. With neither, the
+command refuses with `invalid-arguments` (`no source checkout: pass --source
+PATH or set the environment variable KUBANI_AGENT_SOURCE to the checkout of the
+agent source repository`). `check-sync` and `stage` keep `--source` optional
+and do not read the variable. Whenever a checkout is used, its `origin` must be
+the repository the agent is synced from (the header's, or `--repo`); a checkout
+of another repository is refused as `conflict`: `<path> is a checkout of
+<found>, but <agent> is synced from <repo>; pass the checkout of <repo> (--source
+PATH or KUBANI_AGENT_SOURCE)`. A checkout with no `origin` is not compared, and
+an `origin` that is not a github.com URL is refused.
+
 `sync` refuses a source checkout with uncommitted changes under the agent's
 directory and reports `specChanged` so a capability change is visible in the
-PR. `check-sync` runs in `just validate-local` and CI without a source
-checkout, which catches hand edits; run it with `--source` before cutting a
-release to catch a copy that lags the source. Kustomize strips comments, so the
+PR. `register`, `sync` and `check-sync` also refuse an Agent whose model budget
+could never admit a call: the policy service reserves the backend's whole
+`maxModelLen` for each call (`APS_BACKEND_CATALOGUE` in
+`apps/agent-platform/workloads/agent-policy-service.yaml`), so
+`tokensPerSession` or `tokensPerDay` below it admits none, and a backend the
+catalogue does not list is refused outright. The message reads `<agent>:
+tokensPerSession 20000 is below the 32768 tokens reserved for each call to
+llm-fast (APS_BACKEND_CATALOGUE); no call would be admitted. Raise the budget in
+the agent's source and release a new version`, or `<agent>: model grant names
+backend <backend>, which is not in APS_BACKEND_CATALOGUE; the policy service
+would refuse every call. Use a backend the catalogue lists (<list>)`. `sync`
+writes nothing in that case; `check-sync` reports the agent as `fail` with the
+message as its `detail`. A grant without a budget is skipped.
+
+`check-sync` runs in `just validate-local` and CI without a source checkout,
+which catches hand edits and these budgets; run it with `--source` before
+cutting a release to catch a copy that lags the source. Kustomize strips comments, so the
 header changes nothing the controller sees. All 13 agents were synced on
 2026-11-09 with no rendered object change.
 
 ## Staging and approving a release
 
 `stage` and `approve` take the source repository from the Agent's sync header;
-`--repo` overrides it. With `--source`, `stage` verifies `lockSha256` against
-the repository's `uv.lock` at `buildRevision`, falling back to
-`agents/<agent>/uv.lock` for releases built before the workspace layout.
+`--repo` overrides it. With `--source`, which `stage` never reads from
+`KUBANI_AGENT_SOURCE`, the checkout's `origin` must be that repository, and
+`stage` verifies `lockSha256` against the repository's `uv.lock` at
+`buildRevision`, falling back to `agents/<agent>/uv.lock` for releases built
+before the workspace layout.
 
 `stage` downloads `agent.yaml`, `agentrelease.yaml`, `policy-bundle.json`,
 `predicate.json`, `SHA256SUMS` and `image` with `gh release download`, verifies
