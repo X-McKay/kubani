@@ -11,8 +11,9 @@ failure carries `error.code` from a closed set; see the
 
 ```sh
 just agent state                                # Flux, platform pods, agents, releases, sandboxes, open PRs
-just agent ls                                   # agents, readiness, the release `run` would use
-just agent ls --json                            # the same rows as one object: ok, and the list under `agents`
+just agent ls                                   # agents meant for use, readiness, the release `run` would use
+just agent ls --all                             # the platform's test fixtures too, with a PURPOSE column
+just agent ls --json                            # every agent as one object: ok, and the list under `agents`, each with `purpose`
 just agent run db-admin --task "Assess PostgreSQL health."
 just agent status --receipt ~/.local/state/kubani/agent-runs/db-admin/<run>/receipt.json
 just agent consent --check investigator         # would Keycloak issue this person a depositable token; deposits nothing
@@ -1009,10 +1010,15 @@ patches:
 applies the change the Registry Controller sets the Agent's `Enabled` condition
 to `False` (reason `Disabled`), every release of the agent stops being Ready
 with reason `AgentDisabled`, and the policy service denies its sessions.
-`just agent ls` shows `none (the agent is switched off)` and `just agent run`
-refuses for want of a Ready release. The signer pin, the feed and the list in
-`apps/agents/kustomization.yaml` do not change. Removing the patch switches the
-agent on again.
+`just agent ls` shows `off` under READY and `none (the agent is switched off)`
+under RUNNABLE RELEASE, and `just agent run` refuses for want of a Ready
+release. The Agent's own `Ready` condition stays `True`; `Enabled` is the one
+to read. The signer pin, the feed and the list in
+`apps/agents/kustomization.yaml` do not change. Removing `spec.enabled` from
+the patch switches the agent on again.
+
+A kustomization that ends with a patch can no longer be appended to, so
+`just agent stage` refuses a switched-off agent. That is intended.
 
 After that the agent's source directory can be removed from the source
 repository. `check-sync --source` then reports a switched-off agent as `ok`
@@ -1022,6 +1028,45 @@ switched off here`) and any other agent whose source has gone as `fail`.
 Retired this way on 2026-11-27: `conformance-budget-day-retry`,
 `conformance-budget-day-retry2` and `skill-rehearsal`. An agent the registry
 owns is switched off with `just agent disable <agent>` instead (below).
+
+### Test fixtures and agents meant for use
+
+Most agents in `tenant-test` exist to test the platform: the conformance
+fixtures, the two alias rehearsal agents and the retired ones. Each carries the
+label `agentplatform.io/purpose: fixture` on its Agent. An Agent without the
+label is meant for use; today those are `db-admin` and `investigator`.
+
+`just agent ls` lists only agents meant for use and ends with a count of what
+it left out. `just agent ls --all` lists every agent with a PURPOSE column
+(`use` or `fixture`), and `--json` always carries every agent with `purpose`
+(`"fixture"` or `null`). `just agent state` counts the two kinds separately.
+Every other command takes a fixture's name as before. On the cluster:
+`kubectl get agents -n tenant-test -l agentplatform.io/purpose=fixture`.
+
+The label is set in this repository, by a patch in the agent's own
+`kustomization.yaml`, so `agent.yaml` stays the source's bytes. Put the block
+above `resources:`, because `just agent stage` appends to a list that ends the
+file:
+
+```yaml
+patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: <agent>
+        namespace: <tenant>
+        labels:
+          agentplatform.io/purpose: fixture
+resources:
+  - agent.yaml
+```
+
+A new agent is meant for use unless the change that registers it adds this
+block and adds its name to `FIXTURES` in `tests/test_agent_ops.py`, which holds
+the whole list. Only Agents are labelled; AgentReleases are left as they are.
+The label says what an agent is for and isolates nothing: fixtures and agents
+meant for use still share the tenant's signer pin, runner and policies.
 
 ## Staging and approving a release
 

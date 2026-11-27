@@ -65,8 +65,15 @@ def snapshot(root, kube: live.Kube, *, prs: bool = True) -> dict:
     for tenant in tenants:
         agents = live.agents(kube, tenant)
         views = live.releases(kube, tenant)
+        committed = {d.agent: layout.purpose(d) for d in layout.agent_dirs(root) if d.tenant == tenant}
         out["tenants"][tenant] = {
-            "agents": {"total": len(agents), "notReady": sorted(n for n, a in agents.items() if not a["ready"])},
+            "agents": {
+                "total": len(agents),
+                # As `ls` reads it: the applied label, else what this repository will apply.
+                "fixtures": sum((a["purpose"] or committed.get(n)) == layout.FIXTURE for n, a in agents.items()),
+                "switchedOff": sorted(n for n, a in agents.items() if not a["enabled"]),
+                "notReady": sorted(n for n, a in agents.items() if not a["ready"]),
+            },
             "releases": {
                 "total": len(views),
                 "ready": sum(v.ready for v in views),
@@ -93,7 +100,10 @@ def format_snapshot(snap: dict) -> str:
     for tenant, t in snap["tenants"].items():
         lines.append("")
         lines.append(f"TENANT {tenant}")
-        lines.append(f"  agents    {t['agents']['total']} total, not Ready: {', '.join(t['agents']['notReady']) or 'none'}")
+        a = t["agents"]
+        lines.append(f"  agents    {a['total'] - a['fixtures']} for use, {a['fixtures']} test fixtures; not Ready: {', '.join(a['notReady']) or 'none'}")
+        if a["switchedOff"]:
+            lines.append(f"    switched off      {', '.join(a['switchedOff'])}")
         r = t["releases"]
         lines.append(f"  releases  {r['total']} total, {r['ready']} Ready")
         lines.append(f"    unapproved        {', '.join(r['unapproved']) or 'none'}")

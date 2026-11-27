@@ -113,6 +113,7 @@ def agents(kube: Kube, tenant: str) -> dict[str, dict]:
         out[item["metadata"]["name"]] = {
             "ready": _conditions(status).get("Ready", {}).get("status") == "True",
             "enabled": spec.get("enabled", True) is True,
+            "purpose": ((item["metadata"].get("labels") or {}).get(layout.PURPOSE_LABEL)),
             "identity": (spec.get("identity") or {}).get("mode"),
             "models": [m.get("backend") for m in (spec.get("capabilities") or {}).get("models") or []],
             "mcp": [m.get("backend") for m in (spec.get("capabilities") or {}).get("mcp") or []],
@@ -169,8 +170,8 @@ def listing(root, kube: Kube) -> list[dict]:
     for tenant in tenants:
         live_agents = agents(kube, tenant)
         views = releases(kube, tenant)
-        committed = {d.agent for d in layout.agent_dirs(root) if d.tenant == tenant}
-        for name in sorted(committed | set(live_agents)):
+        committed = {d.agent: d for d in layout.agent_dirs(root) if d.tenant == tenant}
+        for name in sorted(set(committed) | set(live_agents)):
             info = live_agents.get(name)
             mine = [v for v in views if v.agent == name]
             ok = runnable(views, name)
@@ -182,6 +183,8 @@ def listing(root, kube: Kube) -> list[dict]:
                     "live": info is not None,
                     "ready": bool(info and info["ready"]),
                     "enabled": info["enabled"] if info else True,
+                    # The applied label, else what this repository will apply: a fixture is one from the commit on.
+                    "purpose": (info["purpose"] if info else None) or (layout.purpose(committed[name]) if name in committed else None),
                     "identity": info["identity"] if info else None,
                     "models": info["models"] if info else [],
                     "mcp": info["mcp"] if info else [],
@@ -194,10 +197,15 @@ def listing(root, kube: Kube) -> list[dict]:
     return rows
 
 
-def format_listing(rows: list[dict]) -> str:
-    head = ("AGENT", "IDENTITY", "READY", "RELEASES", "RUNNABLE RELEASE")
+def format_listing(rows: list[dict], *, fixtures: bool = False) -> str:
+    """The table of agents meant for use; with `fixtures`, of every agent, with a column that says which is which."""
+    head = ("AGENT", "IDENTITY", "READY", "RELEASES", "RUNNABLE RELEASE") + (("PURPOSE",) if fixtures else ())
     table = [head]
+    hidden = 0
     for r in rows:
+        if r.get("purpose") == layout.FIXTURE and not fixtures:
+            hidden += 1
+            continue
         if not r.get("enabled", True):
             runnable_col = "none (the agent is switched off)"
         elif r["runnable"]:
@@ -210,13 +218,17 @@ def format_listing(rows: list[dict]) -> str:
             (
                 r["agent"],
                 r["identity"] or ("absent" if not r["live"] else "?"),
-                "yes" if r["ready"] else "no",
+                "off" if not r.get("enabled", True) else "yes" if r["ready"] else "no",
                 f"{len(r['readyReleases'])}/{r['releases']}",
                 runnable_col,
             )
+            + ((r.get("purpose") or "use",) if fixtures else ())
         )
     widths = [max(len(row[i]) for row in table) for i in range(len(head))]
-    return "\n".join("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in table)
+    lines = ["  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in table]
+    if hidden:
+        lines.append(f"{hidden} test fixture{'s' if hidden != 1 else ''} not shown; `ls --all` lists every agent")
+    return "\n".join(lines)
 
 
 def runner_pod(kube: Kube, tenant: str) -> dict:

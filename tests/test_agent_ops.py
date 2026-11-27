@@ -1308,5 +1308,144 @@ class RetiredAgentTests(unittest.TestCase):
         self.assertEqual(off, ["conformance-budget-day-retry", "conformance-budget-day-retry2", "skill-rehearsal"])
 
 
+FIXTURE_LABEL = """patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: %s
+        namespace: tenant-test
+        labels:
+          agentplatform.io/purpose: fixture
+"""
+# Every agent that exists to test the platform. An agent is meant for use unless a reviewed change adds it here and
+# labels it in its own kustomization.
+FIXTURES = [
+    "alias-rehearsal-fail",
+    "alias-rehearsal-pass",
+    "conformance",
+    "conformance-b",
+    "conformance-budget-day",
+    "conformance-budget-day-retry",
+    "conformance-budget-day-retry2",
+    "conformance-budget-session",
+    "conformance-checkpoint",
+    "conformance-lifecycle",
+    "conformance-performance",
+    "conformance-protocol",
+    "conformance-transport",
+    "skill-rehearsal",
+]
+
+
+class FixtureTests(unittest.TestCase):
+    """A test fixture is labelled by a patch in its own kustomization; `ls` leaves fixtures out unless asked."""
+
+    def label(self, root: Path, name: str = "sample") -> Path:
+        """Put the label patch above `resources:`, where the real files carry it."""
+        file = root / layout.AGENTS_DIR / "tenant-test/sample/kustomization.yaml"
+        file.write_text(file.read_text().replace("resources:\n", FIXTURE_LABEL % name + "resources:\n"))
+        return file
+
+    def live_agent(self, labels=None, enabled=None, name="sample"):
+        spec = {"identity": {"mode": "agent"}, "capabilities": {}}
+        if enabled is not None:
+            spec["enabled"] = enabled
+        metadata = {"name": name} | ({"labels": labels} if labels is not None else {})
+        return {"metadata": metadata, "spec": spec, "status": {"conditions": [{"type": "Ready", "status": "True"}]}}
+
+    def kube(self, *agents):
+        return FakeKube({("agents", None, "tenant-test"): {"items": list(agents)}, ("agentreleases", None, "tenant-test"): {"items": []}})
+
+    def test_purpose_reads_only_a_label_patched_onto_this_agent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            d = layout.find_agent(root, "sample")
+            self.assertIsNone(layout.purpose(d))
+            self.label(root, name="other")
+            self.assertIsNone(layout.purpose(d))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            file = self.label(root)
+            d = layout.find_agent(root, "sample")
+            self.assertEqual(layout.purpose(d), "fixture")
+            self.assertFalse(layout.switched_off(d))
+            # The synced file is untouched, and a release can still be staged: the list still ends the file.
+            self.assertNotIn("labels", layout.committed_agent(d)["metadata"])
+            layout.append_resource(d, "agentrelease-v9.yaml")
+            self.assertTrue(file.read_text().endswith("  - agentrelease-v9.yaml\n"))
+            self.assertEqual(layout.purpose(d), "fixture")
+
+    def test_listing_takes_the_purpose_from_the_applied_label_or_else_from_the_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            self.assertIsNone(live.listing(root, self.kube(self.live_agent()))[0]["purpose"])
+            self.assertIsNone(live.listing(root, self.kube(self.live_agent(labels={"other": "x"})))[0]["purpose"])
+            self.assertEqual(live.listing(root, self.kube(self.live_agent(labels={layout.PURPOSE_LABEL: "fixture"})))[0]["purpose"], "fixture")
+            self.label(root)
+            # Committed, and Flux has not applied the label yet (or the Agent is not there at all): already a fixture.
+            self.assertEqual(live.listing(root, self.kube(self.live_agent()))[0]["purpose"], "fixture")
+            self.assertEqual(live.listing(root, self.kube())[0]["purpose"], "fixture")
+
+    def test_ls_leaves_fixtures_out_and_says_how_many(self):
+        def row(agent, **more):
+            return {"agent": agent, "identity": "agent", "live": True, "ready": True, "enabled": True, "purpose": None, "releases": 1, "readyReleases": [f"{agent}-1"], "runnable": f"{agent}-1"} | more
+
+        rows = [row("real"), row("probe", purpose="fixture"), row("spent", purpose="fixture", enabled=False, readyReleases=[], runnable=None)]
+        text = live.format_listing(rows)
+        self.assertEqual(text.split("\n")[0].split(), ["AGENT", "IDENTITY", "READY", "RELEASES", "RUNNABLE", "RELEASE"])
+        self.assertIn("real-1", text)
+        self.assertNotIn("probe", text)
+        self.assertNotIn("spent", text)
+        self.assertEqual(text.split("\n")[-1], "2 test fixtures not shown; `ls --all` lists every agent")
+        everything = live.format_listing(rows, fixtures=True).split("\n")
+        self.assertEqual(len(everything), 4)  # the head and three agents; nothing is left out, so no last line
+        self.assertEqual(everything[0].split()[-1], "PURPOSE")
+        self.assertEqual([line.split()[-1] for line in everything[1:]], ["use", "fixture", "fixture"])
+        self.assertEqual(everything[3].split()[:3], ["spent", "agent", "off"])  # its Agent is Ready, yet nothing can run
+        # Only fixtures: the head and the count, and no fixture without --all.
+        self.assertEqual(live.format_listing(rows[1:2]).split("\n")[1], "1 test fixture not shown; `ls --all` lists every agent")
+        self.assertNotIn("not shown", live.format_listing(rows[:1]))
+
+    def test_ls_all_reaches_the_table_and_json_carries_every_row(self):
+        rows = [{"agent": "probe", "purpose": "fixture"}]
+        for argv, shown in ((["ls"], False), (["ls", "--all"], True)):
+            with patch.object(live, "listing", return_value=rows), patch.object(live, "format_listing", return_value="TABLE") as table, patch.object(live, "Kube"), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(argv), 0)
+            table.assert_called_once_with(rows, fixtures=shown)
+        out = io.StringIO()
+        with patch.object(live, "listing", return_value=rows), patch.object(live, "Kube"), contextlib.redirect_stdout(out):
+            self.assertEqual(cli.main(["ls", "--json"]), 0)
+        self.assertEqual(json.loads(out.getvalue())["agents"], rows)
+
+    def test_state_counts_fixtures_and_names_what_is_switched_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            fixture = {layout.PURPOSE_LABEL: "fixture"}
+            self.label(root)  # `sample` is a fixture by the commit; Flux has not applied its label yet
+            agents = [self.live_agent(name="real"), self.live_agent(), self.live_agent(labels=fixture, enabled=False, name="spent")]
+            kube = FakeKube({
+                ("kustomizations.kustomize.toolkit.fluxcd.io", None, "flux-system"): {"items": []},
+                ("pods", None, "agent-platform"): {"items": []},
+                ("pods", None, "tenant-test"): {"items": []},
+                ("agents", None, "tenant-test"): {"items": agents},
+                ("agentreleases", None, "tenant-test"): {"items": []},
+            })
+            snap = state.snapshot(root, kube, prs=False)
+        self.assertEqual(snap["tenants"]["tenant-test"]["agents"], {"total": 3, "fixtures": 2, "switchedOff": ["spent"], "notReady": []})
+        text = state.format_snapshot(snap)
+        self.assertIn("agents    1 for use, 2 test fixtures; not Ready: none", text)
+        self.assertIn("switched off      spent", text)
+
+    def test_the_fixtures_of_this_repository_are_exactly_the_listed_ones(self):
+        dirs = layout.agent_dirs(ROOT)
+        self.assertEqual(sorted(d.agent for d in dirs if layout.purpose(d) == layout.FIXTURE), FIXTURES)
+        self.assertEqual(sorted(d.agent for d in dirs if layout.purpose(d) is None), ["db-admin", "investigator"])
+        # A fixture that is still on must stay stageable: its patch sits above the list that ends the file.
+        for d in dirs:
+            if layout.purpose(d) == layout.FIXTURE and not layout.switched_off(d):
+                layout.listed_resources(d.kustomization)
+
+
 if __name__ == "__main__":
     unittest.main()
