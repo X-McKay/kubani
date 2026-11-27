@@ -259,18 +259,39 @@ def append_listed(path: Path, entry: str) -> None:
     path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")
 
 
-def switched_off(d: AgentDir) -> bool:
-    """Whether the agent's own kustomization patches its Agent to `spec.enabled: false`: retired in this repository,
-    whatever its source says. The Agent file itself stays the source's bytes."""
+PURPOSE_LABEL = "agentplatform.io/purpose"
+FIXTURE = "fixture"
+
+
+def _agent_patches(d: AgentDir) -> list[dict]:
+    """The patches the agent's own kustomization applies to its Agent. This repository says two things about an agent
+    there and nowhere else, so the Agent file stays the source's bytes: that it is switched off, and what it is for."""
+    found = []
     for entry in load_one_plain(d.kustomization).get("patches") or []:
         text = entry.get("patch") if isinstance(entry, dict) else None
         try:
             doc = yaml.safe_load(text) if isinstance(text, str) else None
         except yaml.YAMLError:
             continue
-        if isinstance(doc, dict) and doc.get("kind") == "Agent" and (doc.get("metadata") or {}).get("name") == d.agent and (doc.get("spec") or {}).get("enabled") is False:
-            return True
-    return False
+        if isinstance(doc, dict) and doc.get("kind") == "Agent" and isinstance(doc.get("metadata"), dict) and doc["metadata"].get("name") == d.agent:
+            found.append(doc)
+    return found
+
+
+def switched_off(d: AgentDir) -> bool:
+    """Whether the agent's own kustomization patches its Agent to `spec.enabled: false`: retired in this repository,
+    whatever its source says."""
+    return any((doc.get("spec") or {}).get("enabled") is False for doc in _agent_patches(d))
+
+
+def purpose(d: AgentDir) -> str | None:
+    """What the agent's own kustomization labels its Agent as (`fixture` for a platform test fixture); None for an
+    agent meant for use, which carries no label."""
+    for doc in _agent_patches(d):
+        value = (doc["metadata"].get("labels") or {}).get(PURPOSE_LABEL)
+        if isinstance(value, str):
+            return value
+    return None
 
 
 AGENTS_LIST = AGENTS_DIR / "kustomization.yaml"

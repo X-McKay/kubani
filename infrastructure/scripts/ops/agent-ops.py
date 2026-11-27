@@ -204,8 +204,9 @@ def main(argv=None) -> int:
     parser.add_argument("--repo", help="source repository owner/name (default: the committed Agent's sync header)")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("ls", help="agents, their live readiness and the release `run` would use")
-    p.add_argument("--json", action="store_true", help="print the rows as JSON instead of a table")
+    p = sub.add_parser("ls", help="agents meant for use, their live readiness and the release `run` would use")
+    p.add_argument("--all", action="store_true", help="also list the platform's test fixtures, with a column that says which is which")
+    p.add_argument("--json", action="store_true", help="print the rows as JSON instead of a table; every agent, each with its `purpose`")
 
     p = sub.add_parser("state", help="read-only platform snapshot: Flux, platform pods, agents, releases, sandboxes, open PRs")
     p.add_argument("--json", action="store_true", help="print the snapshot as JSON instead of text")
@@ -321,7 +322,7 @@ def main(argv=None) -> int:
             if args.json:
                 emit(outcome.document({"agents": rows}))
             else:
-                print(live.format_listing(rows))
+                print(live.format_listing(rows, fixtures=args.all))
             return 0
         if args.command == "state":
             snap = state.snapshot(root, live.Kube(), prs=not args.no_prs)

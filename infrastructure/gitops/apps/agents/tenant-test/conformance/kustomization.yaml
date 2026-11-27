@@ -1,6 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# A platform test fixture, not an agent for use: `just agent ls` leaves it out unless --all is given.
+# The label is set here, not in its source, so agent.yaml stays the source's bytes. This block sits
+# above `resources:` because `just agent stage` appends to a list that ends the file.
+patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: conformance
+        namespace: tenant-test
+        labels:
+          agentplatform.io/purpose: fixture
 resources:
   - agent.yaml
   - agentrelease.yaml
