@@ -248,6 +248,15 @@ def _check_one(d: layout.AgentDir, source: Path | None) -> dict:
         row.update(state="fail", detail="body differs from the source file at the recorded commit")
         return row
     head, _ = source_head(source, d.agent)
-    latest = source_file(source, d.agent, head) if head != meta["commit"] else body
+    try:
+        latest = source_file(source, d.agent, head) if head != meta["commit"] else body
+    except SourceMissing:
+        # The source no longer carries the agent. That is the end state of a retired agent, and a fault for any other;
+        # either way it is this agent's row, not the end of the whole check.
+        if layout.switched_off(d):
+            row.update(state="ok", detail="matches recorded commit; the source has since removed the agent, which is switched off here", stale=False, sourceHead=head)
+        else:
+            row.update(state="fail", detail=f"the source checkout no longer has agents/{d.agent}/deploy/agent.yaml at its HEAD, and the agent is not switched off here")
+        return row
     row.update(state="ok", detail="matches recorded commit", stale=latest != body, sourceHead=head)
     return row

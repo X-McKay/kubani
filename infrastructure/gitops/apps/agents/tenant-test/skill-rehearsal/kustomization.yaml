@@ -3,3 +3,16 @@ kind: Kustomization
 resources:
   - agent.yaml
   - agentrelease-v0.1.0.yaml
+# Retired 2026-11-27: its one job was the first live run of a skill's script, done 2026-11-19.
+# The Agent is switched off here, not in its source, which is no longer built. Its release, reports
+# and ledger stay as the record: the controller sets Enabled=False and the policy service denies
+# every release. Remove this patch to switch the Agent on again.
+patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: skill-rehearsal
+        namespace: tenant-test
+      spec:
+        enabled: false

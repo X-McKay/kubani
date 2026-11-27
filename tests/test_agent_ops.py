@@ -1224,5 +1224,89 @@ class ReleaseChoiceTests(unittest.TestCase):
             self.assertEqual(code, 1)
 
 
+SWITCH_OFF = """patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: %s
+        namespace: tenant-test
+      spec:
+        enabled: %s
+"""
+
+
+class RetiredAgentTests(unittest.TestCase):
+    """An agent switched off by a patch in its own kustomization: its files stay, `ls` says so, and its source may go."""
+
+    def switch_off(self, root: Path, name: str = "sample", value: str = "false") -> None:
+        file = root / layout.AGENTS_DIR / "tenant-test/sample/kustomization.yaml"
+        file.write_text(file.read_text() + SWITCH_OFF % (name, value))
+
+    def test_switched_off_reads_only_a_patch_that_disables_this_agent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            d = layout.find_agent(root, "sample")
+            self.assertFalse(layout.switched_off(d))
+            self.switch_off(root, name="other")
+            self.assertFalse(layout.switched_off(d))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            self.switch_off(root, value="true")
+            self.assertFalse(layout.switched_off(layout.find_agent(root, "sample")))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            self.switch_off(root)
+            self.assertTrue(layout.switched_off(layout.find_agent(root, "sample")))
+            # The synced file is untouched: the patch is the only place that says so.
+            self.assertNotIn("enabled", layout.committed_agent(layout.find_agent(root, "sample"))["spec"])
+
+    def test_check_sync_accepts_removed_source_only_for_a_switched_off_agent(self):
+        git = FakeGit({"a" * 40: {"agents/sample/deploy/agent.yaml": AGENT_BODY}, "b" * 40: {}}, "b" * 40)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            with patch.object(sync, "_git", git):
+                result = sync.check(root, source=Path("/src"))
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["agents"][0]["state"], "fail")
+            self.assertIn("no longer has agents/sample/deploy/agent.yaml", result["agents"][0]["detail"])
+            self.switch_off(root)
+            with patch.object(sync, "_git", git):
+                result = sync.check(root, source=Path("/src"))
+            self.assertTrue(result["ok"])
+            row = result["agents"][0]
+            self.assertEqual((row["state"], row["stale"], row["sourceHead"]), ("ok", False, "b" * 40))
+            self.assertIn("switched off here", row["detail"])
+
+    def test_check_sync_still_fails_a_switched_off_agent_whose_recorded_commit_is_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = synced_root(Path(tmp))
+            self.switch_off(root)
+            with patch.object(sync, "_git", FakeGit({"b" * 40: {}}, "b" * 40)):
+                row = sync.check(root, source=Path("/src"))["agents"][0]
+            self.assertEqual(row["state"], "fail")
+
+    def test_listing_says_the_agent_is_switched_off(self):
+        def agent(enabled):
+            spec = {"identity": {"mode": "agent"}, "capabilities": {}}
+            if enabled is not None:
+                spec["enabled"] = enabled
+            return {"metadata": {"name": "sample"}, "spec": spec, "status": {"conditions": [{"type": "Ready", "status": "False" if enabled is False else "True"}]}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_root(Path(tmp))
+            for enabled, expected in ((None, True), (True, True), (False, False)):
+                kube = FakeKube({("agents", None, "tenant-test"): {"items": [agent(enabled)]}, ("agentreleases", None, "tenant-test"): {"items": []}})
+                rows = live.listing(root, kube)
+                self.assertIs(rows[0]["enabled"], expected)
+            self.assertIn("none (the agent is switched off)", live.format_listing(rows))
+            kube = FakeKube({("agents", None, "tenant-test"): {"items": []}, ("agentreleases", None, "tenant-test"): {"items": []}})
+            self.assertIs(live.listing(root, kube)[0]["enabled"], True)  # not applied yet: nothing says it is off
+
+    def test_the_retired_agents_of_this_repository_are_switched_off_and_nothing_else_is(self):
+        off = sorted(d.agent for d in layout.agent_dirs(ROOT) if layout.switched_off(d))
+        self.assertEqual(off, ["conformance-budget-day-retry", "conformance-budget-day-retry2", "skill-rehearsal"])
+
+
 if __name__ == "__main__":
     unittest.main()

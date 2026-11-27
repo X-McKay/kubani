@@ -259,6 +259,20 @@ def append_listed(path: Path, entry: str) -> None:
     path.write_text("\n".join(lines) + f"\n  - {entry}\n", encoding="utf-8")
 
 
+def switched_off(d: AgentDir) -> bool:
+    """Whether the agent's own kustomization patches its Agent to `spec.enabled: false`: retired in this repository,
+    whatever its source says. The Agent file itself stays the source's bytes."""
+    for entry in load_one_plain(d.kustomization).get("patches") or []:
+        text = entry.get("patch") if isinstance(entry, dict) else None
+        try:
+            doc = yaml.safe_load(text) if isinstance(text, str) else None
+        except yaml.YAMLError:
+            continue
+        if isinstance(doc, dict) and doc.get("kind") == "Agent" and (doc.get("metadata") or {}).get("name") == d.agent and (doc.get("spec") or {}).get("enabled") is False:
+            return True
+    return False
+
+
 AGENTS_LIST = AGENTS_DIR / "kustomization.yaml"
 
 

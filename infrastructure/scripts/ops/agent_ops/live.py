@@ -112,6 +112,7 @@ def agents(kube: Kube, tenant: str) -> dict[str, dict]:
         spec, status = item.get("spec") or {}, item.get("status") or {}
         out[item["metadata"]["name"]] = {
             "ready": _conditions(status).get("Ready", {}).get("status") == "True",
+            "enabled": spec.get("enabled", True) is True,
             "identity": (spec.get("identity") or {}).get("mode"),
             "models": [m.get("backend") for m in (spec.get("capabilities") or {}).get("models") or []],
             "mcp": [m.get("backend") for m in (spec.get("capabilities") or {}).get("mcp") or []],
@@ -180,6 +181,7 @@ def listing(root, kube: Kube) -> list[dict]:
                     "committed": name in committed,
                     "live": info is not None,
                     "ready": bool(info and info["ready"]),
+                    "enabled": info["enabled"] if info else True,
                     "identity": info["identity"] if info else None,
                     "models": info["models"] if info else [],
                     "mcp": info["mcp"] if info else [],
@@ -196,7 +198,9 @@ def format_listing(rows: list[dict]) -> str:
     head = ("AGENT", "IDENTITY", "READY", "RELEASES", "RUNNABLE RELEASE")
     table = [head]
     for r in rows:
-        if r["runnable"]:
+        if not r.get("enabled", True):
+            runnable_col = "none (the agent is switched off)"
+        elif r["runnable"]:
             runnable_col = r["runnable"]
         elif len(r["readyReleases"]) > 1:
             runnable_col = f"ambiguous ({len(r['readyReleases'])} Ready; pass --release)"
