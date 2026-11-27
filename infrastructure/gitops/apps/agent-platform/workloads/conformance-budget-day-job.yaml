@@ -44,13 +44,13 @@ spec:
             - --tenant
             - tenant-test
             - --agent
-            - conformance-budget-day-retry2
+            - conformance-budget-day
             - --release
             - $(BUDGET_RELEASE)
             - --tests
             - T13
             - --budget-day-agent
-            - conformance-budget-day-retry2
+            - conformance-budget-day
             - --budget-day-release
             - $(BUDGET_RELEASE)
             - --session-timeout
@@ -59,7 +59,7 @@ spec:
             - /tmp/report.json
           env:
             - name: BUDGET_RELEASE
-              value: conformance-budget-day-retry2-2026-11-06-5cb7f0ce
+              value: conformance-budget-day-2026-11-06-362f1075
             - name: TENANT
               value: tenant-test
             - name: TEMPORAL_ADDRESS

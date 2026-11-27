@@ -104,10 +104,11 @@ cases; its manual templates and separate operator controls remain inactive.
    unreadable logs, absent trusted ledger samples and cleanup failures fail.
 6. Retain the complete report and confirm normal Temporal stop/delete/grant
    cleanup. The day fixture deliberately exhausts its real daily ledger: a
-   same-day repeat cannot reset it. The manual daily Job explicitly selects the
-   separately signed `conformance-budget-day-retry` identity through both
-   `--agent` and `--budget-day-agent`; the fixed original identity and failed
-   ledger remain untouched. Arbitrary aliases and automatic new identities are
+   same-day repeat cannot reset it. The manual daily Job names its identity
+   through both `--agent` and `--budget-day-agent`. Since 2026-11-27 that is the
+   original `conformance-budget-day` again: the two retry identities, added on
+   2026-11-06 for repeats on the day the original ledger was spent, are retired
+   (see below). Arbitrary aliases and automatic new identities are
    rejected. Each identity still needs a genuine zero baseline and exact limits.
    No reset tool is part of the harness. Neither this workflow nor the observer
    restarts Redis.
@@ -125,6 +126,16 @@ manifest checks verify strict JWT policy attachment and exact fixture identities
 The backend Go suite separately checks its enforced byte tokenizer and limits.
 
 ## Exact daily retry identity
+
+Retired 2026-11-27. `conformance-budget-day-retry` and
+`conformance-budget-day-retry2` are switched off (`spec.enabled: false`, by a
+patch in each agent's own `kustomization.yaml`); their releases, reports and
+ledgers stay as the record of 2026-11-06, and the manual Job points at
+`conformance-budget-day`, whose released driver and validator are the same code.
+T13 has not been run on the original identity since; the Job stays suspended.
+The gateway, backend and observer allowlists still name the retired identities:
+narrowing them rolls three workloads and is left for the next T13 run. What
+follows is the record of how the retry identities were set up.
 
 The exact `conformance-budget-day-retry/v0.1.0` release assets from build revision
 `c4bb1e7` are SHA256SUMS-verified and staged unapproved as

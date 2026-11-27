@@ -84,7 +84,7 @@ class BudgetWiringTests(unittest.TestCase):
     def test_jobs_are_suspended_read_only_and_releases_bound_to_fixtures(self):
         workload_names = (AP / "workloads/kustomization.yaml").read_text()
         for case, selected, fixture in (
-            ("day", "T13", "conformance-budget-day-retry2"),
+            ("day", "T13", "conformance-budget-day"),
             ("session", "T13b", "conformance-budget-session"),
         ):
             directory = ROOT / "apps/agents/tenant-test" / fixture

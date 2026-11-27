@@ -986,6 +986,43 @@ cutting a release to catch a copy that lags the source. Kustomize strips comment
 header changes nothing the controller sees. All 13 agents were synced on
 2026-11-09 with no rendered object change.
 
+### Retiring an agent the pull request path owns
+
+An agent whose job is done is switched off, not deleted. Deleting its directory
+would have Flux remove the Agent and every AgentRelease, and those, with the
+reports and ledgers that name them, are the record. Append a patch to the
+agent's own `kustomization.yaml`, with a comment that says when and why:
+
+```yaml
+patches:
+  - patch: |-
+      apiVersion: agentplatform.io/v1alpha1
+      kind: Agent
+      metadata:
+        name: <agent>
+        namespace: <tenant>
+      spec:
+        enabled: false
+```
+
+`agent.yaml` stays the source's bytes, so its header still verifies. Once Flux
+applies the change the Registry Controller sets the Agent's `Enabled` condition
+to `False` (reason `Disabled`), every release of the agent stops being Ready
+with reason `AgentDisabled`, and the policy service denies its sessions.
+`just agent ls` shows `none (the agent is switched off)` and `just agent run`
+refuses for want of a Ready release. The signer pin, the feed and the list in
+`apps/agents/kustomization.yaml` do not change. Removing the patch switches the
+agent on again.
+
+After that the agent's source directory can be removed from the source
+repository. `check-sync --source` then reports a switched-off agent as `ok`
+(`matches recorded commit; the source has since removed the agent, which is
+switched off here`) and any other agent whose source has gone as `fail`.
+
+Retired this way on 2026-11-27: `conformance-budget-day-retry`,
+`conformance-budget-day-retry2` and `skill-rehearsal`. An agent the registry
+owns is switched off with `just agent disable <agent>` instead (below).
+
 ## Staging and approving a release
 
 `stage` and `approve` take the source repository from the Agent's sync header;
