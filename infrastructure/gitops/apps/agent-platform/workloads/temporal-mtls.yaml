@@ -5,7 +5,7 @@
 # frontend to mTLS and remove this once they have.
 #
 # Envoy terminates TLS, requires a client certificate from internal-ca with one
-# of the four SPIFFE IDs below (internal-ca signs other workloads too, so the CA
+# of the SPIFFE IDs listed below (internal-ca signs other workloads too, so the CA
 # alone is not enough), and forwards the bytes to the frontend. The plaintext
 # path still reaches namespace agents-tenant-test; payloads in it are AES-GCM
 # encrypted by the runner's codec.

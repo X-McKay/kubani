@@ -55,7 +55,12 @@ class BudgetWiringTests(unittest.TestCase):
                     if container.get("image", "").startswith("registry.almckay.io/platform/session-runner:"):
                         self.assertEqual(container["image"], expected, path.name)
                         found.add(path.name)
-        self.assertEqual(found, {
+        # Every tenant runs the same runner image; a tenant added after tenant-test has two files of its own
+        # (`just agent tenant add`), which `just agent tenant sync` keeps on tenant-test's pin.
+        namespaces = docs(ROOT / "infrastructure/namespace-policy/agent-platform-namespaces.yaml")
+        tenants = {d["metadata"]["name"] for d in namespaces if "agentplatform.io/tenant" in (d["metadata"].get("labels") or {})}
+        later = {f"{piece}-{tenant}.yaml" for tenant in tenants - {"tenant-test"} for piece in ("session-runner", "cleanup-reconciler")}
+        self.assertEqual(found, later | {
             "session-runner-tenant-test.yaml", "cleanup-reconciler.yaml",
             "conformance-harness-job.yaml", "conformance-admission-job.yaml",
             "conformance-revocation-job.yaml", "conformance-protocol-job.yaml",

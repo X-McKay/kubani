@@ -1,7 +1,7 @@
 # yamllint disable rule:line-length
 # Per-tenant keyless signer pins for Kyverno Rule 1
-# (policies/agent-image-signature.yaml). One entry per tenant namespace, keyed
-# by the namespace name, as JSON:
+# (policies/agent-image-signature.yaml). One entry per tenant namespace that
+# has committed Agents, keyed by the namespace name, as JSON:
 #   issuer          OIDC issuer of the signing certificate (https)
 #   subjectRegExp   anchored ^...$ certificate subject, RE2; no top-level `|`
 #   vulnExceptions  High-severity vulnerability ids allowed by exception

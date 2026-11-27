@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, sync, check-sync, stage, approve, authority, alias, rollback, pin, unpin, disable, enable, evaluate, revoke."""
+"""Operate Kubani-applied agents: state, ls, run, status/wait/cancel, consent, register, tenant, sync, check-sync, stage, approve, authority, alias, rollback, pin, unpin, disable, enable, evaluate, revoke."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 
 import outcome
-from agent_ops import alias, approve, authority, delegation, delivery, layout, live, register, registry_client, run, stage, state, sync
+from agent_ops import alias, approve, authority, delegation, delivery, layout, live, register, registry_client, run, stage, state, sync, tenant
 
 ERRORS = (
     layout.LayoutError,
@@ -18,6 +18,7 @@ ERRORS = (
     run.RunError,
     delegation.ConsentError,
     register.RegisterError,
+    tenant.TenantError,
     sync.SyncError,
     stage.StageError,
     approve.ApproveError,
@@ -120,6 +121,10 @@ def failure_for(command: str, args, code: int, doc: dict) -> dict:
         rows = [{"check": "agent-sync", **row} for row in doc.get("agents", [])] + [{"check": "tenant-pin", **row} for row in doc.get("pins", [])]
         failed = sum(1 for row in rows if row.get("state") != "ok")
         return outcome.error("check-failed", f"{failed} of {len(rows)} checks did not hold; see proofs", proofs=rows)
+    if command == "tenant":
+        rows = [{"check": "tenant-pieces", **row} for row in doc.get("tenants", [])]
+        failed = sum(1 for row in rows if row.get("state") != "ok")
+        return outcome.error("check-failed", f"{failed} of {len(rows)} tenants miss a piece or differ from the reference; see proofs", proofs=rows)
     if command == "consent" and args.check and code == 1:
         proofs = [
             {"check": f"the audience includes {delegation.POLICY_AUDIENCE}", "ok": doc.get("hasPolicyServiceAudience") is True},
@@ -246,10 +251,18 @@ def main(argv=None) -> int:
     p.add_argument("--browser", action=argparse.BooleanOptionalAction, default=False, help="also hand the URL to the default browser (default: print it only)")
 
     p = sub.add_parser("register", help="add a repository's agents to a tenant and regenerate the tenant signer pin")
-    p.add_argument("tenant", help="tenant name, e.g. tenant-test")
+    p.add_argument("tenant", help="tenant name, e.g. tenant-test; `just agent tenant add` creates one")
     p.add_argument("repository", help="owner/name of the repository whose release workflow signs these agents")
     p.add_argument("agents", nargs="+", help="names of the agents to add to the tenant")
     p.add_argument("--source", type=Path, help=SOURCE_HELP_REGISTER)
+
+    p = sub.add_parser("tenant", help="a tenant's committed pieces: add (write them all from the reference tenant), check, sync")
+    actions = p.add_subparsers(dest="action", required=True, help="what to do")
+    q = actions.add_parser("add", help="write every piece of a new, empty tenant from the reference tenant's; commits and applies nothing")
+    q.add_argument("name", help=f"the new tenant's name: `{tenant.PREFIX}` and a DNS label")
+    actions.add_parser("check", help="every tenant has every piece, each equal to the reference tenant's apart from the name (offline)")
+    q = actions.add_parser("sync", help="rewrite the pieces that follow the reference tenant after it changed (an image pin, a limit)")
+    q.add_argument("name", nargs="?", help="one tenant (default: every tenant but the reference)")
 
     p = sub.add_parser("sync", help="copy deploy/agent.yaml from the source checkout with a provenance header")
     p.add_argument("agent", help="committed agent to refresh from the source checkout")
@@ -395,6 +408,11 @@ def main(argv=None) -> int:
             return conclude(args, code, report)
         if args.command == "register":
             return conclude(args, 0, register.register(root, args.tenant, args.repository, args.agents, sync.source_path(args.source)))
+        if args.command == "tenant":
+            if args.action == "check":
+                result = tenant.check(root)
+                return conclude(args, 0 if result["ok"] else 1, result)
+            return conclude(args, 0, tenant.add(root, args.name) if args.action == "add" else tenant.sync(root, args.name))
         if args.command == "sync":
             return conclude(args, 0, sync.sync(root, args.agent, sync.source_path(args.source), repo=args.repo, allow_repo_change=args.allow_repo_change))
         if args.command == "check-sync":
