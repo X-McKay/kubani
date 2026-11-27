@@ -328,7 +328,7 @@ test-agent-preflight:
     just test tests/test_agent_preflight.py
 
 # run AGENT: when the release requires delegation, signs the person in at this terminal, or waits for `consent AGENT --session ID` from theirs. consent --check AGENT: reports whether the token would be accepted for deposit and deposits nothing. PyJWT, which verifies the sign-in, is a locked project dependency, so every subcommand starts from the locked environment alone.
-# Applied agents: state | ls | register | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE. register and sync take --source PATH, or read KUBANI_AGENT_SOURCE when it is not given; the checkout's origin must be the repository the agent is synced from
+# Applied agents: state | ls | register | tenant add NAME / check / sync | run AGENT --task ... | status [--receipt] | wait/cancel --receipt | consent AGENT --session ID | consent --check AGENT | sync | check-sync | stage | approve | authority take/return AGENT | rollback/pin/unpin/disable/enable/evaluate AGENT | revoke AGENT RELEASE. register and sync take --source PATH, or read KUBANI_AGENT_SOURCE when it is not given; the checkout's origin must be the repository the agent is synced from
 agent *ARGS:
     KUBECONFIG=${KUBECONFIG:-/home/al/.kube/config} uv run --locked python -B infrastructure/scripts/ops/agent-ops.py "$@"
 
@@ -337,4 +337,4 @@ agent-check-sync *ARGS:
     uv run --locked python -B infrastructure/scripts/ops/agent-ops.py check-sync "$@"
 
 test-agent-ops:
-    just test tests/test_agent_ops*.py
+    just test tests/test_agent_ops*.py tests/test_agent_tenant.py

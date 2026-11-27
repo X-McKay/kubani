@@ -1,5 +1,8 @@
 """Kyverno's tenant signer pins agree with the Namespace annotations and are sound.
 
+A tenant has a pin exactly when it has committed Agents: a tenant with none trusts
+no one, and `just agent register` writes the pin with its first agent.
+
 Kyverno Rule 1 reads ConfigMap kyverno/tenant-signers (GitOps only). The Registry
 Controller reads the tenant Namespace's agentplatform.io/signer-* annotations. Both
 must hold the same declaration, and neither may be empty or unanchored: Kyverno
@@ -20,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GITOPS = ROOT / "infrastructure/gitops/infrastructure"
 SIGNERS = GITOPS / "kyverno/tenant-signers.yaml"
 NAMESPACES = GITOPS / "namespace-policy/agent-platform-namespaces.yaml"
+AGENTS = ROOT / "infrastructure/gitops/apps/agents"
 
 ISSUER = "agentplatform.io/signer-issuer"
 SUBJECT = "agentplatform.io/signer-subject-regexp"
@@ -70,8 +74,11 @@ def top_level_alternation(pattern: str) -> bool:
 
 
 class TenantSignersTest(unittest.TestCase):
-    def test_every_tenant_has_exactly_one_pin(self) -> None:
-        self.assertEqual(sorted(signer_pins()), sorted(tenant_namespaces()))
+    def test_every_tenant_with_agents_has_exactly_one_pin_and_no_other_does(self) -> None:
+        with_agents = {path.parent.parent.name for path in AGENTS.glob("*/*/agent.yaml")}
+        self.assertIn("tenant-test", with_agents)
+        self.assertEqual(sorted(signer_pins()), sorted(with_agents))
+        self.assertLessEqual(with_agents, set(tenant_namespaces()))
 
     def test_pins_are_sound(self) -> None:
         for name, pin in signer_pins().items():
@@ -91,7 +98,10 @@ class TenantSignersTest(unittest.TestCase):
         for name, meta in tenant_namespaces().items():
             with self.subTest(tenant=name):
                 annotations = meta.get("annotations") or {}
-                pin = pins.get(name, {})
+                if name not in pins:  # no agents yet: neither copy of a pin
+                    self.assertFalse({ISSUER, SUBJECT, EXCEPTIONS} & set(annotations))
+                    continue
+                pin = pins[name]
                 self.assertEqual(annotations.get(ISSUER), pin.get("issuer"))
                 self.assertEqual(annotations.get(SUBJECT), pin.get("subjectRegExp"))
                 exceptions = [

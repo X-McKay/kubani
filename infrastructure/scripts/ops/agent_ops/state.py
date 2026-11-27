@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 
-from . import layout, live
+from . import layout, live, register
 
 FLUX_NAMESPACE = "flux-system"
 
@@ -60,7 +60,8 @@ def open_prs(repo: str = "X-McKay/kubani") -> list[dict] | None:
 
 
 def snapshot(root, kube: live.Kube, *, prs: bool = True) -> dict:
-    tenants = sorted({d.tenant for d in layout.agent_dirs(root)})
+    # A tenant with no agents yet is still a tenant: its Namespace is declared before its first agent is registered.
+    tenants = sorted({d.tenant for d in layout.agent_dirs(root)} | set(register.declared_tenants(root)))
     out = {"flux": flux(kube), "platformPods": pods(kube, live.PLATFORM_NAMESPACE), "tenants": {}}
     for tenant in tenants:
         agents = live.agents(kube, tenant)

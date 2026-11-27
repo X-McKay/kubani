@@ -141,7 +141,7 @@ Unchanged by the contract; `ok` is true exactly when the exit code is 0.
 | Exit | `just agent` | `just agent-preflight` | `just mcp` |
 | --- | --- | --- | --- |
 | 0 | the command succeeded | every required check passed or was not applicable | the command succeeded |
-| 1 | a check failed (`check-sync`, `consent --check`, a token that would not be accepted for deposit); a session that closed without confirmed success or cleanup (also from `status`, which exits 0 for a session still running); a cancel the runner did not accept; an `OSError` or `ValueError` (`ERROR`); an unforeseen exception | a required check failed, was unavailable or was not checked; an unforeseen exception | every refusal (`status: refused`), `stale`, `invalid-registration`, a provisioning `conflict`, an incomplete `status` |
+| 1 | a check failed (`check-sync`, `tenant check`, `consent --check`, a token that would not be accepted for deposit); a session that closed without confirmed success or cleanup (also from `status`, which exits 0 for a session still running); a cancel the runner did not accept; an `OSError` or `ValueError` (`ERROR`); an unforeseen exception | a required check failed, was unavailable or was not checked; an unforeseen exception | every refusal (`status: refused`), `stale`, `invalid-registration`, a provisioning `conflict`, an incomplete `status` |
 | 2 | a refusal by a gate or by the layout, live or sync code (`REFUSED`); a submit or deposit call that failed or was refused; a sign-in that failed; malformed arguments | malformed arguments | malformed arguments |
 | 3 | `run`: nobody consented in time | | |
 | 124 | the wait for a session passed `--wait-timeout`; `consent`: the sign-in was not completed in `--timeout` | | |

@@ -20,13 +20,14 @@ just agent consent --check investigator         # would Keycloak issue this pers
 just agent consent investigator --session <id>  # the person's half of a `run` that is waiting for consent
 just agent sync db-admin --source ../zetra-agents
 just agent check-sync --source ../zetra-agents  # offline without --source; part of validate-local
+just agent tenant check                         # every tenant has every piece (offline); `tenant add <name>` writes a new one
 just agent stage db-admin db-admin/v0.1.2 --source ../zetra-agents
 just agent approve db-admin-2026-11-10-0123abcd --ticket https://github.com/X-McKay/kubani/pull/NNN
 ```
 
 The implementation is `infrastructure/scripts/ops/agent-ops.py` with the
 `agent_ops` package beside it; `just test-agent-ops` runs its offline tests
-(`tests/test_agent_ops*.py`).
+(`tests/test_agent_ops*.py` and `tests/test_agent_tenant.py`).
 Reads use `KUBECONFIG=/home/al/.kube/config`. Nothing here applies objects,
 reads Secrets, prints tokens or bypasses a release gate.
 
@@ -932,6 +933,8 @@ commit exactly those. The pin is derived from the
 sync headers of the tenant's committed Agents, one branch per repository bound
 to exactly its own agents, so a repository can never sign another repository's
 agent. `check-sync` fails when either copy differs from that derivation.
+A tenant made by `just agent tenant add` has no pin; its first `register`
+writes one ([Tenants](#tenants)). A tenant that was not declared is refused.
 Registering the same agent from a second repository is refused; agent names are
 unique across tenants because image paths are `agents/<agent>`. Like `sync`, it
 refuses an Agent whose model budget is below its backend's reservation or whose
@@ -1067,6 +1070,104 @@ block and adds its name to `FIXTURES` in `tests/test_agent_ops.py`, which holds
 the whole list. Only Agents are labelled; AgentReleases are left as they are.
 The label says what an agent is for and isolates nothing: fixtures and agents
 meant for use still share the tenant's signer pin, runner and policies.
+
+## Tenants
+
+A tenant is the unit of isolation: a namespace for sandboxes, with a Session
+Runner, session interface, cleanup reconciler, Temporal namespace, payload key,
+signer pin and NetworkPolicies of its own. `tenant-test` is the reference
+tenant. Every other tenant is that one with its own name in place of
+`tenant-test`, and nothing about a tenant is written by hand.
+
+```sh
+just agent tenant add tenant-ops   # write every piece of a new, empty tenant; commits and applies nothing
+just agent tenant check            # every tenant has every piece, each equal to the reference's (offline)
+just agent tenant sync             # after the reference changed: rewrite what follows it, for every other tenant
+just agent tenant sync tenant-ops  # the same for one tenant
+```
+
+A tenant's name is `tenant-` and a DNS label, 32 characters at most in all; the
+Registry Controller may write only in namespaces of that form.
+
+### What a tenant is made of
+
+| Piece | Where (under `infrastructure/gitops/`) |
+| --- | --- |
+| Namespace, labelled `agentplatform.io/tenant` | `infrastructure/namespace-policy/agent-platform-namespaces.yaml` |
+| Session Runner (Deployment, artifact volume) | `apps/agent-platform/workloads/session-runner-<tenant>.yaml` |
+| Session interface (Deployment, Service, Ingress path `/v1/tenants/<tenant>/sessions` on `agents.almckay.io`) | `apps/agent-platform/workloads/session-api-<tenant>.yaml` |
+| Cleanup reconciler | `apps/agent-platform/workloads/cleanup-reconciler-<tenant>.yaml` (the reference's is `cleanup-reconciler.yaml`) |
+| NetworkPolicies of the tenant namespace | `infrastructure/agent-platform-netpol/<tenant>.yaml` |
+| Roles for the Registry Controller and the session interface | `apps/agents/<tenant>/registry-provisioner-rbac.yaml`, `session-api-rbac.yaml` |
+| ServiceAccount `session-api-<tenant>` | `apps/agent-platform/registry-rbac.yaml` |
+| Temporal client certificate `session-api-<tenant>-temporal-tls`, the Job that creates Temporal namespace `agents-<tenant>`, and the session interface's identity in the endpoint's allow-list | `apps/agent-platform/workloads/temporal-mtls.yaml` |
+| Seven kustomization entries that list the above | `apps/agent-platform/kustomization.yaml`, `apps/agent-platform/workloads/kustomization.yaml`, `apps/agents/kustomization.yaml`, `infrastructure/agent-platform-netpol/kustomization.yaml` |
+| Payload key (the Secret named `session-payload-key-<tenant>`) | `apps/agent-platform/session-payload-key-<tenant>.enc.yaml`; a person creates it (below) |
+| Signer pin | the Namespace's annotations and `infrastructure/kyverno/tenant-signers.yaml`; written by the tenant's first `just agent register` |
+
+Shared by every tenant, and so not on the list: the hostname
+`agents.almckay.io`, Keycloak realm `agents`, the agent registry, the Registry
+Controller, the gateway and the model backends.
+
+### Adding a tenant
+
+1. `just agent tenant add <tenant>` writes every row of the table but the last
+   two and prints the files under `files`. It adds lines to the shared files
+   and changes none that were there. If the result would not pass the check,
+   it restores every file and keeps nothing.
+2. A person creates the payload key: 32 random bytes, base64, under `key`. This
+   is a credential, so automation does not run it. On rig0, where `age.key`
+   lives, on the branch from step 1:
+
+   ```bash
+   cd ~/git/kubani
+   T=<tenant>
+   D=$(mktemp -d)   # the plaintext stays outside the repository
+   ( umask 077; printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: session-payload-key-%s\n  namespace: agent-platform\ntype: Opaque\nstringData:\n  key: %s\n' \
+       "$T" "$(openssl rand -base64 32)" > "$D/secret.enc.yaml" )
+   SOPS_AGE_KEY_FILE=age.key sops --encrypt "$D/secret.enc.yaml" \
+     > "infrastructure/gitops/apps/agent-platform/session-payload-key-$T.enc.yaml"
+   shred -u "$D/secret.enc.yaml" && rmdir "$D"
+   ```
+
+   Until that file exists `tenant check` fails, and so does every kustomize
+   build of `apps/agent-platform`, because the kustomization already lists it.
+   The key decrypts the tenant's Temporal history and exists in Git only as
+   this SOPS file.
+3. Add the tenant's Session Runner, session interface and cleanup reconciler to
+   [the capacity ledger](../cluster/capacity.md).
+4. `just agent tenant check`, `just validate-local`, then one pull request.
+   When Flux applies it, the Temporal mTLS endpoint (`temporal-mtls` in
+   `temporal`) restarts once to load the new allow-list entry. What that does
+   to a session in flight in another tenant has not been tested, so apply it
+   when none is running.
+5. `just agent register <tenant> OWNER/REPO <agent>` adds the first agent. An
+   empty tenant has no signer pin and trusts no one: a tenant with no entry
+   has every agent pod denied, and `check-sync` reports it as `ok` with
+   `no committed Agents and no pin`. The first registration writes the pin in
+   both places; later ones regenerate it as before.
+
+An agent belongs to the tenant its source names: `sync` and `register` refuse
+an Agent whose `metadata.namespace` is not the tenant it is registered with. To
+move an agent to another tenant, change the namespace in its source first.
+Agent names are still unique across tenants.
+
+### Keeping tenants equal
+
+`tenant check` fails, with `check-failed` and one row per tenant, when a tenant
+misses a file, a document or a kustomization entry, when a piece differs from
+the reference's in anything but the tenant's name (comments are not compared),
+when the endpoint admits a session interface of no tenant, or when a tenant
+with no committed Agents carries a signer pin. It runs in the test suite
+(`tests/test_agent_tenant.py`), so `just validate-local` and CI hold it.
+
+To change something every tenant has (the runner image, a resource limit, a
+NetworkPolicy), change the reference tenant's file and run
+`just agent tenant sync`; commit the reference and the files it lists
+together. Three things never follow the reference: the payload key, the signer
+pin, and the effects a tenant grants (`agentplatform.io/granted-effects` on the
+Namespace; a new tenant grants none, and granting one is its own reviewed
+change).
 
 ## Staging and approving a release
 

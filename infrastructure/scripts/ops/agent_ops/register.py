@@ -9,6 +9,10 @@ the tenant Namespace annotation the Registry Controller reads and the
 `kyverno/tenant-signers` ConfigMap Kyverno Rule 1 reads. `check` verifies both
 copies against the derived value, so a hand edit to either is drift.
 
+A tenant with no committed Agents has no pin in either place: it trusts no one.
+`register` writes the pin with the tenant's first agent (`create_pins`) and
+`check` fails a pin that is there without an agent.
+
 The expression is the one zetra's contracts produce (`subject_regexp_for`, and
 `subject_regexp_for_sources` from zetra PR #72 on); with one repository it is byte
 for byte the pin `agentctl signer-annotations --repo ... --agent ...` prints.
@@ -29,6 +33,8 @@ from . import layout, sync
 
 NAMESPACES = Path("infrastructure/gitops/infrastructure/namespace-policy/agent-platform-namespaces.yaml")
 ANNOTATION = "agentplatform.io/signer-subject-regexp"
+ISSUER_ANNOTATION = "agentplatform.io/signer-issuer"
+TENANT_LABEL = "agentplatform.io/tenant"
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 AGENT_KUSTOMIZATION = "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - agent.yaml\n"
 TAG_SUFFIX = "/v[0-9][A-Za-z0-9.+-]*"
@@ -125,11 +131,37 @@ def pinned_tenants(root: Path) -> list[str]:
     return sorted(data)
 
 
-def check(root: Path) -> dict:
-    """Every pinned tenant: do both pin copies equal the pin derived from its committed Agents?
+def declared_tenants_in(namespaces_text: str) -> dict[str, dict]:
+    """Tenant Namespaces in the text of the namespaces file: name -> metadata."""
+    try:
+        docs = list(yaml.safe_load_all(namespaces_text))
+    except yaml.YAMLError as exc:
+        raise RegisterError(f"{NAMESPACES}: not valid YAML: {exc}") from None
+    found = {}
+    for doc in docs:
+        meta = doc.get("metadata") if isinstance(doc, dict) and doc.get("kind") == "Namespace" else None
+        if isinstance(meta, dict) and TENANT_LABEL in (meta.get("labels") or {}):
+            found[meta.get("name")] = meta
+    return found
 
-    A pinned tenant without committed Agents is reported too: its pin trusts a repository
-    for agents that do not exist, which is either a bootstrap in progress or stale trust.
+
+def declared_tenants(root: Path) -> dict[str, dict]:
+    """The tenant Namespaces this repository declares, whether or not they have agents: name -> metadata."""
+    path = root / NAMESPACES
+    return declared_tenants_in(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+
+def unpinned(root: Path, tenant: str) -> bool:
+    """True for a declared tenant with no pin in either file: its first registration writes one."""
+    meta = declared_tenants(root).get(tenant)
+    return meta is not None and ANNOTATION not in (meta.get("annotations") or {}) and tenant not in pinned_tenants(root)
+
+
+def check(root: Path) -> dict:
+    """Every tenant: do both pin copies equal the pin derived from its committed Agents?
+
+    A pinned tenant without committed Agents fails: its pin trusts a repository for agents
+    that do not exist. A declared tenant with neither agents nor a pin is as it should be.
     """
     rows = []
     dirs = layout.agent_dirs(root)
@@ -138,13 +170,18 @@ def check(root: Path) -> dict:
         names.setdefault(d.agent, []).append(d.tenant)
     duplicates = {agent: tenants for agent, tenants in names.items() if len(tenants) > 1}
     try:
-        tenants = sorted(set(pinned_tenants(root)) | {d.tenant for d in dirs})
+        pinned = set(pinned_tenants(root))
+        declared = declared_tenants(root)
+        tenants = sorted(pinned | {d.tenant for d in dirs} | set(declared))
     except RegisterError as exc:
         return {"ok": False, "tenants": [{"tenant": "*", "state": "fail", "detail": str(exc)}]}
     for tenant in tenants:
         row = {"tenant": tenant}
         if tenant not in {d.tenant for d in dirs}:
-            row.update(state="fail", detail="pinned tenant has no committed Agents; register one or remove the pin")
+            if tenant in pinned or ANNOTATION in ((declared.get(tenant) or {}).get("annotations") or {}):
+                row.update(state="fail", detail="pinned tenant has no committed Agents; register one or remove the pin")
+            else:
+                row.update(sources={}, state="ok", detail="no committed Agents and no pin: the tenant trusts no one")
             rows.append(row)
             continue
         try:
@@ -210,6 +247,47 @@ def write_pins(root: Path, tenant: str, pattern: str) -> list[str]:
     return [str(layout.SIGNERS), str(NAMESPACES)]
 
 
+def create_pins(root: Path, tenant: str, pattern: str) -> list[str]:
+    """Write a tenant's first pin in both files: the signer annotations on its Namespace and its ConfigMap entry.
+
+    As in `write_pins`, both texts are built and parsed back before either is written, and here every other tenant's pin
+    must also read exactly as it did.
+    """
+    if "'" in pattern or "\n" in pattern:
+        raise RegisterError("pin cannot contain a single quote or a newline")
+    signers = root / layout.SIGNERS
+    old_signers = signers.read_text(encoding="utf-8")
+    entry = {"issuer": layout.ISSUER, "subjectRegExp": pattern, "vulnExceptions": []}
+    block = "\n".join("    " + line for line in json.dumps(entry, indent=2).split("\n"))
+    signers_text = old_signers.rstrip("\n") + f"\n  {tenant}: |\n{block}\n"
+
+    namespaces = root / NAMESPACES
+    old_namespaces = namespaces.read_text(encoding="utf-8")
+    lines = old_namespaces.split("\n")
+    start = _index(lines, f"  name: {tenant}", namespaces)
+    lines[start + 1 : start + 1] = [
+        "  annotations:",
+        f"    {ISSUER_ANNOTATION}: {layout.ISSUER}",
+        "    # yamllint disable-line rule:line-length",
+        f"    {ANNOTATION}: '{pattern}'",
+    ]
+    namespaces_text = "\n".join(lines)
+
+    others = [t for t in pinned_tenants(root) if t != tenant]
+    try:
+        have = _pins_from_texts(signers_text, namespaces_text, tenant)
+        kept = all(_pins_from_texts(signers_text, namespaces_text, t) == _pins_from_texts(old_signers, old_namespaces, t) for t in others)
+        issuer = declared_tenants_in(namespaces_text)[tenant]["annotations"].get(ISSUER_ANNOTATION)
+        whole = json.loads(_single(signers_text, layout.SIGNERS)["data"][tenant])
+    except (RegisterError, ValueError, KeyError, TypeError, AttributeError):
+        raise RegisterError(f"the first pin of {tenant} could not be written so that both files parse back to it") from None
+    if any(value != pattern for value in have.values()) or not kept or issuer != layout.ISSUER or whole != entry:
+        raise RegisterError(f"the first pin of {tenant} could not be written so that both files parse back to it")
+    signers.write_text(signers_text, encoding="utf-8")
+    namespaces.write_text(namespaces_text, encoding="utf-8")
+    return [str(layout.SIGNERS), str(NAMESPACES)]
+
+
 def _index(lines: list[str], exact: str, path: Path) -> int:
     hits = [i for i, line in enumerate(lines) if line == exact]
     if len(hits) != 1:
@@ -248,7 +326,9 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
         raise RegisterError("repository must be owner/name", "invalid-arguments")
     if not agents:
         raise RegisterError("name at least one agent", "invalid-arguments")
-    committed_pins(root, tenant)  # the tenant must already exist in both pin files
+    first = unpinned(root, tenant)  # a declared tenant with no agents yet: this registration writes its pin
+    if not first:
+        committed_pins(root, tenant)  # the tenant must already exist in both pin files
     top = root / layout.AGENTS_DIR / "kustomization.yaml"
     listed = layout.listed_resources(top)  # refuses a kustomization that cannot be appended
     existing = {d.agent: d for d in layout.agent_dirs(root)}
@@ -294,7 +374,10 @@ def register(root: Path, tenant: str, repo: str, agents: list[str], source: Path
         added_dirs.append(d)
         wrote += [str(d.agent_file.relative_to(root)), str(d.kustomization.relative_to(root)), str(layout.AGENTS_DIR / "kustomization.yaml")]
     pattern = derived_pin(root, tenant)
-    changed = write_pins(root, tenant, pattern) if any(v != pattern for v in committed_pins(root, tenant).values()) else []
+    if first:
+        changed = create_pins(root, tenant, pattern)
+    else:
+        changed = write_pins(root, tenant, pattern) if any(v != pattern for v in committed_pins(root, tenant).values()) else []
     feed = render_feed(root, touched, added_dirs, before)
     return {
         "tenant": tenant,

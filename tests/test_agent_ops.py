@@ -834,8 +834,7 @@ class RegisterTests(unittest.TestCase):
         """The real repository: both pin copies equal the pin derived from the headers of every committed Agent."""
         result = register.check(ROOT)
         self.assertTrue(result["ok"], result)
-        row = result["tenants"][0]
-        self.assertEqual(row["tenant"], "tenant-test")
+        row = next(r for r in result["tenants"] if r["tenant"] == "tenant-test")
         self.assertEqual(list(row["sources"]), ["X-McKay/zetra-agents"])
         committed = sorted(p.parent.name for p in (ROOT / layout.AGENTS_DIR / "tenant-test").glob("*/agent.yaml"))
         self.assertTrue(committed)
